@@ -146,3 +146,86 @@ Conclusion (from the above only): criterion (a) is met with a registered sparse 
 1. (b) Run `D:\NothingLauncher\out\spikes\NotifySpike\NotifySpike.exe --seconds 120`. In Settings > System > Notifications > (target app, e.g. Discord or Windows PowerShell) turn **off** "Show notification banners". Send a message/toast (or `powershell -File <toast.ps1>` equivalent). Confirm the text still prints (`EVENT` / `POLL NEW` lines). Turn the setting back on.
 2. (c) Elevated terminal (it must be the SAME Windows user: the cert is in CurrentUser\My and the package registration is per-user): `pwsh spikes\install-spikes.ps1 -Only NotifySpike` (publishes with uiAccess, signs, copies to `C:\Program Files\NothingShell.Spikes\NotifySpike`, re-registers the sparse package with that external location). Run `C:\Program Files\NothingShell.Spikes\NotifySpike\NotifySpike.exe --seconds 60` from a normal (non-elevated) terminal, send a toast, and check for `tokenUIAccess=1`, the `GetCurrentPackageFullName` name, `RequestAccessAsync` status and the printed text. Not verified that identity + uiAccess work together.
 3. Remove afterwards: `pwsh spikes\NotifySpike\register.ps1 -Remove`.
+
+## Hands-on results (2026-11-18, user present)
+
+Two interactive runs of `build/verify/plan1-handson.ps1`, with the user answering the physical checks. Sources: `.superpowers/sdd/2026-11-17-plan1-foundation-and-dock/handson-results-20261118-010546.json` (run 1, Task 8, Overflow, Desktop; K and N also ran) and `handson-results-20261118-015632.json` (run 2, `-Only KeySpike,Notify`).
+
+Run 1 notes: K.0, N.1 and N.2 failed there because of a script output-capture bug, fixed in commit `a7c0f8f`. The run was stopped by the user at the banners-off step, so N.3 and N.4 do not exist in run 1. Run 1 had Fenn closed (S0 `fennRunning=false`).
+
+Run 2 notes: END failed. At the start Fenn was running and the Explorer taskbar was hidden (`trayState` 0); at the end Fenn was not running and the taskbar was visible (`trayState` 1). Auto-hide was true at both points. Per the run report, the tray visibility difference is why END failed. Every other check in run 2 passed.
+
+### Task 8 (run 1, normal user, uiAccess app)
+
+| Check | Description | Measured | User answer | Verdict |
+|---|---|---|---|---|
+| C8.1 | App start: taskbar hidden, auto-hide on, watchdog matches, uiAccess=1, window fills screen | Watchdog found, parent-start match; tray state 0; work area 0,0,1920,1080; app not elevated | y | PASS |
+| C8.1b | After 10 s, watchdog and app alive, taskbar still hidden | Both alive; tray state 0 | - | PASS |
+| C8.2 | Normal quit: taskbar back, auto-hide original, state file deleted, watchdog exited | Taskbar back in 113 ms; state file deleted; watchdog exited | y | PASS |
+| C8.3 | Force-kill: taskbar back within 3 s, auto-hide restored | Taskbar back in 106 ms; state file deleted; watchdog exited | - | PASS |
+| C8.4a | Explorer restart: new tray hidden by the app | New tray appeared at 406 ms, hidden 10 ms later | y | PASS |
+| C8.4b | Normal quit after Explorer restart brings taskbar back | Taskbar back in 1 ms | y | PASS |
+| C8.5 | Leftover state file: after killing watchdog and app, next run restores the original auto-hide | State file survived both kills; taskbar stayed hidden; taskbar back in 107 ms on quit; state file deleted. Auto-hide was switched OFF for this check (the original value in the test), and the notes say it was set back to ON afterwards | y | PASS |
+
+### Overflow (run 1, Fenn closed)
+
+| Check | Description | Measured | User answer | Verdict |
+|---|---|---|---|---|
+| O.1 | Flyout works with taskbar hidden (show, invoke, hide, early hide) | Strategy 2 worked: taskbar visible 83 ms, flyout 49 ms after Invoke start, still open 600 ms after hide. Strategy 3 (Win+B, Enter) worked; tray `IsWindowVisible` true in 0/24 samples. Strategy 1 found no chevron | y (taskbar flash seen) | PASS |
+| O.2 | Same, hide after flyout (late hide) | Strategy 2 worked: taskbar visible 64 ms, flyout 20 ms after Invoke start. Strategy 3 worked; 0/24 samples visible | y (taskbar flash seen) | PASS |
+| O.3 | Win+B then Enter shows correct hidden icons | Not measured | y | PASS |
+| O.4 | Right-click menus on flyout icons work | Not measured | y | PASS |
+| O.5 | Taskbar returns to original state | Tray visible, auto-hide original and now the same | - | PASS |
+
+### Desktop layer (run 1, Fenn closed)
+
+| Check | Description | Measured | User answer | Verdict |
+|---|---|---|---|---|
+| D.0 | DesktopLayerSpike started | Process up | - | PASS |
+| D.1 | Widget visible on the desktop | Not measured | y | PASS |
+| D.2 | Widget clickable | Not measured | y | PASS |
+| D.3 | Re-attaches after Explorer restart, within 2 s of Progman reappearing | Re-attached 106 ms after the new Progman was first seen (613 ms after loss detected) | y | PASS |
+| D.4 | Widget NOT in the Alt+Tab list | Not measured | y (widget seen in Alt+Tab) | FAIL |
+
+### KeySpike
+
+| Check | Description | Measured | User answer | Verdict |
+|---|---|---|---|---|
+| K.0 (run 1) | KeySpike started and hook installed | `hookInstalled` false (output-capture bug, fixed in `a7c0f8f`) | - | FAIL |
+| K.0 (run 2) | KeySpike started and hook installed | Process up, hook installed | - | PASS |
+| K.1 | Win alone: Start does not open, launcher event logged | 7 `OPEN LAUNCHER` events | n | PASS |
+| K.2 | Win+A: Quick Settings does not open | 1 `OPEN PANEL (Win+A)`, 0 launcher events | n | PASS |
+| K.3 | Win+N: Notification Center does not open | 1 `OPEN PANEL (Win+N)`, 0 launcher events | n | PASS |
+| K.4 | Win+E opens File Explorer | Pass-through logged | y | PASS |
+| K.5 | Win+D twice behaves normally | Pass-through logged for both presses | y | PASS |
+| K.6 | Win+Tab opens Task View | Pass-through logged | y | PASS |
+| K.7 | Win+Shift+S opens the screenshot bar | Pass-through logged | y | PASS |
+| K.8 | Win+Arrow snaps a window | Pass-through logged | y | PASS |
+| K.9 | Win alone with elevated Task Manager focused: Start does not open | 3 `OPEN LAUNCHER` events | n | PASS |
+| K.10 | Win+L locks normally | Not measured | y | PASS |
+
+### NotifySpike
+
+| Check | Description | Measured | User answer | Verdict |
+|---|---|---|---|---|
+| N.1 (run 1) | Installed: tokenUIAccess=1, package identity, access Allowed | Not reached: `tokenUIAccess` false, access not Allowed, log empty (output-capture bug, fixed in `a7c0f8f`) | - | FAIL |
+| N.2 (run 1) | Self-sent test toast received (expect match) | Listener not started (output-capture bug, fixed in `a7c0f8f`) | - | FAIL |
+| N.1 (run 2) | Installed: tokenUIAccess=1, package identity, access Allowed | `tokenUIAccess` 1; package identity present; access Allowed | - | PASS |
+| N.2 (run 2) | Self-sent test toast received (expect match) | Expect match via the Added event and via the poll | - | PASS |
+| N.3 | Banners off: listener still receives the toast | Expect match; banner seen by user: n | n | PASS |
+| N.4 | Test toasts cleaned up | 1 test toast removed | - | PASS |
+
+### What this closes
+
+Closed:
+- Physical Win key alone does not open Start, including with elevated Task Manager focused (K.1, K.9).
+- Win+A and Win+N panels do not open (K.2, K.3).
+- Other Win combos behave normally: Win+E, Win+D, Win+Tab, Win+Shift+S, Win+Arrow, Win+L (K.4 to K.8, K.10).
+- Notifications with uiAccess, package identity, and banners off (N.1 to N.3, run 2).
+- Overflow flyout with working right-click menus, with Fenn not running (O.3, O.4).
+- Widget re-attaches after an Explorer restart (D.3).
+- Task 8 checks 1 to 5 (C8.1 to C8.5, run 1).
+
+Open:
+- D.4: the user saw the test widget in Alt+Tab. This must be fixed in the real widget host.
+- Overflow strategies 2 and 3: the user reported a brief taskbar flash (O.1 and O.2). For strategy 3 the recorded samples show the tray not visible in any sample, so the flash is not explained by the recorded data and needs a separate look.
