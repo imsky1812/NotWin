@@ -24,9 +24,10 @@ foreach ($name in 'NothingShell', 'NothingShell.Watchdog') {
 # 2. Restore the taskbar/shell state
 $watchdog = Join-Path $install 'NothingShell.Watchdog.exe'
 if (Test-Path $watchdog) {
-    & $watchdog --restore-now --state (Join-Path $env:APPDATA 'NothingShell')
-    if ($LASTEXITCODE -ne 0) {
-        throw "Watchdog --restore-now failed (exit $LASTEXITCODE). Aborting before deleting $install so the watchdog stays available to retry the taskbar/shell restore."
+    # WinExe: '&' would not wait, so use Start-Process -Wait to get a real exit code.
+    $p = Start-Process -FilePath $watchdog -ArgumentList '--restore-now', '--state', ('"{0}"' -f (Join-Path $env:APPDATA 'NothingShell')) -Wait -PassThru
+    if ($p.ExitCode -ne 0) {
+        throw "Watchdog --restore-now failed (exit $($p.ExitCode)). Aborting before deleting $install so the watchdog stays available to retry the taskbar/shell restore."
     }
 } else {
     Write-Host 'Watchdog not found; skipping restore.'

@@ -37,7 +37,11 @@ public static class TaskbarNative
 
     public static void HideAll() => ShowAllWindows(SHOW_WINDOW_CMD.SW_HIDE);
 
-    public static void ShowAll() => ShowAllWindows(SHOW_WINDOW_CMD.SW_SHOW);
+    /// <summary>Shows every explorer-owned tray window. Returns false when no explorer tray exists (e.g. Explorer restarting).</summary>
+    public static bool ShowAll() => ShowAllWindows(SHOW_WINDOW_CMD.SW_SHOW);
+
+    /// <summary>True when an explorer-owned primary tray window exists.</summary>
+    public static bool HasTray() => FindPrimary() != HWND.Null;
 
     /// <summary>True when the explorer-owned primary taskbar is visible (false if not found).</summary>
     public static bool IsPrimaryVisible()
@@ -46,10 +50,12 @@ public static class TaskbarNative
         return h != HWND.Null && PInvoke.IsWindowVisible(h);
     }
 
-    public static void Restore(TaskbarRestoreState s)
+    /// <summary>Shows the taskbar, then applies the saved auto-hide. Returns false (doing nothing more) if no explorer tray exists.</summary>
+    public static bool Restore(TaskbarRestoreState s)
     {
-        ShowAll();
+        if (!ShowAll()) return false;
         SetAutoHide(s.WasAutoHide);
+        return true;
     }
 
     private static APPBARDATA NewAppBarData(HWND hwnd) => new()
@@ -64,10 +70,12 @@ public static class TaskbarNative
         return HWND.Null;
     }
 
-    private static void ShowAllWindows(SHOW_WINDOW_CMD cmd)
+    private static bool ShowAllWindows(SHOW_WINDOW_CMD cmd)
     {
-        foreach (var h in FindExplorerWindows(PrimaryClass)) PInvoke.ShowWindow(h, cmd);
+        var primaries = FindExplorerWindows(PrimaryClass);
+        foreach (var h in primaries) PInvoke.ShowWindow(h, cmd);
         foreach (var h in FindExplorerWindows(SecondaryClass)) PInvoke.ShowWindow(h, cmd);
+        return primaries.Count > 0;
     }
 
     private static List<HWND> FindExplorerWindows(string className)

@@ -6,7 +6,7 @@ namespace NothingShell.Core;
 public sealed record TaskbarRestoreState(bool WasAutoHide);
 
 // Source-generated so the Native AOT watchdog can read the file without reflection.
-[JsonSourceGenerationOptions(PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase)]
+[JsonSourceGenerationOptions(PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase, PropertyNameCaseInsensitive = true, WriteIndented = true)]
 [JsonSerializable(typeof(TaskbarRestoreState))]
 internal sealed partial class RestoreStateJsonContext : JsonSerializerContext;
 
@@ -32,7 +32,7 @@ public sealed class TaskbarRestoreStore(string directory)
         }
     }
 
-    public void Save(TaskbarRestoreState state) => JsonFile.WriteAtomic(directory, FileName, state);
+    public void Save(TaskbarRestoreState state) => JsonFile.WriteAtomic(directory, FileName, state, RestoreStateJsonContext.Default.TaskbarRestoreState);
 
     public void Delete() => File.Delete(Path.Combine(directory, FileName));
 }

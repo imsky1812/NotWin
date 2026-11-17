@@ -46,4 +46,12 @@ public sealed class TaskbarSessionTests : IDisposable
         File.WriteAllText(Path.Combine(_dir, "taskbar-restore.json"), "garbage");
         Assert.False(new TaskbarRestoreStore(_dir).TryLoad(out _));
     }
+
+    [Fact]
+    public void RestoreStore_PascalCaseFile_LoadsValue()
+    {
+        File.WriteAllText(Path.Combine(_dir, "taskbar-restore.json"), "{\"WasAutoHide\":true}");
+        Assert.True(new TaskbarRestoreStore(_dir).TryLoad(out var s));
+        Assert.True(s.WasAutoHide);
+    }
 }
