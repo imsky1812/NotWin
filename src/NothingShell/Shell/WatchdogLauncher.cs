@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.IO;
+using System.Runtime.InteropServices;
 
 namespace NothingShell.Shell;
 
@@ -8,21 +9,23 @@ public static class WatchdogLauncher
 {
     private const string ExeName = "NothingShell.Watchdog.exe";
 
-    /// <summary>Returns the watchdog process, or null (with a logged warning) in Debug when the exe is absent.</summary>
+    /// <summary>Returns the watchdog process, or null (logged) when the exe is missing or could not be launched.</summary>
     public static Process? Start(int parentPid, string stateDir)
     {
         var exe = Path.Combine(AppContext.BaseDirectory, ExeName);
         if (!File.Exists(exe))
         {
-#if DEBUG
-            Log.Info($"WARNING: {ExeName} not found at {exe}; running WITHOUT the crash watchdog (Debug only).");
+            Log.Error($"{ExeName} not found at {exe}");
             return null;
-#else
-            throw new FileNotFoundException("Watchdog executable missing.", exe);
-#endif
         }
 
-        var startFileTime = Process.GetCurrentProcess().StartTime.ToUniversalTime().ToFileTimeUtc();
+        if (!GetProcessTimes(GetCurrentProcess(), out var created, out _, out _, out _))
+        {
+            Log.Error($"GetProcessTimes failed ({Marshal.GetLastWin32Error()})");
+            return null;
+        }
+        // Exact UTC creation FILETIME of this process (no local-time/DST round trip).
+        var startFileTime = ((long)created.dwHighDateTime << 32) | (uint)created.dwLowDateTime;
         var psi = new ProcessStartInfo(exe)
         {
             UseShellExecute = false,
@@ -35,6 +38,19 @@ public static class WatchdogLauncher
         psi.ArgumentList.Add(startFileTime.ToString());
         psi.ArgumentList.Add("--state");
         psi.ArgumentList.Add(stateDir);
-        return Process.Start(psi);
+        try { return Process.Start(psi); }
+        catch (Exception e)
+        {
+            Log.Error("failed to launch watchdog", e);
+            return null;
+        }
     }
+
+    [DllImport("kernel32.dll")]
+    private static extern IntPtr GetCurrentProcess();
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    private static extern bool GetProcessTimes(IntPtr process, out System.Runtime.InteropServices.ComTypes.FILETIME creation,
+        out System.Runtime.InteropServices.ComTypes.FILETIME exit, out System.Runtime.InteropServices.ComTypes.FILETIME kernel,
+        out System.Runtime.InteropServices.ComTypes.FILETIME user);
 }

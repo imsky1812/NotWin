@@ -16,13 +16,13 @@ public partial class App : Application
         // Register crash/exit restore paths before the taskbar is touched.
         AppDomain.CurrentDomain.UnhandledException += (_, args) =>
         {
-            Log.Error("unhandled exception", args.ExceptionObject as Exception);
-            _taskbar?.Dispose();
+            try { _taskbar?.Dispose(); }
+            finally { Log.Error("unhandled exception", args.ExceptionObject as Exception); }
         };
         DispatcherUnhandledException += (_, args) =>
         {
-            Log.Error("dispatcher unhandled exception", args.Exception);
-            _taskbar?.Dispose();
+            try { _taskbar?.Dispose(); }
+            finally { Log.Error("dispatcher unhandled exception", args.Exception); }
             // Not marked handled: the crash continues.
         };
         SessionEnding += (_, _) => _taskbar?.Dispose();

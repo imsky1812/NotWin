@@ -47,10 +47,33 @@ public sealed class TaskbarController : IDisposable
             Log.Info($"taskbar original autoHide={_original.WasAutoHide} (leftover={leftover is not null})");
             _store.Save(_original);
 
-            ApplyHidden();
-
+            // The watchdog is the safety net for hard kills: never hide the taskbar without a live one.
             try { _watchdog = WatchdogLauncher.Start(Environment.ProcessId, _stateDir); }
             catch (Exception e) { Log.Error("failed to start watchdog", e); }
+            var alive = false;
+            try { alive = _watchdog is not null && !_watchdog.WaitForExit(300); }
+            catch (Exception e) { Log.Error("watchdog check failed", e); }
+            if (!alive)
+            {
+#if DEBUG
+                Log.Info("WARNING: watchdog not running; hiding taskbar anyway (Debug only).");
+#else
+                Log.Error("watchdog is not running; refusing to hide the taskbar");
+                try { _watchdog?.Dispose(); } catch (Exception) { }
+                _watchdog = null;
+                try
+                {
+                    // A leftover state means a previous run may have left the taskbar hidden: put it back first.
+                    if (leftover is not null) TaskbarNative.Restore(_original);
+                    _store.Delete();
+                }
+                catch (Exception e) { Log.Error("cleanup after watchdog refusal failed", e); }
+                _restored = true; // nothing was hidden; Dispose has nothing to do
+                return;
+#endif
+            }
+
+            ApplyHidden();
 
             _taskbarCreated = RegisterWindowMessage("TaskbarCreated");
             var p = new HwndSourceParameters("NothingShellTaskbarWatcher")
