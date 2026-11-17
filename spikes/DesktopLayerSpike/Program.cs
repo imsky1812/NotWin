@@ -136,14 +136,14 @@ static class P
         Say($"created window {hwnd:X} option={Opt}");
     }
 
-    static void Attach()
+    static bool Attach()
     {
         if (Opt == "A")
         {
             prog = FindWindow("Progman", null);
             SendMessageTimeout(prog, 0x052C, 0xD, 1, 0, 1000, out _);
             host = FindDefViewHost(true);
-            if (host == 0) { Say("Option A: no DefView host found"); return; }
+            if (host == 0) { Say("Option A: no DefView host found"); return false; }
             long st = GetWL(hwnd, GWL_STYLE);
             st = (st & ~(WS_POPUP | WS_CAPTION | WS_THICKFRAME | WS_SYSMENU)) | WS_CHILD | WS_VISIBLE;
             SetWL(hwnd, GWL_STYLE, unchecked((nint)st));
@@ -151,6 +151,7 @@ static class P
             var p = new PT { X = X, Y = Y }; ScreenToClient(host, ref p);
             SetWindowPos(hwnd, HWND_TOP, p.X, p.Y, SZ, SZ, SWP_FRAMECHANGED | SWP_SHOWWINDOW | SWP_NOACTIVATE);
             Say($"Option A: parented to {host:X}; client pos=({p.X},{p.Y}); rect now {Rc(hwnd)}");
+            return GetParent(hwnd) == host;
         }
         else
         {
@@ -166,6 +167,7 @@ static class P
                 SetWinEventHook(3, 3, 0, keepAlive, 0, 0, 0); // EVENT_SYSTEM_FOREGROUND, WINEVENT_OUTOFCONTEXT, delivered via this thread's message loop
             }
             Say($"Option B: toplevel bottom; rect {Rc(hwnd)} noReshow={NoReshow}");
+            return true;
         }
     }
 
@@ -182,20 +184,24 @@ static class P
     }
 
     // ---- re-attach watcher (criterion d, manual) ----
-    static long lostAt = -1;
+    static long lostAt = -1, progSeenAt = -1;
     static void Watch()
     {
         bool dead = !IsWindow(hwnd);
         var curProg = FindWindow("Progman", null);
-        bool bad = dead || (Opt == "A" && (curProg == 0 || curProg != prog || GetParent(hwnd) != host)) || (Opt == "B" && !IsWindowVisible(hwnd));
-        if (!bad) { lostAt = -1; return; }
-        if (lostAt < 0) { lostAt = Clock.ElapsedMilliseconds; Say($"WATCH: lost (dead={dead} progman={curProg:X} was {prog:X})"); }
+        bool bad = dead || (Opt == "A" && (curProg == 0 || curProg != prog || host == 0 || GetParent(hwnd) != host)) || (Opt == "B" && !IsWindowVisible(hwnd));
+        if (!bad) { lostAt = progSeenAt = -1; return; }
+        long now = Clock.ElapsedMilliseconds;
+        if (lostAt < 0) { lostAt = now; Say($"WATCH: lost (dead={dead} progman={curProg:X} was {prog:X} host={host:X})"); }
         if (Opt == "A" && curProg == 0) return; // explorer not back yet
-        Say($"WATCH: Progman present again ({curProg:X}); re-attaching {Clock.ElapsedMilliseconds - lostAt} ms after loss detected");
-        if (dead) { try { win.Close(); } catch { } Create(); }
-        else Attach();
-        Say($"WATCH: re-attached; visible={IsWindowVisible(hwnd)} parent={GetParent(hwnd):X} total {Clock.ElapsedMilliseconds - lostAt} ms since loss detected");
-        lostAt = -1;
+        if (progSeenAt < 0) { progSeenAt = now; Say($"WATCH: Progman {curProg:X} first seen {now - lostAt} ms after loss detected"); }
+        bool ok;
+        if (dead) { try { win.Close(); } catch { } Create(); ok = Opt != "A" || (host != 0 && GetParent(hwnd) == host); }
+        else ok = Attach();
+        if (!ok) { Say($"WATCH: attach incomplete (DefView host not ready?); will retry; {now - progSeenAt} ms since Progman first seen"); return; }
+        long t = Clock.ElapsedMilliseconds;
+        Say($"WATCH: re-attached; visible={IsWindowVisible(hwnd)} parent={GetParent(hwnd):X}; {t - progSeenAt} ms since new Progman first seen, {t - lostAt} ms since loss detected");
+        lostAt = progSeenAt = -1;
     }
 
     // ---- inspection ----
@@ -286,6 +292,7 @@ static class P
 
     static void SelfTest()
     {
+        bool toggled = false;
         try
         {
             Thread.Sleep(1500);
@@ -300,11 +307,11 @@ static class P
             Say($"foreground before Win+D: {Desc(fg0)}");
             if (IsDesktopClass(fg0)) { Say("desktop already foreground; skipping Win+D toggles"); ClickTest("no Win+D"); return; }
             Say(">>> Win+D #1");
-            WinD(); Thread.Sleep(1200);
+            toggled = true; WinD(); Thread.Sleep(1200);
             Describe("after Win+D #1 (desktop shown)");
             ClickTest("desktop shown");
             Say(">>> Win+D #2 (restore)");
-            WinD(); Thread.Sleep(1500);
+            WinD(); toggled = false; Thread.Sleep(1500);
             Describe("after Win+D #2 (restored)");
             var fg1 = GetForegroundWindow();
             Say($"foreground same as before Win+D: {fg1 == fg0}  (before {fg0:X}, after {fg1:X})");
@@ -314,7 +321,11 @@ static class P
             Describe("after simulated re-attach call");
         }
         catch (Exception e) { Say("SELFTEST EXCEPTION " + e); }
-        finally { Say("=== SELFTEST END"); }
+        finally
+        {
+            if (toggled) { Say(">>> FINALLY: restoring Win+D (exception path)"); WinD(); Thread.Sleep(1500); Say($"foreground after emergency restore: {Desc(GetForegroundWindow())}"); }
+            Say("=== SELFTEST END");
+        }
     }
 
     [STAThread]
