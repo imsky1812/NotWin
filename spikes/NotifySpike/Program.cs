@@ -1,5 +1,7 @@
 // THROWAWAY spike: UserNotificationListener from a sparse-package-identity exe.
-// Usage: NotifySpike.exe [--seconds N]  (default 60). Log: %TEMP%\NotifySpike.log (also stdout).
+// Usage: NotifySpike.exe [--seconds N] [--expect "<text>"] [--verbose] [--cleanup]  (default 60 s). Log: %TEMP%\NotifySpike.log (also stdout).
+// By default only test toasts ("NothingShell spike test") are printed in full; other apps' notifications are redacted.
+// With --verbose the log contains OTHER APPS' NOTIFICATION TEXT: never commit or share it.
 using System.Runtime.InteropServices;
 using System.Text;
 using Windows.UI.Notifications;
@@ -10,6 +12,22 @@ static class P
     [DllImport("kernel32.dll", CharSet = CharSet.Unicode)]
     static extern int GetCurrentPackageFullName(ref int len, StringBuilder? name);
 
+    [DllImport("advapi32.dll", SetLastError = true)]
+    static extern bool OpenProcessToken(IntPtr proc, uint access, out IntPtr token);
+    [DllImport("advapi32.dll", SetLastError = true)]
+    static extern bool GetTokenInformation(IntPtr token, int cls, out uint info, int len, out int ret);
+    [DllImport("kernel32.dll")] static extern IntPtr GetCurrentProcess();
+    [DllImport("kernel32.dll")] static extern bool CloseHandle(IntPtr h);
+
+    static string TokenUiAccess()
+    {
+        if (!OpenProcessToken(GetCurrentProcess(), 0x8 /*TOKEN_QUERY*/, out var tok)) return "OpenProcessToken failed " + Marshal.GetLastWin32Error();
+        try { return GetTokenInformation(tok, 26 /*TokenUIAccess*/, out var v, 4, out _) ? v.ToString() : "GetTokenInformation failed " + Marshal.GetLastWin32Error(); }
+        finally { CloseHandle(tok); }
+    }
+
+    static bool verbose;
+    static string? expect;
     static readonly string LogPath = Path.Combine(Path.GetTempPath(), "NotifySpike.log");
     static void Log(string s)
     {
@@ -19,6 +37,19 @@ static class P
     }
 
     static string Describe(UserNotification n)
+    {
+        var full = DescribeFull(n);
+        if (verbose || full.Contains("NothingShell spike test")) return full;
+        return $"id={n.Id} (non-test notification, content redacted)";
+    }
+
+    static void Check(string described)
+    {
+        if (expect == null || !described.Contains("NothingShell spike test")) return;
+        Log(described.Contains("text=\"" + expect) ? $"EXPECT MATCH (text starts with \"{expect}\")" : $"EXPECT MISMATCH (wanted text starting with \"{expect}\")");
+    }
+
+    static string DescribeFull(UserNotification n)
     {
         string app = "?";
         try { app = n.AppInfo.DisplayInfo.DisplayName + " [" + n.AppInfo.AppUserModelId + "]"; } catch (Exception e) { app = "ERR " + e.GetType().Name + " " + e.Message; }
@@ -36,8 +67,10 @@ static class P
     {
         int seconds = 60;
         for (int i = 0; i < args.Length - 1; i++) if (args[i] == "--seconds") seconds = int.Parse(args[i + 1]);
+        for (int i = 0; i < args.Length - 1; i++) if (args[i] == "--expect") expect = args[i + 1];
+        verbose = args.Contains("--verbose");
         File.WriteAllText(LogPath, "");
-        Log($"exe={Environment.ProcessPath} pid={Environment.ProcessId} uiAccessManifest={(Environment.ProcessPath ?? "").Contains("Program Files")}");
+        Log($"exe={Environment.ProcessPath} pid={Environment.ProcessId} inProgramFiles={(Environment.ProcessPath ?? "").Contains("Program Files", StringComparison.OrdinalIgnoreCase)} tokenUIAccess={TokenUiAccess()} verbose={verbose}");
         int len = 0;
         int rc = GetCurrentPackageFullName(ref len, null);
         if (rc == 15700) Log("GetCurrentPackageFullName: APPMODEL_ERROR_NO_PACKAGE (15700) -> NO package identity");
@@ -71,7 +104,7 @@ static class P
             if (args.Contains("--cleanup"))
             {
                 int removed = 0;
-                foreach (var n in list) if (Describe(n).Contains("NothingShell spike test")) { l.RemoveNotification(n.Id); removed++; }
+                foreach (var n in list) if (DescribeFull(n).Contains("NothingShell spike test")) { l.RemoveNotification(n.Id); removed++; }
                 Log($"cleanup: removed {removed} test notifications");
                 return 0;
             }
@@ -86,6 +119,7 @@ static class P
                 {
                     var n = s.GetNotification(a.UserNotificationId);
                     Log($"EVENT NotificationChanged kind={a.ChangeKind} id={a.UserNotificationId} " + (n != null ? Describe(n) : "(notification null)"));
+                    if (n != null) Check(Describe(n));
                 }
                 catch (Exception e) { Log("EVENT handler threw " + e.Message); }
             };
@@ -101,7 +135,7 @@ static class P
             try
             {
                 var list = await l.GetNotificationsAsync(NotificationKinds.Toast);
-                foreach (var n in list) if (seen.Add(n.Id)) Log("  POLL NEW " + Describe(n));
+                foreach (var n in list) if (seen.Add(n.Id)) { Log("  POLL NEW " + Describe(n)); Check(Describe(n)); }
             }
             catch (Exception e) { Log("poll threw " + e.Message); }
         }

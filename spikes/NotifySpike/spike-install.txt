@@ -1,1 +1,1 @@
-NotifySpike: published, signed and installed by spikes/install-spikes.ps1 (uiAccess variant). Sparse package registration: spikes/NotifySpike/register.ps1 -ExternalLocation <Program Files dir> (-Installed).
+NotifySpike: published, signed and installed by spikes/install-spikes.ps1 (uiAccess variant). install-spikes.ps1 then runs register.ps1 -ExternalLocation <install dir> (sparse package registration; run it as the same Windows user).
