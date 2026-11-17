@@ -82,5 +82,8 @@ foreach ($d in $dirs) {
     if ($LASTEXITCODE -ge 8) { throw "robocopy failed (exit $LASTEXITCODE)" }
     $global:LASTEXITCODE = 0
     Write-Host "Installed to $dest"
+    # Sparse-package spikes: register package identity pointing at the installed folder
+    $reg = Join-Path $d.FullName 'register.ps1'
+    if (Test-Path $reg) { & $reg -ExternalLocation $dest; Write-Host "Registered sparse package for $name (external location $dest)." }
 }
 Write-Host "Done. Run e.g. '$install\KeySpike\KeySpike.exe' (launch from Explorer / a normal terminal, NOT elevated) and follow the findings doc's manual checks."

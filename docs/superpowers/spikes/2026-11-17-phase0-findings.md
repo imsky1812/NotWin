@@ -106,3 +106,43 @@ Conclusion (from the measurements above only): Option A passed the flag/hit-test
 - `Attach()` now returns success (false when no DefView host or parent != host). `Watch()` treats `host == 0` / wrong parent as lost and keeps retrying every 250 ms; "re-attached" is logged only on success and reports both "ms since new Progman first seen" and "ms since loss detected". The 2 s criterion should be read from the first (since Progman first seen) figure. The retry path was not exercised (no Explorer restart); NOT MEASURED.
 - `SelfTest` restores Win+D in `finally` when a "toggled" flag is set. Exception path not exercised.
 - Re-run Option A self-test once: runs/runA4-fixround.txt: SendInput click registered (0 -> 1), UIA Invoke 1 -> 2, foreground restored, no spike process left.
+
+## Spike: notification listener
+
+Code: `spikes/NotifySpike` (`NotifySpike.exe [--seconds N] [--cleanup]`, log `%TEMP%\NotifySpike.log`), sparse-package manifest `AppxManifest.xml`, embedded-identity manifests `app.manifest` / `app.uiaccess.manifest`, `register.ps1` (pack + sign + register / `-Remove`). Environment: Windows 11 build 26300, Developer Mode on, run non-elevated (no admin was available to the agent).
+
+How the package was built, signed and registered (all non-admin):
+1. `dotnet publish spikes/NotifySpike/NotifySpike.csproj -c Release -o out/spikes/NotifySpike` (non-uiAccess manifest; the exe's embedded manifest has `<msix publisher="CN=NothingShell Dev" packageName="NothingShell.NotifySpike" applicationId="App"/>`).
+2. `pwsh spikes/NotifySpike/register.ps1 -ExternalLocation D:\NothingLauncher\out\spikes\NotifySpike`: `makeappx pack /nv /o` (from NuGet `Microsoft.Windows.SDK.BuildTools` 10.0.28000.2957), `signtool sign /fd SHA256 /sha1 <CN=NothingShell Dev thumbprint>`, then `Add-AppxPackage -Path out\spikes\NotifySpike.msix -ExternalLocation <dir>`. Manifest: `uap10:AllowExternalContent=true`, `uap3:Capability Name="userNotificationListener"`, `rescap:runFullTrust`, Application `Executable="NotifySpike.exe"` with `uap10:TrustLevel="mediumIL" uap10:RuntimeBehavior="win32App"`. (Note: the capability is in the `uap3` namespace; I added `uap3` to IgnorableNamespaces beyond the brief's list.) Registration succeeded: `Get-AppxPackage` -> `NothingShell.NotifySpike_1.0.0.0_neutral__vsqbmsqrkt384`, `SignatureKind: Developer`, `Status: Ok`.
+3. The package is **left registered** for the manual session. Remove with: `pwsh spikes\NotifySpike\register.ps1 -Remove` (= `Get-AppxPackage NothingShell.NotifySpike | Remove-AppxPackage`).
+
+Test toasts: generated with Windows PowerShell 5.1 via `ToastNotificationManager.CreateToastNotifier('{1AC14E77-02E7-4E5D-B744-2EB1AE5198B7}\WindowsPowerShell\v1.0\powershell.exe').Show(...)`, text `NothingShell spike test <HH:mm:ss> ...`. After the runs `NotifySpike.exe --cleanup` removed the remaining test notification(s) via `RemoveNotification`; a following listing showed 0 notifications containing "NothingShell spike test". Content of the user's other notifications was seen by the spike (Windows Security, Claude, Feedback Hub, OMEN Gaming Hub app names; 8-9 toasts in the Action Center) and is deliberately not reproduced here.
+
+Measured (N counts runs/toasts):
+
+| Item | Measured | Result |
+|---|---|---|
+| Package identity present | `GetCurrentPackageFullName` rc=0, name `NothingShell.NotifySpike_1.0.0.0_neutral__vsqbmsqrkt384` in 5/5 launches (also from a copy of the exe in `%TEMP%\nsctl`, i.e. identity attached by the embedded `<msix>` element, not by folder). A no-identity control run was not done | measured |
+| Access | `GetAccessStatus()` before any request = `Allowed`; `RequestAccessAsync()` returned `Allowed` after 19-24 ms; no prompt was observable (the call returned in ~20 ms; no UIA/window enumeration was done, so "no prompt" is inferred from the latency). Access status was already Allowed on the very first launch, so whether a consent prompt ever appears for a fresh package was not observed | Allowed, 5/5 |
+| (a) text prints | `GetNotificationsAsync(NotificationKinds.Toast)` listed existing toasts with `AppInfo.DisplayInfo.DisplayName` and the `ToastGeneric` text elements printed. New test toasts: `NotificationChanged` (ChangeKind=Added) fired with the app (`Windows PowerShell [{1AC14E77-...}\WindowsPowerShell\v1.0\powershell.exe]`) and exact text `NothingShell spike test 00:28:22 run2 | body line two`, 1/1 in run 2 and 3/3 in run 3 (4/4 total), event latency 40-60 ms after `Show`. A 1 s poll of `GetNotificationsAsync` also saw 4/4 | PASS (N=4 toasts, 2 runs) |
+| `Removed` events | For the 3 non-suppressed toasts in run 3, a `Removed` event arrived about 2 s after `Added` (`GetNotification` returned null then). Cause not investigated (possibly tied to the PowerShell sender process exiting) | observation |
+| (b) with banners off | The "Show notification banners" setting was NOT touched (controller decision). Proxy only: toasts with `ToastNotification.SuppressPopup = true` (delivered to the Action Center without a banner) were also delivered to the listener, 3/3 (`Added` event + poll, text intact). This is not the same as the per-app Settings toggle | NOT MEASURED (manual); proxy 3/3 |
+| (c) signed uiAccess exe under Program Files | Needs admin (install-spikes.ps1). Not run. Only checked: the `-p:UiAccess=true` build compiles. NotifySpike now has `spike-install.txt`, and `install-spikes.ps1` calls `register.ps1 -ExternalLocation <Program Files dir>` after installing | NOT MEASURED (manual) |
+
+Raw output of the key run (run 2, other apps' EXISTING lines omitted):
+```
+00:28:17.123 GetCurrentPackageFullName rc=0 name=NothingShell.NotifySpike_1.0.0.0_neutral__vsqbmsqrkt384
+00:28:17.160 GetAccessStatus (before) = Allowed
+00:28:17.182 RequestAccessAsync returned Allowed after 21 ms
+00:28:17.241 GetNotificationsAsync(Toast) count=8
+00:28:17.379 NotificationChanged handler attached
+00:28:22.561 EVENT NotificationChanged kind=Added id=127755 ... app=Windows PowerShell [{1AC14E77-02E7-4E5D-B744-2EB1AE5198B7}\WindowsPowerShell\v1.0\powershell.exe] text="NothingShell spike test 00:28:22 run2 | body line two"
+00:28:22.613   POLL NEW id=127755 ... text="NothingShell spike test 00:28:22 run2 | body line two"
+```
+
+Conclusion (from the above only): criterion (a) is met with a registered sparse package (non-uiAccess, run from the build output): the listener is Allowed and prints app name + text for existing and newly arrived toasts. (b) and (c) are not measured.
+
+### Manual checks pending (user/controller), NotifySpike
+1. (b) Run `D:\NothingLauncher\out\spikes\NotifySpike\NotifySpike.exe --seconds 120`. In Settings > System > Notifications > (target app, e.g. Discord or Windows PowerShell) turn **off** "Show notification banners". Send a message/toast (or `powershell -File <toast.ps1>` equivalent). Confirm the text still prints (`EVENT` / `POLL NEW` lines). Turn the setting back on.
+2. (c) Elevated terminal: `pwsh spikes\install-spikes.ps1 -Only NotifySpike` (publishes with uiAccess, signs, copies to `C:\Program Files\NothingShell.Spikes\NotifySpike`, re-registers the sparse package with that external location). Run `C:\Program Files\NothingShell.Spikes\NotifySpike\NotifySpike.exe --seconds 60` from a normal (non-elevated) terminal, send a toast, and check for the `GetCurrentPackageFullName` name, `RequestAccessAsync` status and the printed text. Not verified that identity + uiAccess work together.
+3. Remove afterwards: `pwsh spikes\NotifySpike\register.ps1 -Remove`.
