@@ -163,7 +163,7 @@ static class P
             Chord(lwin, (vk, false)); Thread.Sleep(900);
             bool s2 = StartVisible(out var i2); var l = Snap();
             Console.WriteLine($"  actions: {string.Join(" | ", l)}");
-            Check($"{name} -> OPEN PANEL, Start stays closed", l.Any(x => x.StartsWith("OPEN PANEL")) && !s2 && !l.Contains("OPEN LAUNCHER"), $"startVisible={s2} ({i2})");
+            Check($"{name} -> OPEN PANEL logged, no OPEN LAUNCHER, no Start window (flyout itself not detected)", l.Any(x => x.StartsWith("OPEN PANEL")) && !s2 && !l.Contains("OPEN LAUNCHER"), $"startVisible={s2} ({i2})");
             CloseStartIfOpen(name);
         }
 
@@ -179,10 +179,13 @@ static class P
 
         Console.WriteLine("-- Win+D with hook (desktop shown, then Win+D again to undo)");
         Chord(lwin, (0x44, false)); Thread.Sleep(1000);
-        var fg1 = GetForegroundWindow(); string fgDesc = $"{ProcName(fg1)}:{Cls(fg1)}"; var d = Snap();
+        var fg1 = GetForegroundWindow(); string c1 = Cls(fg1); string fgDesc = $"{ProcName(fg1)}:{c1}"; var d = Snap();
         Console.WriteLine($"  actions: {string.Join(" | ", d)}; foreground after Win+D = {fgDesc}");
-        Chord(lwin, (0x44, false)); Thread.Sleep(1000); Snap();
-        Check("Win+D passes through", d.Any(x => x.Contains("Win+0x44")) && !d.Contains("OPEN LAUNCHER"), $"foreground after = {fgDesc} (Progman/WorkerW/Shell_TrayWnd = desktop shown)");
+        Chord(lwin, (0x44, false)); Thread.Sleep(1000);
+        var fg2 = GetForegroundWindow(); string c2 = Cls(fg2); Snap();
+        bool shown = c1 is "Progman" or "WorkerW", restored = !(c2 is "Progman" or "WorkerW");
+        Check("Win+D passes through (desktop shown, then restored by 2nd Win+D)", d.Any(x => x.Contains("Win+0x44")) && !d.Contains("OPEN LAUNCHER") && shown && restored,
+              $"foreground after 1st = {fgDesc} (desktop={shown}); after 2nd = {ProcName(fg2)}:{c2} (restored={restored})");
         CloseStartIfOpen("d");
 
         PostThreadMessage(pumpTid, 0x12, 0, 0); // WM_QUIT

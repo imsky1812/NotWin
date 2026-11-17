@@ -50,6 +50,8 @@ static class P
         if (bridge != 0) ShowWindow(bridge, SW_SHOWNA);
     }
 
+    [DllImport("user32", EntryPoint = "GetWindowLongW")] static extern int GetWindowLong(IntPtr h, int idx);
+    [DllImport("user32")] static extern IntPtr GetForegroundWindow();
     static void Say(string s) => Console.WriteLine(s);
 
     static string Cls(IntPtr h) { var sb = new StringBuilder(256); GetClassName(h, sb, 256); return sb.ToString(); }
@@ -88,7 +90,10 @@ static class P
             string n, id;
             try { n = e.Current.Name; id = e.Current.AutomationId; } catch { continue; }
             if (n.Contains("hidden icons", StringComparison.OrdinalIgnoreCase) || id.Contains("Chevron", StringComparison.OrdinalIgnoreCase))
-                return e;
+            {
+                // right after show the XAML tree can exist before patterns are wired up; only accept a chevron that supports Invoke
+                if (e.TryGetCurrentPattern(InvokePattern.Pattern, out _)) return e;
+            }
         }
         return null;
     }
@@ -148,7 +153,15 @@ static class P
         GetWindowRect(tray, out var r0);
         Say($"initial: Shell_TrayWnd visible={initiallyVisible} rect=({r0.L},{r0.T},{r0.R},{r0.B}) fenn={Process.GetProcessesByName("fenn").Length > 0}");
 
-        void Restore() { ShowWindow(tray, initiallyVisible ? SW_SHOWNA : SW_HIDE); }
+        var bridge0 = FindWindowEx(tray, 0, "Windows.UI.Composition.DesktopWindowContentBridge", null);
+        bool BridgeOwnVisible() => bridge0 != 0 && (GetWindowLong(bridge0, -16) & 0x10000000) != 0;   // WS_VISIBLE of the child itself
+        bool bridgeInitiallyVisible = BridgeOwnVisible();
+        Say($"initial: XAML bridge child hwnd={bridge0} WS_VISIBLE={bridgeInitiallyVisible}");
+        void Restore()
+        {
+            if (bridge0 != 0) ShowWindow(bridge0, bridgeInitiallyVisible ? SW_SHOWNA : SW_HIDE);
+            ShowWindow(tray, initiallyVisible ? SW_SHOWNA : SW_HIDE);
+        }
         AppDomain.CurrentDomain.ProcessExit += (_, _) => Restore();
         Console.CancelKeyPress += (_, _) => Restore();
 
@@ -226,26 +239,25 @@ static class P
             Say($"  chevron found={chev != null} after {sw.ElapsedMilliseconds} ms of taskbar visible");
             if (chev != null)
             {
-                long tStart = sw.ElapsedMilliseconds;
+                long tStart = sw.ElapsedMilliseconds;         // Invoke() starts this many ms after the first ShowWindow
                 var inv = Task.Run(() => Invoke(chev));      // Invoke() blocks for a while, so poll for the flyout meanwhile
-                if (args.Contains("--early-hide"))            // variant 2b: hide the taskbar 50 ms after starting Invoke, don't wait for the flyout
+                long tHide = -1;
+                if (args.Contains("--early-hide"))            // variant 2b: hide the taskbar ~15 ms after starting Invoke, don't wait for the flyout
                 {
                     Thread.Sleep(15);
-                    pinCts?.Cancel(); ShowWindow(tray, SW_HIDE);
-                    Say($"  early-hide: taskbar visible for only {sw.ElapsedMilliseconds} ms (show -> hide)");
-                    tStart = sw.ElapsedMilliseconds;
+                    pinCts?.Cancel(); ShowWindow(tray, SW_HIDE); tHide = sw.ElapsedMilliseconds;
+                    Say($"  [early-hide] taskbar visible from first show to hide call: {tHide} ms");
                 }
                 long tOv = -1;
                 while (sw.ElapsedMilliseconds - tStart < 4000 && tOv < 0) { if (FindOverflow() != 0) tOv = sw.ElapsedMilliseconds; else Thread.Sleep(5); }
-                Say($"  Invoke started {tStart} ms after show; flyout window visible {tOv} ms after show ({(tOv >= 0 ? tOv - tStart : -1)} ms after Invoke started); Invoke returned={inv.IsCompleted}");
+                Say($"  Invoke started at t={tStart} ms (t=0 is first show); flyout visible at t={tOv} ms = {(tOv >= 0 ? tOv - tStart : -1)} ms after Invoke start; Invoke returned={inv.IsCompleted}");
                 foreach (var kv in VisibleTop().Where(k => !before.ContainsKey(k.Key))) Say($"  new visible top-level: {kv.Value} hwnd={kv.Key}");
                 if (tOv >= 0)
                 {
-                    pinCts?.Cancel(); Thread.Sleep(20); if (!initiallyVisible) ShowWindow(tray, SW_HIDE);
-                    long tHidden = sw.ElapsedMilliseconds;
+                    if (tHide < 0) { pinCts?.Cancel(); if (!initiallyVisible) ShowWindow(tray, SW_HIDE); tHide = sw.ElapsedMilliseconds; Say($"  [late-hide] taskbar visible from first show to hide call (after flyout appeared): {tHide} ms"); }
                     Thread.Sleep(600);
                     bool stillOpen = FindOverflow() != 0;
-                    Say($"  taskbar visible for {tHidden} ms total (show->hide); overflow still open 600 ms after hiding taskbar = {stillOpen}");
+                    Say($"  overflow still open 600 ms after taskbar hide = {stillOpen}");
                     Say(stillOpen ? "  RESULT strategy 2 WORKS (flyout survives taskbar hide)" : "  RESULT overflow closed when taskbar hidden");
                 }
                 else Say("  RESULT overflow window did NOT appear");
@@ -260,18 +272,26 @@ static class P
         try
         {
             ShowWindow(tray, SW_HIDE);
+            int visSamples = 0, samples = 0; int minTop = int.MaxValue;
+            var sampCts = new CancellationTokenSource();
+            var samp = Task.Run(() => { while (!sampCts.IsCancellationRequested) { samples++; if (IsWindowVisible(tray)) visSamples++; GetWindowRect(tray, out var sr); minTop = Math.Min(minTop, sr.T); Thread.Sleep(5); } });
             Key(0x5B, false, true); Tap(0x42); Key(0x5B, true, true);
             Thread.Sleep(250);
-            Tap(0x0D);
+            var fg = GetForegroundWindow(); var fgc = Cls(fg);
+            if (fgc == "Shell_TrayWnd") { Tap(0x0D); Say("  Win+B focused the tray; sent Enter"); }
+            else Say($"  Win+B did not focus the tray (foreground class={fgc}); Enter NOT sent");
             long t = WaitOverflow(1500);
-            Say(t >= 0 ? $"  RESULT overflow window appeared after {t} ms with taskbar hidden" : "  RESULT overflow window did NOT appear (1500 ms)");
+            Thread.Sleep(100); sampCts.Cancel(); samp.Wait();
+            Say($"  tray sampled every 5 ms during Win+B/Enter: {visSamples}/{samples} samples IsWindowVisible=true; lowest rect.top seen={minTop} (initial top={r0.T})");
+            Say(t >= 0 ? $"  RESULT overflow window appeared {t} ms after the wait started" : "  RESULT overflow window did NOT appear (1500 ms)");
         }
         finally { Restore(); }
         bool closed = CloseFlyout();
         Thread.Sleep(300);
 
+        Restore(); Thread.Sleep(500);   // the shell may flip the bridge child back on after strategy 3 (Win+B reveals the bar); re-assert and re-check
         GetWindowRect(tray, out var r1);
-        Say($"final: Shell_TrayWnd visible={IsWindowVisible(tray)} (initial {initiallyVisible}) rect=({r1.L},{r1.T},{r1.R},{r1.B}); overflow closed cleanly={closed}");
+        Say($"final: Shell_TrayWnd visible={IsWindowVisible(tray)} (initial {initiallyVisible}) rect=({r1.L},{r1.T},{r1.R},{r1.B}); overflow closed cleanly={closed}; bridge child WS_VISIBLE={BridgeOwnVisible()} (initial {bridgeInitiallyVisible})");
         return 0;
     }
 }

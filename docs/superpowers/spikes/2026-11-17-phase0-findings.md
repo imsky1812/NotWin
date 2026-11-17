@@ -16,10 +16,10 @@ Observed (Debug build, non-uiAccess, `--selftest`, final run):
 |---|---|
 | Control: lone Win tap with hook NOT installed opens Start | Start detected (detector valid) |
 | (a) lone Win tap with hook: Start stays closed, `OPEN LAUNCHER` logged | PASS |
-| Win+A: `OPEN PANEL (Win+A)`, no Control Center, no Start | PASS |
-| Win+N: `OPEN PANEL (Win+N)`, no notification center, no Start | PASS |
+| Win+A: `OPEN PANEL (Win+A)` logged, no `OPEN LAUNCHER`, no Start window detected | PASS for that. Absence of Quick Settings was NOT measured (no detector); manual |
+| Win+N: `OPEN PANEL (Win+N)` logged, no `OPEN LAUNCHER`, no Start window detected | PASS for that. Absence of the Notification Center was NOT measured; manual |
 | Win+E: passes through, new Explorer window opened (closed by harness) | PASS |
-| Win+D: passes through, foreground became `explorer:Progman`; second Win+D undid it | PASS |
+| Win+D: hook logged pass-through and no `OPEN LAUNCHER`; asserted foreground class Progman/WorkerW after the 1st press (observed `explorer:Progman`) and not Progman/WorkerW after the 2nd (observed `claude:Chrome_WidgetWin_1`) | PASS (assertions added in fix round 1, re-run) |
 | (b) Win+L, Win+Shift+S, Win+Tab, Win+arrows | NOT TESTED (lock / overlay / window moves; manual) |
 | (c) uiAccess, signed, Program Files, Task Manager focused | NOT TESTED (needs elevated install; manual) |
 
@@ -44,19 +44,19 @@ Environment findings:
 - The tray chevron in UIA: `ControlType.Button`, `AutomationId='SystemTrayIcon'`, `Name='Show Hidden Icons'`, class `SystemTray.NormalButton`, supports `InvokePattern`.
 - With the tray hidden, UIA exposes no XAML children (the content bridge child is hidden). The tray window and its bridge child must both be shown before the chevron can be found.
 
-Results (3 runs of `--run --early-hide` plus 1 earlier run on the unlocked desktop; initial state tray hidden, restored to hidden each time):
+Results, fix-round re-run (on the unlocked desktop; 3 runs of `--run --early-hide`, 1 run of `--run`; tray initially hidden, restored to hidden every time). Timing definitions: t=0 is the first `ShowWindow`; "visible time" = t=0 to the moment the hide call returns; "flyout latency" = Invoke start to the flyout window being seen (5 ms polling).
 
 | Strategy | Result |
 |---|---|
-| 1. taskbar hidden, UIA Invoke | FAIL: chevron not found while hidden (no UIA children) |
-| 2. show, find chevron, Invoke, hide again | WORKS 4/4: flyout window appeared 0-55 ms after Invoke started and survived hiding the taskbar (still open 600 ms later). Taskbar visible show-to-hide: 116, 296, 348, 377 ms. Dominated by the UIA chevron search (75-352 ms, first search is slowest). |
-| 3. taskbar hidden, Win+B then Enter | WORKS 4/4: flyout appeared 6-15 ms after Enter; we never show the taskbar |
+| 1. taskbar hidden, UIA Invoke | FAIL in every run (8/8): chevron not found (no UIA children). Observed only with Fenn running; the root cause may be Fenn rather than Windows, not tested without it |
+| 2. show, find chevron (must expose InvokePattern), Invoke, hide | Worked 4/4 in the re-run (flyout survived the taskbar hide; still open 600 ms later). Early-hide runs (hide ~15 ms after Invoke starts): visible time 102, 74, 66 ms; flyout latency 27, 25, 26 ms. Non-early run: flyout 23 ms after Invoke start, hide issued after it, visible time 96 ms. All under 300 ms. Caveat: in the first fix-round attempt (before requiring InvokePattern) 3 of 4 runs found a chevron element at 44-57 ms that had no InvokePattern yet and failed; earlier unlocked runs had visible times of 116-377 ms (those figures used the older, differently reset timers and are superseded). So the find step is flaky unless the pattern check is included. |
+| 3. taskbar hidden, Win+B then Enter | Flyout appeared 13-14 ms after Enter in 4/4 re-runs. During Win+B/Enter the tray window was sampled every 5 ms: `IsWindowVisible=true` in 0 of ~25 samples per run, and its rect.top never moved below the resting autohide position (lowest top 1020 against an initial 1020 or 1078). Enter is only sent if Win+B put focus on `Shell_TrayWnd` (guard added to avoid stray Enter) |
 
-Criterion "at least one strategy with no visible taskbar flash longer than 300 ms": strategy 3 passes by construction (the taskbar is never shown by us). Strategy 2 is borderline (116 to 377 ms) and could be tightened by caching the chevron element. Not observed visually: whether the bar is painted on screen in those windows (only `IsWindowVisible` and timing were measured). Fenn's placement of the bar (rect y=1078..1138 on a 1080 px screen, i.e. mostly off-screen) may hide it anyway.
+Overall status of the overflow criterion: PENDING. Mechanically, strategies 2 and 3 open Windows' own flyout (`TopLevelWindowForOverflowXamlIsland`) with the taskbar hidden within 300 ms by `IsWindowVisible`/timing, but the criterion also needs working icons and right-click menus, and a visual check for flash. Neither was verified; see manual checks. Taskbar painting on screen was not observed visually.
 
 Not verified: flyout contents (icons present), right-click menus, Discord/Steam icons, flyout position when the real taskbar is hidden normally, and behavior when Fenn is NOT running. Esc does not reliably close a flyout opened this way (focus never lands in it); the spike falls back to `SW_HIDE` on the flyout window, so stale flyout state is possible.
 
-Taskbar state: restored to its initial hidden state after every run (verified: both `Shell_TrayWnd` windows `IsWindowVisible=False`, no overflow/Explorer/Start windows left).
+Taskbar state: restored to its initial hidden state after every run (verified: both `Shell_TrayWnd` windows `IsWindowVisible=False`, no overflow/Explorer/Start windows left). The spike also records and restores the XAML bridge child (`DesktopWindowContentBridge`) that `PinShow` forces visible; final check reports its WS_VISIBLE against the initial value (False/False in all 4 re-runs; an earlier build that did not restore it showed it left True right after a run, which the shell later reset). Checked on the machine afterwards: bridge child WS_VISIBLE=False.
 
 ### Manual checks pending (user)
 1. Run `spikes\OverflowSpike\bin\Debug\net10.0-windows10.0.22621.0\OverflowSpike.exe --run --early-hide` while watching the bottom/right of the screen. Note any taskbar flash and its duration.
