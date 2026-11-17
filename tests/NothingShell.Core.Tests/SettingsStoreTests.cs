@@ -50,4 +50,45 @@ public sealed class SettingsStoreTests : IDisposable
         Assert.False(File.Exists(Path.Combine(_dir, "settings.json")));
         Assert.Equal("{ not json", File.ReadAllText(Path.Combine(_dir, "settings.json.bad")));
     }
+
+    [Fact]
+    public void Load_LockedFile_ReturnsDefaultsWithoutRenaming()
+    {
+        var path = Path.Combine(_dir, "settings.json");
+        File.WriteAllText(path, "{\"keepDockVisible\":true}");
+        using (new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.None))
+        {
+            var s = new SettingsStore(_dir).Load();
+            Assert.False(s.KeepDockVisible);
+        }
+        Assert.True(File.Exists(path));
+        Assert.False(File.Exists(path + ".bad"));
+    }
+
+    [Fact]
+    public void Save_AfterFailedLoad_DoesNotOverwrite()
+    {
+        var path = Path.Combine(_dir, "settings.json");
+        File.WriteAllText(path, "{\"keepDockVisible\":true}");
+        var store = new SettingsStore(_dir);
+        using (new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.None))
+            store.Load();
+
+        store.Save(new ShellSettings());
+
+        Assert.Contains("true", File.ReadAllText(path));
+        Assert.True(store.Load().KeepDockVisible); // lock released: load succeeds, saves allowed again
+        store.Save(new ShellSettings { WidgetScale = "L" });
+        Assert.Equal("L", store.Load().WidgetScale);
+    }
+
+    [Fact]
+    public void Load_CorruptFile_WithUnmovableBad_StillReturnsDefaults()
+    {
+        File.WriteAllText(Path.Combine(_dir, "settings.json"), "{ nope");
+        var bad = Path.Combine(_dir, "settings.json.bad");
+        File.WriteAllText(bad, "old");
+        using (new FileStream(bad, FileMode.Open, FileAccess.Read, FileShare.None))
+            Assert.True(new SettingsStore(_dir).Load().StartWithWindows);
+    }
 }
