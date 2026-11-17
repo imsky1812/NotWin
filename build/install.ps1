@@ -48,7 +48,7 @@ $cert = Get-ChildItem Cert:\CurrentUser\My |
 if (-not $cert) {
     Write-Host "Creating code-signing certificate $subject"
     $cert = New-SelfSignedCertificate -Type CodeSigningCert -Subject $subject `
-        -KeyAlgorithm RSA -KeyLength 3072 -HashAlgorithm SHA256 `
+        -KeyAlgorithm RSA -KeyLength 3072 -HashAlgorithm SHA256 -KeyExportPolicy NonExportable `
         -CertStoreLocation Cert:\CurrentUser\My -NotAfter (Get-Date).AddYears(5)
 }
 $thumb = $cert.Thumbprint

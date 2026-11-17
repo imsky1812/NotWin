@@ -14,14 +14,20 @@ $install = Join-Path $env:ProgramFiles 'NothingShell'
 
 # 1. Stop shell and watchdog
 foreach ($name in 'NothingShell', 'NothingShell.Watchdog') {
-    Get-Process -Name $name -ErrorAction SilentlyContinue | Stop-Process -Force
+    $procs = @(Get-Process -Name $name -ErrorAction SilentlyContinue)
+    if ($procs.Count -gt 0) {
+        $procs | Stop-Process -Force
+        $procs | Wait-Process -Timeout 15 -ErrorAction SilentlyContinue
+    }
 }
-Start-Sleep -Milliseconds 500
 
 # 2. Restore the taskbar/shell state
 $watchdog = Join-Path $install 'NothingShell.Watchdog.exe'
 if (Test-Path $watchdog) {
     & $watchdog --restore-now --state (Join-Path $env:APPDATA 'NothingShell')
+    if ($LASTEXITCODE -ne 0) {
+        throw "Watchdog --restore-now failed (exit $LASTEXITCODE). Aborting before deleting $install so the watchdog stays available to retry the taskbar/shell restore."
+    }
 } else {
     Write-Host 'Watchdog not found; skipping restore.'
 }
