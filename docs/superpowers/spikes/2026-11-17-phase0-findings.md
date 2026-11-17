@@ -64,3 +64,40 @@ Taskbar state: restored to its initial hidden state after every run (verified: b
 3. Right-click an icon in that flyout: the context menu must appear and its items must work.
 4. Repeat 1-3 with Fenn closed and the Windows taskbar set to auto-hide (and once always visible) to see behavior without the decoy `Shell_TrayWnd`/re-hide. Report whether the 300 ms criterion holds.
 5. Confirm the taskbar returns to its original state after each run.
+
+## Spike: desktop layer
+
+Code: `spikes/DesktopLayerSpike` (`--option A|B [--selftest] [--stay] [--no-reshow]`). Raw console output of every self-test run: `spikes/DesktopLayerSpike/runs/` (runA1-3, runB1-3, runBnr1-2). Environment: Windows 11 build 26300, 1920x1080, Fenn running. Runs happened on the unlocked desktop (no LogonUI). N: Option A 3 runs; Option B with re-show 3 runs; Option B without re-show (`--no-reshow`) 2 runs. Window: 300x300 WPF window at screen (100,300) with a click-counting button. This spike does not need a signed/Program Files install (no `spike-install.txt` marker): nothing here uses uiAccess.
+
+Self-test method: (1) `ZTest`: open an own top-level window over the spike in the normal state; (2) send Win+D with `SendInput`; (3) measure; (4) click test; (5) Win+D again and verify the foreground window is the same as before. Clicks: `SendInput` is sent only if `WindowFromPoint` at the button centre returns the spike's own HWND (checked before and again after moving the cursor); otherwise skipped. `UIA InvokePattern` is a secondary check and involves no mouse, so it does not prove a real click can reach the window.
+
+Desktop tree observed (all runs): `Progman` (explorer, rect 0,0,1920,1080) has children `SHELLDLL_DefView` (-> `SysListView32`) and a `WorkerW` (all child windows of Progman). No top-level `WorkerW` had a `SHELLDLL_DefView` child. So Option A parented the spike to Progman (the DefView host) and put it at HWND_TOP among Progman's children (index 0 of 3 siblings).
+
+Option A: send 0x052C to Progman, `SetParent` to Progman, `HWND_TOP`.
+
+| Criterion | Measured | Result |
+|---|---|---|
+| (a) click registers | With the desktop shown (after Win+D), `WindowFromPoint(button centre)` = spike HWND; `SendInput` left click: clicks 0 -> 1 and a mouse-up event seen, in 3/3 runs. UIA `InvokePattern` also raised the count (1 -> 2) in 3/3 | PASS (N=3) |
+| (b) under normal windows | In the normal state a top-level test window of mine was placed over the spike: `WindowFromPoint(spike centre)` = test window; walking `GW_HWNDNEXT` from the test window reaches Progman (the spike's root) below it, 3/3. Progman's index among top-level windows was 234 of 235 and 237 of 238 in run 1 (0 = topmost). In the normal state `WindowFromPoint` at the spike centre returned the Claude app's Chrome window (isSpike=False) in all runs, i.e. the user's app was hit-tested above the spike. Only my own test window and the user's Claude window were tested, not arbitrary apps | PASS (N=3), limited to those windows |
+| (c) visible after Win+D | After Win+D #1: `IsWindowVisible`=True, `IsIconic`=False, cloaked=False, `WindowFromPoint(centre)` = spike HWND, foreground = Progman. Run 1 shown in full; the click result (a) in runs 2-3 implies the same hit result. After the restoring Win+D #2 the user's foreground window was unchanged (3/3) | PASS (N=3) |
+| (d) survives Explorer restart | Not run (controller decision: Explorer must not be restarted). Watcher exists (`--stay`, 250 ms timer, recreates the window when its HWND is gone or Progman changed; logs ms since loss detected). The code-path check (calling `Attach()` again on a live window) kept it parented/visible; that is not an Explorer restart | NOT MEASURED (manual) |
+| (e) not in Alt-Tab / dock list | Spike is a child window (style has WS_CHILD, parent=Progman), `EnumWindows` did not list it (False in all states), `WS_EX_TOOLWINDOW`=False, cloaked=False. Alt-Tab heuristic (visible, unowned, top-level, not toolwindow) computed False because it is not top-level. `GetWindow(GW_OWNER)` returned a non-zero handle for the child; not investigated. Alt-Tab was not pressed and no dock exists yet to check its list | Heuristic only, not observed in Alt-Tab: NOT MEASURED (manual) |
+
+Option B: top-level `WS_EX_TOOLWINDOW|WS_EX_NOACTIVATE`, `HWND_BOTTOM` via `WM_WINDOWPOSCHANGING`, re-show on `EVENT_SYSTEM_FOREGROUND` -> Progman/WorkerW.
+
+| Criterion | Measured | Result |
+|---|---|---|
+| (a) click registers | After Win+D, `WindowFromPoint(button centre)` = `SysListView32` (explorer's desktop FolderView), not the spike, in 3/3 re-show runs and 2/2 no-reshow runs. The `SendInput` click was therefore skipped by the safety rule every time, so no real click was delivered to it. UIA Invoke raised the count (0 -> 1) in 5/5, which proves only that the button's handler works | FAIL for real clicks in the measured state (hit-testing at the button goes to the desktop list view; 5/5 runs). Real click never delivered, so "the click would not register" is inferred from `WindowFromPoint`, not measured |
+| (b) under normal windows | Top-level index 234-237 of 236-239 (near the bottom; user's windows above), and the own test window was above it (`WindowFromPoint` = test window in 3/5 runs; in the other 2 the Claude window was hit instead, so that check was inconclusive in those runs) | PASS for "stays near bottom" (N=5); not tested against every app |
+| (c) visible after Win+D | `IsWindowVisible`=True, `IsIconic`=False after Win+D #1 in all 5 runs, **including no-reshow** (re-show was therefore not needed to keep the flag True). The re-show hook did fire in the 3 re-show runs. But `WindowFromPoint(centre)` returned the explorer `SysListView32`, not the spike, in 5/5; whether the spike is actually painted above or below the desktop icons was not measured | Flag-level PASS; actual on-screen visibility NOT MEASURED (manual) |
+| (d) Explorer restart | Not run. `TaskbarCreated` handler exists (code path exercised only by posting the message to itself) | NOT MEASURED (manual) |
+| (e) Alt-Tab / dock | Top-level, `WS_EX_TOOLWINDOW`=True, no `WS_EX_APPWINDOW`, visible, not cloaked; Alt-Tab heuristic computed False (5/5). `GW_OWNER` non-zero in all runs, not investigated. Alt-Tab not pressed; no dock yet | Heuristic only: NOT MEASURED (manual) |
+
+Conclusion (from the measurements above only): Option A is the one that passed every criterion that could be measured here ((a), (b), (c), 3/3 runs); Option B failed (a) because the desktop list view was the hit-test target over the spike after Win+D. (d), (e) in Alt-Tab and any visual check remain manual. Notes: Explorer's pid changed between my first and later runs (11924 -> 11472); not caused by this spike (nothing here restarts Explorer) and the cause was not investigated. Cleanup: no DesktopLayerSpike process remained after the runs; each run ended with Win+D toggled back and the original foreground window restored (see "foreground same as before Win+D: True" in each log).
+
+### Manual checks pending (user/controller)
+1. `cd spikes\DesktopLayerSpike; .\bin\Debug\net10.0-windows10.0.22621.0\DesktopLayerSpike.exe --option A --stay` (log also at `%TEMP%\DesktopLayerSpike.log`). Click the button with the mouse (desktop shown and with apps open).
+2. Criterion (d): in a terminal run `Stop-Process -Name explorer` (Explorer normally auto-restarts; with Fenn running expect side effects). Read the `WATCH:` lines in the log: need re-attach within 2 s of Progman reappearing. Confirm the widget is visible and clickable afterwards.
+3. Criterion (e): press Alt-Tab and check the window list; confirm no `DesktopLayerSpike` entry. Check the dock window list once it exists.
+4. Visually confirm the window is above the wallpaper/icons and under normal windows, and that it stays visible after Win+D.
+5. Ctrl+C to quit.

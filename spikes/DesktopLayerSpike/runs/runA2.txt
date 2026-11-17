@@ -1,0 +1,115 @@
+[   313 ms] Progman 1020A class=Progman owner=explorer(11924) title='Program Manager' rect=(0,0,1920,1080) 1920x1080 visible=True
+[   315 ms]   Progman descendant 10210 class=SHELLDLL_DefView owner=explorer(11924) title='' parent=1020A rect=(0,0,1920,1080) 1920x1080 visible=True
+[   315 ms]   Progman descendant 10212 class=SysListView32 owner=explorer(11924) title='FolderView' parent=10210 rect=(0,0,1920,1080) 1920x1080 visible=True
+[   315 ms]   Progman descendant 10216 class=SysHeader32 owner=explorer(11924) title='' parent=10212 rect=(0,0,0,0) 0x0 visible=False
+[   315 ms]   Progman descendant 30164 class=WorkerW owner=explorer(11924) title='' parent=1020A rect=(0,0,1920,1080) 1920x1080 visible=True
+[   317 ms] top-level WorkerW 302C6 owner=SystemSettings(14536) visible=False rect=(0,0,166,47) 166x47 hasDefView=False
+[   318 ms] top-level WorkerW B0676 owner=explorer(11924) visible=False rect=(0,0,166,47) 166x47 hasDefView=False
+[   318 ms] top-level WorkerW 20314 owner=explorer(11924) visible=False rect=(0,0,166,47) 166x47 hasDefView=False
+[   318 ms] top-level WorkerW 60750 owner=explorer(11924) visible=False rect=(0,0,166,47) 166x47 hasDefView=False
+[   318 ms] top-level WorkerW 107B2 owner=explorer(11924) visible=False rect=(0,0,166,47) 166x47 hasDefView=False
+[   318 ms] top-level WorkerW 206F6 owner=explorer(11924) visible=False rect=(0,0,166,47) 166x47 hasDefView=False
+[   318 ms] top-level WorkerW 30276 owner=CastSrv(8184) visible=False rect=(0,0,166,47) 166x47 hasDefView=False
+[   318 ms] top-level WorkerW 603C2 owner=CastSrv(8184) visible=False rect=(0,0,166,47) 166x47 hasDefView=False
+[   318 ms] top-level WorkerW 1033E owner=RuntimeBroker(14104) visible=False rect=(0,0,166,47) 166x47 hasDefView=False
+[   318 ms] top-level WorkerW 1031A owner=explorer(11924) visible=False rect=(0,0,166,47) 166x47 hasDefView=False
+[   318 ms] top-level WorkerW 102D6 owner=explorer(11924) visible=False rect=(0,0,166,47) 166x47 hasDefView=False
+[   318 ms] top-level WorkerW 10296 owner=explorer(11924) visible=False rect=(0,0,166,47) 166x47 hasDefView=False
+[   318 ms] top-level WorkerW 10298 owner=explorer(11924) visible=False rect=(0,0,166,47) 166x47 hasDefView=False
+[   318 ms] top-level WorkerW 201F6 owner=explorer(11924) visible=False rect=(0,0,166,47) 166x47 hasDefView=False
+[   318 ms] top-level WorkerW 201B0 owner=explorer(11924) visible=False rect=(0,0,0,0) 0x0 hasDefView=False
+[   318 ms] top-level WorkerW 1021E owner=explorer(11924) visible=False rect=(0,0,166,47) 166x47 hasDefView=False
+[   318 ms] top-level WorkerW 10204 owner=explorer(11924) visible=False rect=(0,0,166,47) 166x47 hasDefView=False
+[   319 ms] top-level WorkerW 10202 owner=explorer(11924) visible=False rect=(0,0,166,47) 166x47 hasDefView=False
+[   319 ms] DefView host chosen: 1020A class=Progman owner=explorer(11924) title='Program Manager'
+[   327 ms] Option A: parented to 1020A; client pos=(100,300); rect now (100,300,400,600) 300x300
+[   327 ms] created window 180748 option=A
+[  1838 ms] === SELFTEST option A noReshow=False OS=10.0.26300.0
+[  1844 ms] foreground before: 303A8 class=Chrome_WidgetWin_1 owner=claude(12836) title='Claude'
+[  1844 ms] --- state: initial (normal desktop, user's windows present)
+[  1845 ms]   hwnd=180748 IsWindow=True IsWindowVisible=True IsIconic=False cloaked=False rect=(100,300,400,600) 300x300
+[  1845 ms]   style=0x56000000 exstyle=0x0 (TOOLWINDOW=False APPWINDOW=False NOACTIVATE=False CHILD=True) parent=1020A owner(GW_OWNER)=F009A
+[  1845 ms]   z-order among siblings of its parent: index 0 of 3 (0 = topmost)
+[  1845 ms]   top-level root 1020A class=Progman owner=explorer(11924) title='Program Manager' z-index among top-level windows: 234 of 235
+[  1846 ms]   present in EnumWindows (top-level enumeration): False
+[  1846 ms]   Alt-Tab heuristic (visible && !cloaked && unowned && top-level && (!TOOLWINDOW || APPWINDOW)) = False  [computed; Alt-Tab not pressed]
+[  1846 ms]   WindowFromPoint(center 250,450) = 10470 class=Chrome_RenderWidgetHostHWND owner=claude(12836) title='Chrome Legacy Window'  isSpike=False
+[  1846 ms]   foreground = 303A8 class=Chrome_WidgetWin_1 owner=claude(12836) title='Claude'
+[  1846 ms] --- z-order test: own top-level test window over the spike
+[  2500 ms]   WindowFromPoint(spike center) = D02B8 class=HwndWrapper[DesktopLayerSpike;;248765e1-b578-4479-900f-a0a5accfd247] owner=DesktopLayerSpike(21560) title='ZTestWindow'  isTestWindow=True
+[  2500 ms]   walking GW_HWNDNEXT from test window D02B8: spike's top-level root 1020A (parent-chain root, spike is a child) found below it = True after 200 steps
+[  2500 ms]   test window top-level z-index 38 of 239
+[  2920 ms]   test window closed; IsWindow(test)=False; foreground=303A8 class=Chrome_WidgetWin_1 owner=claude(12836) title='Claude'
+[  2920 ms] --- state: after z-test
+[  2920 ms]   hwnd=180748 IsWindow=True IsWindowVisible=True IsIconic=False cloaked=False rect=(100,300,400,600) 300x300
+[  2920 ms]   style=0x56000000 exstyle=0x0 (TOOLWINDOW=False APPWINDOW=False NOACTIVATE=False CHILD=True) parent=1020A owner(GW_OWNER)=F009A
+[  2920 ms]   z-order among siblings of its parent: index 0 of 3 (0 = topmost)
+[  2920 ms]   top-level root 1020A class=Progman owner=explorer(11924) title='Program Manager' z-index among top-level windows: 237 of 238
+[  2920 ms]   present in EnumWindows (top-level enumeration): False
+[  2920 ms]   Alt-Tab heuristic (visible && !cloaked && unowned && top-level && (!TOOLWINDOW || APPWINDOW)) = False  [computed; Alt-Tab not pressed]
+[  2920 ms]   WindowFromPoint(center 250,450) = 10470 class=Chrome_RenderWidgetHostHWND owner=claude(12836) title='Chrome Legacy Window'  isSpike=False
+[  2920 ms]   foreground = 303A8 class=Chrome_WidgetWin_1 owner=claude(12836) title='Claude'
+[  2920 ms] foreground before Win+D: 303A8 class=Chrome_WidgetWin_1 owner=claude(12836) title='Claude'
+[  2921 ms] >>> Win+D #1
+[  4165 ms] --- state: after Win+D #1 (desktop shown)
+[  4165 ms]   hwnd=180748 IsWindow=True IsWindowVisible=True IsIconic=False cloaked=False rect=(100,300,400,600) 300x300
+[  4165 ms]   style=0x56000000 exstyle=0x0 (TOOLWINDOW=False APPWINDOW=False NOACTIVATE=False CHILD=True) parent=1020A owner(GW_OWNER)=F009A
+[  4165 ms]   z-order among siblings of its parent: index 0 of 3 (0 = topmost)
+[  4165 ms]   top-level root 1020A class=Progman owner=explorer(11924) title='Program Manager' z-index among top-level windows: 37 of 238
+[  4166 ms]   present in EnumWindows (top-level enumeration): False
+[  4166 ms]   Alt-Tab heuristic (visible && !cloaked && unowned && top-level && (!TOOLWINDOW || APPWINDOW)) = False  [computed; Alt-Tab not pressed]
+[  4166 ms]   WindowFromPoint(center 250,450) = 180748 class=HwndWrapper[DesktopLayerSpike;;f416dd5d-c337-4224-ab3e-dc77f85d56a4] owner=DesktopLayerSpike(21560) title='DesktopLayerSpike'  isSpike=True
+[  4166 ms]   foreground = 1020A class=Progman owner=explorer(11924) title='Program Manager'
+[  4168 ms] --- click test: desktop shown
+[  4174 ms]   button center 250,450; WindowFromPoint = 180748 class=HwndWrapper[DesktopLayerSpike;;f416dd5d-c337-4224-ab3e-dc77f85d56a4] owner=DesktopLayerSpike(21560) title='DesktopLayerSpike'
+[  4784 ms]   SendInput click: clicks 0 -> 1, mouse-up events 0 -> 1  => REGISTERED
+[  5117 ms]   UIA InvokePattern: clicks 1 -> 2 (secondary check; no mouse involved)
+[  5117 ms] >>> Win+D #2 (restore)
+[  6668 ms] --- state: after Win+D #2 (restored)
+[  6668 ms]   hwnd=180748 IsWindow=True IsWindowVisible=True IsIconic=False cloaked=False rect=(100,300,400,600) 300x300
+[  6668 ms]   style=0x56000000 exstyle=0x0 (TOOLWINDOW=False APPWINDOW=False NOACTIVATE=False CHILD=True) parent=1020A owner(GW_OWNER)=F009A
+[  6668 ms]   z-order among siblings of its parent: index 0 of 3 (0 = topmost)
+[  6668 ms]   top-level root 1020A class=Progman owner=explorer(11924) title='Program Manager' z-index among top-level windows: 237 of 238
+[  6669 ms]   present in EnumWindows (top-level enumeration): False
+[  6669 ms]   Alt-Tab heuristic (visible && !cloaked && unowned && top-level && (!TOOLWINDOW || APPWINDOW)) = False  [computed; Alt-Tab not pressed]
+[  6669 ms]   WindowFromPoint(center 250,450) = 10470 class=Chrome_RenderWidgetHostHWND owner=claude(12836) title='Chrome Legacy Window'  isSpike=False
+[  6669 ms]   foreground = 303A8 class=Chrome_WidgetWin_1 owner=claude(12836) title='Claude'
+[  6669 ms] foreground same as before Win+D: True  (before 303A8, after 303A8)
+[  6669 ms] --- re-attach code path (NOT an Explorer restart)
+[  6669 ms] Progman 1020A class=Progman owner=explorer(11924) title='Program Manager' rect=(0,0,1920,1080) 1920x1080 visible=True
+[  6669 ms]   Progman descendant 180748 class=HwndWrapper[DesktopLayerSpike;;f416dd5d-c337-4224-ab3e-dc77f85d56a4] owner=DesktopLayerSpike(21560) title='DesktopLayerSpike' parent=1020A rect=(100,300,400,600) 300x300 visible=True
+[  6670 ms]   Progman descendant 10210 class=SHELLDLL_DefView owner=explorer(11924) title='' parent=1020A rect=(0,0,1920,1080) 1920x1080 visible=True
+[  6670 ms]   Progman descendant 10212 class=SysListView32 owner=explorer(11924) title='FolderView' parent=10210 rect=(0,0,1920,1080) 1920x1080 visible=True
+[  6670 ms]   Progman descendant 10216 class=SysHeader32 owner=explorer(11924) title='' parent=10212 rect=(0,0,0,0) 0x0 visible=False
+[  6670 ms]   Progman descendant 30164 class=WorkerW owner=explorer(11924) title='' parent=1020A rect=(0,0,1920,1080) 1920x1080 visible=True
+[  6670 ms] top-level WorkerW 302C6 owner=SystemSettings(14536) visible=False rect=(0,0,166,47) 166x47 hasDefView=False
+[  6670 ms] top-level WorkerW B0676 owner=explorer(11924) visible=False rect=(0,0,166,47) 166x47 hasDefView=False
+[  6670 ms] top-level WorkerW 20314 owner=explorer(11924) visible=False rect=(0,0,166,47) 166x47 hasDefView=False
+[  6670 ms] top-level WorkerW 60750 owner=explorer(11924) visible=False rect=(0,0,166,47) 166x47 hasDefView=False
+[  6670 ms] top-level WorkerW 107B2 owner=explorer(11924) visible=False rect=(0,0,166,47) 166x47 hasDefView=False
+[  6670 ms] top-level WorkerW 206F6 owner=explorer(11924) visible=False rect=(0,0,166,47) 166x47 hasDefView=False
+[  6671 ms] top-level WorkerW 30276 owner=CastSrv(8184) visible=False rect=(0,0,166,47) 166x47 hasDefView=False
+[  6671 ms] top-level WorkerW 603C2 owner=CastSrv(8184) visible=False rect=(0,0,166,47) 166x47 hasDefView=False
+[  6671 ms] top-level WorkerW 1033E owner=RuntimeBroker(14104) visible=False rect=(0,0,166,47) 166x47 hasDefView=False
+[  6671 ms] top-level WorkerW 1031A owner=explorer(11924) visible=False rect=(0,0,166,47) 166x47 hasDefView=False
+[  6671 ms] top-level WorkerW 102D6 owner=explorer(11924) visible=False rect=(0,0,166,47) 166x47 hasDefView=False
+[  6671 ms] top-level WorkerW 10296 owner=explorer(11924) visible=False rect=(0,0,166,47) 166x47 hasDefView=False
+[  6671 ms] top-level WorkerW 10298 owner=explorer(11924) visible=False rect=(0,0,166,47) 166x47 hasDefView=False
+[  6671 ms] top-level WorkerW 201F6 owner=explorer(11924) visible=False rect=(0,0,166,47) 166x47 hasDefView=False
+[  6671 ms] top-level WorkerW 201B0 owner=explorer(11924) visible=False rect=(0,0,0,0) 0x0 hasDefView=False
+[  6671 ms] top-level WorkerW 1021E owner=explorer(11924) visible=False rect=(0,0,166,47) 166x47 hasDefView=False
+[  6671 ms] top-level WorkerW 10204 owner=explorer(11924) visible=False rect=(0,0,166,47) 166x47 hasDefView=False
+[  6671 ms] top-level WorkerW 10202 owner=explorer(11924) visible=False rect=(0,0,166,47) 166x47 hasDefView=False
+[  6671 ms] DefView host chosen: 1020A class=Progman owner=explorer(11924) title='Program Manager'
+[  6673 ms] Option A: parented to 1020A; client pos=(100,300); rect now (100,300,400,600) 300x300
+[  7183 ms] --- state: after simulated re-attach call
+[  7183 ms]   hwnd=180748 IsWindow=True IsWindowVisible=True IsIconic=False cloaked=False rect=(100,300,400,600) 300x300
+[  7183 ms]   style=0x56000000 exstyle=0x0 (TOOLWINDOW=False APPWINDOW=False NOACTIVATE=False CHILD=True) parent=1020A owner(GW_OWNER)=F009A
+[  7183 ms]   z-order among siblings of its parent: index 0 of 3 (0 = topmost)
+[  7183 ms]   top-level root 1020A class=Progman owner=explorer(11924) title='Program Manager' z-index among top-level windows: 237 of 238
+[  7184 ms]   present in EnumWindows (top-level enumeration): False
+[  7184 ms]   Alt-Tab heuristic (visible && !cloaked && unowned && top-level && (!TOOLWINDOW || APPWINDOW)) = False  [computed; Alt-Tab not pressed]
+[  7184 ms]   WindowFromPoint(center 250,450) = 10470 class=Chrome_RenderWidgetHostHWND owner=claude(12836) title='Chrome Legacy Window'  isSpike=False
+[  7184 ms]   foreground = 303A8 class=Chrome_WidgetWin_1 owner=claude(12836) title='Claude'
+[  7184 ms] === SELFTEST END
+[  7211 ms] exited
