@@ -1,16 +1,37 @@
 using System.Diagnostics;
 using System.Windows;
 using NothingShell.Interop;
+using NothingShell.Shell;
 
 namespace NothingShell;
 
 public partial class App : Application
 {
+    private TaskbarController? _taskbar;
+
     protected override void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
+
+        // Register crash/exit restore paths before the taskbar is touched.
+        AppDomain.CurrentDomain.UnhandledException += (_, args) =>
+        {
+            Log.Error("unhandled exception", args.ExceptionObject as Exception);
+            _taskbar?.Dispose();
+        };
+        DispatcherUnhandledException += (_, args) =>
+        {
+            Log.Error("dispatcher unhandled exception", args.Exception);
+            _taskbar?.Dispose();
+            // Not marked handled: the crash continues.
+        };
+        SessionEnding += (_, _) => _taskbar?.Dispose();
+
         var uiAccess = TokenInfo.GetUiAccess() ? 1 : 0;
         Log.Info($"startup uiAccess={uiAccess} pid={Environment.ProcessId}");
+
+        _taskbar = new TaskbarController();
+        _taskbar.Start();
 
         // Placeholder window; replaced by the dock in a later task.
         new Window
@@ -25,5 +46,11 @@ public partial class App : Application
                 VerticalAlignment = VerticalAlignment.Center,
             },
         }.Show();
+    }
+
+    protected override void OnExit(ExitEventArgs e)
+    {
+        _taskbar?.Dispose();
+        base.OnExit(e);
     }
 }
