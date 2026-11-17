@@ -9,7 +9,13 @@
   Results: D:\NothingLauncher\.superpowers\sdd\2026-11-17-plan1-foundation-and-dock\handson-results-<stamp>.json
 #>
 [CmdletBinding()]
-param()
+param(
+    # Run only these sections (default: everything). Example: -Only KeySpike,Notify
+    [ValidateSet('Task8', 'KeySpike', 'Overflow', 'Desktop', 'Notify')]
+    [string[]]$Only,
+    # With -Only the reinstall step is skipped unless -Reinstall is given.
+    [switch]$Reinstall
+)
 $ErrorActionPreference = 'Stop'
 
 # =====================================================================================
@@ -265,6 +271,8 @@ function Complete-Check {
 }
 
 # ---------- generic ----------
+function Test-Section([string]$Name) { (-not $Only) -or ($Only -contains $Name) }
+
 function Wait-Until([scriptblock]$Condition, [int]$TimeoutMs, [int]$PollMs = 100) {
     $sw = [System.Diagnostics.Stopwatch]::StartNew()
     while ($true) {
@@ -490,11 +498,15 @@ function Find-SpikeExe([string]$Name) {
 }
 
 # Starts a long-running spike (normal user token if possible), output into $LogFile. Returns $true when its process is up.
-function Start-Spike([string]$Name, [string]$Exe, [string]$ArgString, [string]$LogFile) {
+# uiAccess programs are started by the AppInfo service and do NOT inherit redirected stdout, so
+# KeySpike/NotifySpike write their own log files; pass -OwnLog and read $LogFile (their own log).
+function Start-Spike([string]$Name, [string]$Exe, [string]$ArgString, [string]$LogFile, [switch]$OwnLog) {
     Stop-OursByName $Name
-    Set-Content -Path $LogFile -Value '' -Encoding ASCII
-    $script:TempFiles.Add($LogFile)
-    $p = Start-LimitedProcess $Name ('"{0}" {1}' -f $Exe, $ArgString) $LogFile
+    $redir = $LogFile
+    if ($OwnLog) { $redir = "$LogFile.stdout"; try { Remove-Item -LiteralPath $LogFile -Force -ErrorAction SilentlyContinue } catch { } }
+    else { Set-Content -Path $LogFile -Value '' -Encoding ASCII }
+    $script:TempFiles.Add($LogFile); $script:TempFiles.Add($redir)
+    $p = Start-LimitedProcess $Name ('"{0}" {1}' -f $Exe, $ArgString) $redir
     if (-not $p) {
         $script:LastSpikeMode = "FAILED: $($script:LastLaunchError)"
         $script:LastSpikeElevated = -1
@@ -546,9 +558,13 @@ try {
     Wait-Enter 'Press Enter to begin'
 
     # ---------------------------------------------------------------- setup
-    Write-Step 'SETUP: installing the latest app and test programs'
     Record-Preexisting
+    try { Get-ScheduledTask -TaskName 'NothingShellVerify_*' -ErrorAction SilentlyContinue | Unregister-ScheduledTask -Confirm:$false -ErrorAction SilentlyContinue } catch { }   # leftovers of earlier runs
+    $doInstall = (-not $Only) -or $Reinstall
+    if ($Only) { Write-Info ("Running only: {0}" -f ($Only -join ', ')) }
     $pwsh = (Get-Process -Id $PID).Path
+    if ($doInstall) {
+    Write-Step 'SETUP: installing the latest app and test programs'
     $installOk = $false
     foreach ($noTs in $false, $true) {
         $extra = if ($noTs) { @('-NoTimestamp') } else { @() }
@@ -572,12 +588,31 @@ try {
     if (-not $spikesOk) { throw 'spikes\install-spikes.ps1 failed.' }
     Record-Preexisting   # after install: anything left running now is not ours to kill
     Write-Good 'Install done.'
+    } else {
+        Write-Info 'Skipping the reinstall (use -Reinstall to force it).'
+        if ((Test-Section 'Task8') -or (Test-Section 'Overflow')) {
+            if (-not (Test-Path $AppExe) -or -not (Test-Path $Watchdog)) { throw 'The app is not installed. Run again with -Reinstall.' }
+        }
+    }
+    # KeySpike now mirrors its console to %TEMP%\KeySpike.log; make sure the installed copy is not older than its source.
+    if (Test-Section 'KeySpike') {
+        $ksInstalled = Join-Path $SpikeRoot 'KeySpike\KeySpike.exe'
+        $ksSource = Join-Path $Repo 'spikes\KeySpike\Program.cs'
+        if (-not (Test-Path $ksInstalled) -or ((Get-Item $ksInstalled).LastWriteTime -lt (Get-Item $ksSource).LastWriteTime)) {
+            Write-Info 'Updating the installed KeySpike...'
+            & $pwsh -NoProfile -ExecutionPolicy Bypass -File (Join-Path $Repo 'spikes\install-spikes.ps1') -Only KeySpike -NoTimestamp 2>&1 | ForEach-Object { Write-Host "    $_" }
+            if ($LASTEXITCODE -ne 0) { throw 'Could not install KeySpike.' }
+            Record-Preexisting
+        }
+    }
+    if ((Test-Section 'Notify') -and -not (Test-Path (Join-Path $SpikeRoot 'NotifySpike\NotifySpike.exe'))) { throw 'NotifySpike is not installed. Run again with -Reinstall.' }
 
     # ---------------------------------------------------------------- Fenn
     Write-Step 'STEP 1: close Fenn'
     $fenn = @(Get-Process -Name 'fenn' -ErrorAction SilentlyContinue)
     $fennSkipped = $false
-    if ($fenn.Count -gt 0) {
+    $needFennGone = (Test-Section 'Task8') -or (Test-Section 'Overflow')
+    if ($fenn.Count -gt 0 -and $needFennGone) {
         Write-Do 'Please quit Fenn now: find its icon in the tray (bottom right), right-click it and choose Quit.'
         Write-Info 'I will wait until it is gone.  (Press S here to continue anyway - results may then be wrong.)'
         while (@(Get-Process -Name 'fenn' -ErrorAction SilentlyContinue).Count -gt 0) {
@@ -614,6 +649,7 @@ try {
     [void](Complete-Check -Id 'S0' -Description 'Starting state (Fenn closed): auto-hide and explorer taskbar visibility' -Measured $startInfo -Info -Notes $s0Notes)
     if ($script:OrigTray -eq -1) { throw 'No Windows taskbar (explorer) found at the start; cannot continue.' }
 
+    if (Test-Section 'Task8') {
     # ================================================================ TASK 8 CHECKS
     # ---------------------------------------------------------------- C8.1
     Write-Step 'CHECK 1: start the app - the taskbar should disappear'
@@ -782,16 +818,18 @@ try {
         [NsWin]::SetAutoHide($script:OrigAutoHide); Write-Info "Auto-hide put back to your original setting ($($script:OrigAutoHide))."
     }
     Stop-OursByName 'NothingShell.Watchdog'
+    }
 
     # ================================================================ SPIKES
+    if (Test-Section 'KeySpike') {
     # ---------------------------------------------------------------- KeySpike
     Write-Step 'SPIKE 1: Windows key (KeySpike)'
     Write-Info 'A small test program (started as your normal user) will watch the Windows key. A black window may pop up: leave it alone.'
     Write-Info 'After each key test: close anything that opened (Esc), then click THIS window and answer.'
     $keyExe = Join-Path $SpikeRoot 'KeySpike\KeySpike.exe'
-    $keyLog = Join-Path $env:TEMP "nsho-keyspike-$Stamp.txt"
+    $keyLog = Join-Path $env:TEMP 'KeySpike.log'
     if (-not (Test-Path $keyExe)) { throw "KeySpike not installed at $keyExe" }
-    $up = Start-Spike 'KeySpike' $keyExe '' $keyLog
+    $up = Start-Spike 'KeySpike' $keyExe '' $keyLog -OwnLog
     $hookUp = (Wait-Until { (Read-SharedText $keyLog) -match 'hook installed' } 6000 200) -ge 0
     [void](Complete-Check -Id 'K.0' -Description 'KeySpike started and hook installed' -Measured @{ processUp = $up; hookInstalled = $hookUp; launchedAs = $script:LastSpikeMode } -MeasuredPass ($up -and $hookUp -and $script:LastSpikeElevated -eq 0))
     if ($up -and $hookUp) {
@@ -848,7 +886,9 @@ try {
     }
     Stop-OursByName 'KeySpike'
     Start-Sleep -Milliseconds 500
+    }
 
+    if (Test-Section 'Overflow') {
     # ---------------------------------------------------------------- OverflowSpike
     Write-Step 'SPIKE 2: hidden tray icons (OverflowSpike) - with the app hiding the taskbar'
     Write-Info 'I start the app (taskbar hides), then run the test twice. WATCH the bottom and right of the screen.'
@@ -891,7 +931,9 @@ try {
     [void](Complete-Check -Id 'O.5' -Description 'Taskbar returns to original state after the overflow test' -Measured @{ autoHideNow = $ahNow; autoHideOriginal = $script:OrigAutoHide; trayVisible = ([NsWin]::TrayState() -eq 1) } `
         -MeasuredPass (([NsWin]::TrayState() -eq 1) -and $ahNow -eq $script:OrigAutoHide))
     Stop-OursByName 'NothingShell.Watchdog'
+    }
 
+    if (Test-Section 'Desktop') {
     # ---------------------------------------------------------------- DesktopLayerSpike
     Write-Step 'SPIKE 3: desktop widget (DesktopLayerSpike)'
     $dlExe = Find-SpikeExe 'DesktopLayerSpike'
@@ -932,14 +974,16 @@ try {
     }
     Stop-OursByName 'DesktopLayerSpike'
     [void](Ensure-TaskbarBack 'after desktop test')
+    }
 
+    if (Test-Section 'Notify') {
     # ---------------------------------------------------------------- NotifySpike
     Write-Step 'SPIKE 4: notifications (NotifySpike)'
     $nsExe = Join-Path $SpikeRoot 'NotifySpike\NotifySpike.exe'
     $toastPs = Join-Path $Repo 'spikes\NotifySpike\send-test-toast.ps1'
     if (-not (Test-Path $nsExe)) { throw "NotifySpike not installed at $nsExe" }
-    $nsLog = Join-Path $env:TEMP "nsho-notify1-$Stamp.txt"
-    $up = Start-Spike 'NotifySpike' $nsExe '--seconds 90 --expect "NothingShell spike test"' $nsLog
+    $nsLog = Join-Path $env:TEMP 'NotifySpike.log'
+    $up = Start-Spike 'NotifySpike' $nsExe '--seconds 90 --expect "NothingShell spike test"' $nsLog -OwnLog
     $listening = (Wait-Until { (Read-SharedText $nsLog) -match 'Listening' } 20000 250) -ge 0
     $txt = Read-SharedText $nsLog
     $uia = $txt -match 'tokenUIAccess=1'
@@ -971,8 +1015,8 @@ try {
     try { Start-Process 'ms-settings:notifications' } catch { Write-Info 'Open Settings > System > Notifications by hand.' }
     $script:BannersOff = $true
     Wait-Enter 'Press Enter once banners are OFF for Windows PowerShell'
-    $nsLog2 = Join-Path $env:TEMP "nsho-notify2-$Stamp.txt"
-    $up2 = Start-Spike 'NotifySpike' $nsExe '--seconds 60 --expect "NothingShell spike test"' $nsLog2
+    $nsLog2 = Join-Path $env:TEMP 'NotifySpike.log'
+    $up2 = Start-Spike 'NotifySpike' $nsExe '--seconds 60 --expect "NothingShell spike test"' $nsLog2 -OwnLog
     $listening2 = (Wait-Until { (Read-SharedText $nsLog2) -match 'Listening' } 20000 250) -ge 0
     $m2 = $false; $sent2 = $false
     if ($listening2) {
@@ -990,10 +1034,12 @@ try {
     Wait-Enter 'Press Enter once banners are back ON'
     $script:BannersOff = $false
     # Remove our test toasts
-    $nsLog3 = Join-Path $env:TEMP "nsho-notify3-$Stamp.txt"; $script:TempFiles.Add($nsLog3)
-    $cleanOk = Invoke-Unelevated ('"{0}" --cleanup' -f $nsExe) $nsLog3 -Wait -TimeoutSec 40
+    $nsLog3 = Join-Path $env:TEMP 'NotifySpike.log'; $script:TempFiles.Add("$nsLog3.stdout")
+    $cleanOk = Invoke-Unelevated ('"{0}" --cleanup' -f $nsExe) "$nsLog3.stdout" -Wait -TimeoutSec 40
     $cl = Read-SharedText $nsLog3
     [void](Complete-Check -Id 'N.4' -Description 'Test toasts cleaned up (--cleanup)' -Measured @{ ran = $cleanOk; log = @($cl.Trim() -split "`r?`n" | Select-Object -Last 3) } -MeasuredPass ($cleanOk -and $cl -match 'cleanup: removed'))
+    }
+
 }
 catch {
     $fatal = $_

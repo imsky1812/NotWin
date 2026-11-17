@@ -2,6 +2,7 @@
 //   KeySpike.exe             install the hook and run until Ctrl+C (prints OPEN LAUNCHER / OPEN PANEL)
 //   KeySpike.exe --selftest  drive the hook with SendInput and check whether Start opened
 using System.Diagnostics;
+using System.IO;
 using System.Runtime.InteropServices;
 using System.Text;
 
@@ -209,10 +210,26 @@ static class P
     static int Main(string[] args)
     {
         if (args.Contains("--selftest")) { SelfTest(); return results.All(r => r.pass) ? 0 : 1; }
+        // uiAccess processes are started by the AppInfo service and do not inherit redirected stdout: mirror the console to %TEMP%\KeySpike.log.
+        try
+        {
+            var fw = new StreamWriter(new FileStream(Path.Combine(Path.GetTempPath(), "KeySpike.log"), FileMode.Create, FileAccess.Write, FileShare.ReadWrite)) { AutoFlush = true };
+            Console.SetOut(new TeeWriter(Console.Out, fw));
+        }
+        catch { }
         var tid = GetCurrentThreadId();
         Console.CancelKeyPress += (_, e) => { e.Cancel = true; PostThreadMessage(tid, 0x12, 0, 0); };
         Console.WriteLine("KeySpike running. Press Win alone / Win+A / Win+N. Ctrl+C to quit.");
         Run(null);
         return 0;
     }
+}
+
+sealed class TeeWriter(TextWriter a, TextWriter b) : TextWriter
+{
+    public override Encoding Encoding => a.Encoding;
+    public override void Write(char c) { a.Write(c); b.Write(c); }
+    public override void Write(string? s) { a.Write(s); b.Write(s); }
+    public override void WriteLine(string? s) { a.WriteLine(s); b.WriteLine(s); }
+    public override void Flush() { a.Flush(); b.Flush(); }
 }
