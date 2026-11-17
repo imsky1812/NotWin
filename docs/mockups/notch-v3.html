@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Nothing Shell — Notch v3</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  :root{--tile:#161616;--tile2:#202020;--line:rgba(255,255,255,.07);--txt:#f2f2f2;--dim:#8a8a8a;--red:#e8231f;--cell:84px;--gap:10px}
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{background:#0d0d0d;color:var(--txt);font-family:'Space Grotesk',system-ui,sans-serif}
+  body{padding:16px}
+  .cap{max-width:1280px;margin:0 auto 12px}
+  .cap h1{font-size:18px;font-weight:600}
+  .cap p{font-family:'Space Mono',monospace;font-size:11px;color:var(--dim);text-transform:uppercase;letter-spacing:.4px;line-height:1.7;margin-top:2px}
+  .bar{max-width:1280px;margin:0 auto 12px;display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+  .bar .lbl{font-family:'Space Mono',monospace;font-size:10px;color:var(--dim);text-transform:uppercase;margin-right:4px}
+  .btn{font-family:'Space Mono',monospace;font-size:11px;text-transform:uppercase;letter-spacing:.4px;background:#1c1c1c;color:#ddd;border:1px solid #2a2a2a;border-radius:20px;padding:7px 14px;cursor:pointer}
+  .btn:hover{background:#262626}
+  .btn.on{background:#f2f2f2;color:#111;border-color:#f2f2f2}
+  .fit{max-width:1280px;margin:0 auto;position:relative;border-radius:14px;overflow:hidden;box-shadow:0 0 0 1px #222}
+  .stage{width:1280px;height:470px;position:absolute;left:0;top:0;transform-origin:0 0;overflow:hidden;
+    background:radial-gradient(ellipse 420px 300px at 18% 40%,#f4f4f4 0%,transparent 70%),radial-gradient(ellipse 520px 340px at 72% 30%,#e9e9e9 0%,transparent 70%),
+    radial-gradient(ellipse 300px 200px at 50% 80%,#9d9d9d 0%,transparent 75%),linear-gradient(160deg,#cfcfcf,#b4b4b4)}
+  .mono{font-family:'Space Mono',monospace;text-transform:uppercase;letter-spacing:.6px}
+  .tiny{font-size:10px;color:var(--dim)}
+
+  /* ---------- notch shell ---------- */
+  .notch{position:absolute;left:50%;top:8px;transform:translateX(-50%);background:#000;color:var(--txt);overflow:hidden;z-index:5;cursor:pointer;
+    border-radius:20px;width:196px;height:34px;box-shadow:0 8px 30px rgba(0,0,0,.28);
+    transition:width .3s cubic-bezier(.2,.8,.2,1),height .3s cubic-bezier(.2,.8,.2,1),border-radius .3s}
+  .notch .layer{position:absolute;inset:0;opacity:0;pointer-events:none;transition:opacity .16s}
+  .notch[data-s="rest"] .l-rest,.notch[data-s="music"] .l-music,.notch[data-s="timer"] .l-timer,.notch[data-s="notify"] .l-notify,.notch[data-s="open"] .l-open{opacity:1;pointer-events:auto;transition-delay:.1s}
+  .notch[data-s="music"]{width:300px}
+  .notch[data-s="timer"]{width:270px}
+  .notch[data-s="notify"]{width:420px;height:64px;border-radius:30px}
+  .notch[data-s="open"]{width:770px;border-radius:34px;cursor:default}
+  .row{display:flex;align-items:center;justify-content:space-between;height:34px;padding:0 14px}
+  .bat{display:flex;align-items:center;gap:6px;font-family:'Space Mono',monospace;font-size:11px;color:#ddd}
+  .mini-art{width:22px;height:22px;border-radius:7px;background:radial-gradient(circle at 30% 35%,#d9d9d9 0 10%,transparent 32%),linear-gradient(135deg,#555,#111)}
+  .l-notify .row{height:64px;padding:0 18px;gap:14px;justify-content:flex-start}
+  .nic{width:36px;height:36px;border-radius:50%;background:#1d1d1d;display:grid;place-items:center;flex:none}
+  .nic svg{width:17px;height:17px}
+
+  /* ---------- open dashboard ---------- */
+  .l-open{padding:14px}
+  .grid{display:grid;grid-template-columns:repeat(8,var(--cell));grid-auto-rows:var(--cell);gap:var(--gap);grid-auto-flow:dense}
+  .t{background:var(--tile);border-radius:22px;position:relative;overflow:hidden;padding:12px;display:flex;flex-direction:column;transition:background .15s}
+  .t:hover{background:var(--tile2)}
+  .t.center{align-items:center;justify-content:center;gap:6px;text-align:center}
+  .t svg.ic{width:20px;height:20px}
+  .hd{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:600}
+  .hd svg{width:16px;height:16px}
+  .hd .r{margin-left:auto;display:flex}
+  .lbl2{font-family:'Space Mono',monospace;font-size:9px;color:var(--dim);text-transform:uppercase;letter-spacing:.6px}
+  .foot{display:flex;justify-content:space-between;align-items:center;margin-top:10px;padding:0 4px}
+  .pg{display:flex;gap:6px}
+  .pg i{width:6px;height:6px;border-radius:50%;background:#444;cursor:pointer}
+  .pg i.on{background:#f2f2f2}
+  .edit{display:flex;align-items:center;gap:6px;cursor:pointer;color:var(--dim);font-family:'Space Mono',monospace;font-size:10px;text-transform:uppercase}
+  .edit svg{width:14px;height:14px}
+  .edit.on{color:var(--txt)}
+  /* media */
+  .art{border-radius:12px;flex:none;background:radial-gradient(circle at 30% 35%,#e0e0e0 0 9%,transparent 30%),radial-gradient(circle at 70% 70%,#6b6b6b 0 20%,transparent 60%),linear-gradient(135deg,#4a4a4a,#111)}
+  .ttl{font-size:14px;font-weight:600;line-height:1.25}
+  .sub{font-size:11px;color:var(--dim)}
+  .ctr{display:flex;align-items:center;justify-content:space-between}
+  .ctr svg{width:16px;height:16px}
+  .play{width:34px;height:34px;border-radius:50%;background:#f2f2f2;display:grid;place-items:center;flex:none}
+  .play svg{width:14px;height:14px}
+  /* clipboard */
+  .clip{display:flex;flex-direction:column;gap:2px;margin-top:8px}
+  .clip div{font-family:'Space Mono',monospace;font-size:11px;padding:6px 8px;border-radius:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#ccc}
+  .clip div:first-child{background:#222;color:#fff}
+  .clip div:hover{background:#262626}
+  /* notes */
+  textarea,input.n{background:none;border:0;outline:0;color:var(--txt);font:inherit;font-size:13px;resize:none;width:100%;margin-top:8px}
+  textarea::placeholder,input.n::placeholder{color:#666}
+  /* toggle */
+  .tg{width:40px;height:24px;border-radius:12px;background:#333;position:relative;flex:none;cursor:pointer;transition:background .15s}
+  .tg::after{content:"";position:absolute;left:3px;top:3px;width:18px;height:18px;border-radius:50%;background:#f2f2f2;transition:left .15s,background .15s}
+  .tg.on{background:#f2f2f2}.tg.on::after{left:19px;background:#111}
+  .t.lit{background:#f2f2f2;color:#111}.t.lit .lbl2{color:#555}.t.lit svg *{stroke:#111}
+  /* shelf */
+  .drop{flex:1;margin-top:8px;border:1.5px dashed #3a3a3a;border-radius:14px;display:grid;place-items:center;text-align:center}
+  /* edit mode */
+  .editing .t{outline:1.5px dashed #8a8a8a;outline-offset:-1.5px}
+  .chip{display:none;position:absolute;right:8px;bottom:8px;background:#f2f2f2;color:#111;font-family:'Space Mono',monospace;font-size:10px;border-radius:10px;padding:3px 8px;cursor:pointer;z-index:2}
+  .x{display:none;position:absolute;right:8px;top:8px;width:20px;height:20px;border-radius:50%;background:var(--red);color:#fff;font-size:11px;line-height:20px;text-align:center;cursor:pointer;z-index:2}
+  .editing .chip,.editing .x{display:block}
+  .add{background:transparent!important;border:1.5px dashed #3a3a3a;color:var(--dim);cursor:pointer}
+  .legend{max-width:1280px;margin:14px auto 0;display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:10px}
+  .legend div{background:#141414;border:1px solid #1f1f1f;border-radius:14px;padding:12px 14px;font-size:13px;color:#ccc;line-height:1.5}
+  .legend b{display:block;font-family:'Space Mono',monospace;font-size:10px;color:var(--dim);text-transform:uppercase;font-weight:400;margin-bottom:4px}
+</style>
+</head>
+<body>
+<div class="cap">
+  <h1>Mockup 3 · The notch, trimmed to your four</h1>
+  <p>Hover the notch to open it · Pencil = edit mode · In edit mode, click a tile's size chip to resize · ✕ removes · dots switch pages</p>
+</div>
+<div class="bar">
+  <span class="lbl">Notch state:</span>
+  <button class="btn" data-go="rest">Resting</button>
+  <button class="btn" data-go="music">Music playing</button>
+  <button class="btn" data-go="timer">Timer running</button>
+  <button class="btn" data-go="notify">New notification</button>
+  <button class="btn" data-go="open">Open</button>
+</div>
+<div class="fit" id="fit"><div class="stage" id="stage">
+  <div class="notch" id="notch" data-s="rest">
+    <div class="layer l-rest"><div class="row"><span id="rtime"></span><span class="bat"><svg width="20" height="11" viewBox="0 0 20 11" fill="none"><rect x=".5" y=".5" width="16" height="10" rx="2.5" stroke="#ddd"/><rect x="2.5" y="2.5" width="11" height="6" rx="1" fill="#ddd"/><rect x="17.5" y="3.5" width="2" height="4" rx="1" fill="#ddd"/></svg>85%</span></div></div>
+    <div class="layer l-music"><div class="row"><span class="mini-art"></span><span id="meq"></span></div></div>
+    <div class="layer l-timer"><div class="row"><span id="tring"></span><span id="ttime"></span></div></div>
+    <div class="layer l-notify"><div class="row"><span class="nic" data-i="chat"></span><div style="min-width:0"><div style="font-size:13px;font-weight:600">Discord</div><div style="font-size:12px;color:#aaa;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Arjun: are you streaming tonight?</div></div><span class="lbl2" style="margin-left:auto">now</span></div></div>
+    <div class="layer l-open" id="open">
+      <div class="grid" id="grid"></div>
+      <div class="foot"><span class="edit" id="editBtn"><span data-i="pencil"></span><span id="editLbl">Edit</span></span><span class="pg" id="pg"><i class="on" data-p="0"></i><i data-p="1"></i></span></div>
+    </div>
+  </div>
+</div></div>
+
+<div class="legend">
+  <div><b>Resting</b>A small black pill: time and battery. Nothing else.</div>
+  <div><b>Live</b>It grows a little to show what's happening right now (music, timer, a new notification), then shrinks back.</div>
+  <div><b>Open</b>Hover and it opens into your tools. Same tools as your Fenn notch, restyled: no purple or yellow, only black, white and red.</div>
+  <div><b>Sizes</b>Every tile is 1×1, 2×1 or 2×2 and shows more when bigger. Desktop widgets use the same sizes and the same edit mode.</div>
+</div>
+
+<script>
+const I={
+ timer:'<path d="M7 3h10M7 21h10M8 3c0 5 8 5 8 9s-8 4-8 9M16 3c0 5-8 5-8 9s8 4 8 9"/>',
+ target:'<circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3"/>',
+ clip:'<rect x="6" y="4" width="12" height="17" rx="2"/><path d="M9 4h6v3H9z"/>',
+ expand:'<path d="M14 4h6v6M10 20H4v-6M20 4l-7 7M4 20l7-7"/>',
+ text:'<path d="M4 18L9 6l5 12M5.8 14h6.4M15 18v-4.5a2.5 2.5 0 015 0V18M15 15.5h5"/>',
+ phone:'<rect x="7" y="3" width="10" height="18" rx="2.5"/><path d="M11 18h2"/>',
+ scan:'<path d="M4 8V4h4M16 4h4v4M20 16v4h-4M8 20H4v-4"/><rect x="8" y="8" width="8" height="8" rx="1"/>',
+ shelf:'<path d="M4 14l2-9h12l2 9v5H4z"/><path d="M4 14h5l1 2h4l1-2h5"/>',
+ picker:'<path d="M14 4l6 6M17 7l-9 9-3 1 1-3 9-9"/>',
+ region:'<path d="M4 7V4h3M10 4h4M17 4h3v3M20 10v4M20 17v3h-3M14 20h-4M7 20H4v-3M4 14v-4"/>',
+ draw:'<path d="M4 17c3-6 5-6 6-3s3 3 5-2 4-5 5-3"/><path d="M14 20l6-6"/>',
+ settings:'<circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1L7 17M17 7l2.1-2.1"/>',
+ cup:'<path d="M4 9h12v6a5 5 0 01-5 5H9a5 5 0 01-5-5z"/><path d="M16 11h2a2 2 0 010 4h-2M8 3v3M12 3v3"/>',
+ notes:'<path d="M5 19l1-4L16 5l3 3L9 18z"/><path d="M14 7l3 3"/>',
+ pencil:'<path d="M5 19l1-4L16 5l3 3L9 18z"/>',
+ chat:'<path d="M4 5h16v11H9l-5 4z"/>',
+ prev:'<path d="M6 5v14M19 5l-9 7 9 7z"/>',
+ next:'<path d="M18 5v14M5 5l9 7-9 7z"/>',
+ cloud:'<path d="M7 18h10a4 4 0 000-8 6 6 0 00-11.5 1.5A3.3 3.3 0 007 18z"/>',
+ cal:'<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/>',
+ head:'<path d="M4 14v-2a8 8 0 0116 0v2"/><rect x="3" y="14" width="4" height="6" rx="1.5"/><rect x="17" y="14" width="4" height="6" rx="1.5"/>'
+};
+const svg=(k,c='#fff',cls='')=>`<svg class="${cls}" viewBox="0 0 24 24" fill="none" stroke="${c}" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">${I[k]||''}</svg>`;
+const fillPlay=(c='#111')=>`<svg viewBox="0 0 24 24" fill="${c}"><path d="M7 4l13 8-13 8z"/></svg>`;
+const fillPause=(c='#111')=>`<svg viewBox="0 0 24 24" fill="${c}"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg>`;
+function paintIcons(root=document){root.querySelectorAll('[data-i]').forEach(e=>e.innerHTML=svg(e.dataset.i))}
+
+/* dot font */
+const G={'0':['01110','10001','10001','10001','10001','10001','01110'],'1':['00100','01100','00100','00100','00100','00100','01110'],'2':['01110','10001','00001','00010','00100','01000','11111'],'3':['11111','00010','00100','00010','00001','10001','01110'],'4':['00010','00110','01010','10010','11111','00010','00010'],'5':['11111','10000','11110','00001','00001','10001','01110'],'6':['00110','01000','10000','11110','10001','10001','01110'],'7':['11111','00001','00010','00100','01000','01000','01000'],'8':['01110','10001','10001','01110','10001','10001','01110'],'9':['01110','10001','10001','01111','00001','00010','01100'],':':['0','0','1','0','1','0','0'],'°':['010','101','010','000','000','000','000'],'%':['11001','11010','00010','00100','01000','01011','10011']};
+function dots(text,{d=4,gap=1.5,fill='#fff'}={}){const p=d+gap;let x=0,o='';for(const ch of text){const g=G[ch];if(!g)continue;const w=g[0].length;g.forEach((r,ri)=>[...r].forEach((b,ci)=>{if(b==='1')o+=`<circle cx="${x+ci*p+d/2}" cy="${ri*p+d/2}" r="${d/2}" fill="${fill}"/>`}));x+=(w+1)*p}const W=x-p,H=7*p-gap;return `<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" style="display:block">${o}</svg>`}
+function dotBar(n,f,{d=4,gap=3}={}){const p=d+gap;let o='';for(let i=0;i<n;i++)o+=`<circle cx="${i*p+d/2}" cy="${d/2}" r="${d/2}" fill="${i===f-1?'#e8231f':(i<f?'#f2f2f2':'#333')}"/>`;return `<svg width="100%" height="${d}" viewBox="0 0 ${n*p-gap} ${d}" preserveAspectRatio="xMinYMid meet" style="display:block">${o}</svg>`}
+function ring(size,n,lit,dr){const c=size/2,R=c-dr-1;let o='';for(let i=0;i<n;i++){const a=i/n*2*Math.PI-Math.PI/2;o+=`<circle cx="${c+R*Math.cos(a)}" cy="${c+R*Math.sin(a)}" r="${dr}" fill="${i===lit-1?'#e8231f':(i<lit?'#f2f2f2':'#333')}"/>`}return o}
+function eqSVG(cols,rows,dr,pitch){let o='';for(let c=0;c<cols;c++){const h=1+Math.floor(Math.random()*rows);for(let r=0;r<rows;r++){const lit=r>=rows-h;o+=`<circle cx="${c*pitch+dr}" cy="${r*pitch+dr}" r="${dr}" fill="${lit?(r===rows-h?'#e8231f':'#f2f2f2'):'#222'}"/>`}}return `<svg width="${cols*pitch}" height="${rows*pitch}" style="display:block">${o}</svg>`}
+
+/* ---------- state ---------- */
+let timerSec=25*60,timerRun=false,awake=false,editing=false,page=0,noteText='';
+document.addEventListener('input',e=>{if(e.target.matches('textarea,input.n'))noteText=e.target.value});
+const SIZES={timer:['2x2','2x1','1x1'],media:['2x2','2x1','1x1'],clip:['2x2','2x1','1x1'],notes:['2x2','2x1','1x1'],awake:['2x1','1x1'],tool:['1x1','2x1'],shelf:['2x2','2x1','1x1'],weather:['2x1','1x1','2x2'],devices:['2x1','2x2','1x1'],next:['2x1','2x2']};
+let PAGES=[
+ [{k:'timer',s:'2x2'},{k:'media',s:'2x2'},{k:'clip',s:'2x2'},{k:'notes',s:'2x2'}],
+ [{k:'shelf',s:'2x2'},{k:'awake',s:'2x1'},{k:'weather',s:'2x1'},
+  {k:'tool',s:'1x1',i:'text',n:'Grab text'},{k:'tool',s:'1x1',i:'phone',n:'Phone'},{k:'tool',s:'1x1',i:'scan',n:'Scan QR'},{k:'tool',s:'1x1',i:'picker',n:'Color'},
+  {k:'tool',s:'1x1',i:'region',n:'Snip'},{k:'tool',s:'1x1',i:'draw',n:'Draw'},{k:'tool',s:'1x1',i:'settings',n:'Settings'},{k:'devices',s:'1x1'}]
+];
+let removed=[];
+const fmt=s=>String(Math.floor(s/60)).padStart(2,'0')+':'+String(s%60).padStart(2,'0');
+
+/* ---------- tile renderers ---------- */
+const R={
+ timer(s){const t=fmt(timerSec),pct=Math.round((timerSec/(25*60))*48);
+  if(s==='1x1')return `<div class="t center" data-act="timer"><svg width="60" height="60">${ring(60,32,Math.round(pct*32/48),1.8)}</svg><div style="position:absolute">${dots(t.slice(0,2),{d:2.6,gap:1})}</div></div>`;
+  if(s==='2x1')return `<div class="t"><div class="hd">${svg('timer')}Timer</div><div class="ctr" style="margin-top:auto">${dots(t,{d:3.4,gap:1.2})}<span class="play" data-act="timer">${timerRun?fillPause():fillPlay()}</span></div></div>`;
+  return `<div class="t"><div class="hd">${svg('timer')}Timer<span class="r">${svg('target','#888')}</span></div>
+   <div style="flex:1;display:grid;place-items:center;position:relative"><svg width="98" height="98">${ring(98,48,pct,2.2)}</svg><div style="position:absolute">${dots(t,{d:2,gap:.8})}</div></div>
+   <div class="ctr" style="padding:0 6px"><span data-act="minus" style="cursor:pointer;font-size:18px;color:#aaa">−</span><span class="play" data-act="timer" style="width:30px;height:30px">${timerRun?fillPause():fillPlay()}</span><span data-act="plus" style="cursor:pointer;font-size:18px;color:#aaa">+</span></div></div>`},
+ media(s){
+  if(s==='1x1')return `<div class="t" style="padding:0"><div class="art" style="position:absolute;inset:0;border-radius:0"></div><span class="play" style="position:absolute;right:8px;bottom:8px;width:28px;height:28px">${fillPause()}</span></div>`;
+  if(s==='2x1')return `<div class="t" style="flex-direction:row;gap:10px;align-items:center"><div class="art" style="width:40px;height:40px"></div><div style="min-width:0;flex:1"><div class="ttl" style="font-size:12px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden">I Bought a 2025 Laptop for $380</div><div class="sub">Spec Tech</div></div><span class="play" style="width:30px;height:30px">${fillPause()}</span></div>`;
+  return `<div class="t"><div style="display:flex;gap:10px"><div class="art" style="width:54px;height:54px"></div><div style="min-width:0"><div class="lbl2">Opera · YouTube</div><div class="lbl2" style="margin-top:4px">10:41 / 14:08</div></div></div>
+   <div class="ttl" style="margin-top:8px">I Bought a 2025 Laptop for $380</div><div class="sub">Spec Tech</div>
+   <div style="margin-top:auto">${dotBar(20,15)}</div>
+   <div class="ctr" style="margin-top:8px">${svg('prev')}<span class="play">${fillPause()}</span>${svg('next')}</div></div>`},
+ clip(s){const items=['https://github.com/jaxparrow07/nothing-kde-widgets','http://github.com/FlorianButz/DynamicWin','https://hyenathedesigner.be/nothing.html'];
+  if(s==='1x1')return `<div class="t center">${svg('clip','#fff','ic')}${dots('3',{d:3,gap:1})}<span class="lbl2">Clipboard</span></div>`;
+  if(s==='2x1')return `<div class="t"><div class="hd">${svg('clip')}Clipboard<span class="r">${svg('expand','#888')}</span></div><div class="clip">${`<div>${items[0]}</div>`}</div></div>`;
+  return `<div class="t"><div class="hd">${svg('clip')}Clipboard<span class="r">${svg('expand','#888')}</span></div><div class="clip">${items.map(i=>`<div>${i}</div>`).join('')}</div></div>`},
+ notes(s){
+  if(s==='1x1')return `<div class="t center">${svg('notes','#fff','ic')}<span class="lbl2">Notes</span></div>`;
+  const v=noteText.replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;');
+  if(s==='2x1')return `<div class="t"><div class="hd">${svg('notes')}Notes</div><input class="n" placeholder="Write something" value="${v}"></div>`;
+  return `<div class="t"><div class="hd">${svg('notes')}Notes</div><textarea rows="5" placeholder="Write something">${v}</textarea></div>`},
+ awake(s){
+  if(s==='1x1')return `<div class="t center ${awake?'lit':''}" data-act="awake">${svg('cup',awake?'#111':'#fff','ic')}<span class="lbl2">${awake?'Awake':'Sleep ok'}</span></div>`;
+  return `<div class="t" style="flex-direction:row;align-items:center;gap:10px">${svg('cup','#fff','ic')}<div style="flex:1"><div style="font-size:13px;font-weight:600">Keep awake</div><div class="lbl2">${awake?'On · always':'Off'}</div></div><span class="tg ${awake?'on':''}" data-act="awake"></span></div>`},
+ tool(s,o){
+  if(s==='2x1')return `<div class="t" style="flex-direction:row;align-items:center;gap:12px"><span style="width:36px;height:36px;border-radius:50%;background:#222;display:grid;place-items:center;flex:none">${svg(o.i,'#fff','ic')}</span><div><div style="font-size:13px;font-weight:600">${o.n}</div><div class="lbl2">Shortcut</div></div></div>`;
+  return `<div class="t center">${svg(o.i,'#fff','ic')}<span class="lbl2">${o.n}</span></div>`},
+ shelf(s){
+  if(s==='1x1')return `<div class="t center">${svg('shelf','#fff','ic')}<span class="lbl2">Shelf · 2</span></div>`;
+  return `<div class="t"><div class="hd">${svg('shelf')}Shelf<span class="r lbl2">2 files</span></div><div class="drop"><div><div style="font-size:12px;color:#aaa">Drop files here</div><div class="lbl2" style="margin-top:4px">drag out to use</div></div></div></div>`},
+ weather(s){
+  if(s==='1x1')return `<div class="t center">${dots('24°',{d:3,gap:1})}<span class="lbl2">Delhi</span></div>`;
+  return `<div class="t" style="flex-direction:row;align-items:center;gap:12px">${svg('cloud','#fff','ic')}${dots('24°',{d:4,gap:1.4})}<div style="margin-left:auto;text-align:right"><div class="lbl2">Delhi</div><div style="font-size:11px;color:#ccc;margin-top:3px">↑28° ↓23°</div></div></div>`},
+ devices(s){
+  if(s==='1x1')return `<div class="t center">${svg('head','#fff','ic')}${dots('60%',{d:2.2,gap:.9})}</div>`;
+  return `<div class="t" style="justify-content:center;gap:8px"><div style="display:flex;align-items:center;gap:8px">${svg('head','#fff','ic')}<div style="flex:1">${dotBar(14,8,{d:3.5,gap:2.5})}</div><span class="lbl2">60%</span></div><div style="display:flex;align-items:center;gap:8px">${svg('phone','#fff','ic')}<div style="flex:1">${dotBar(14,12,{d:3.5,gap:2.5})}</div><span class="lbl2">91%</span></div></div>`},
+ next(s){return `<div class="t" style="justify-content:space-between"><div class="lbl2">Up next</div><div style="font-size:15px;font-weight:600">Design review</div><div style="font-size:11px;color:#ccc;display:flex;align-items:center;gap:6px"><span style="width:7px;height:7px;border-radius:50%;background:#e8231f"></span>10:00 · in 15 min</div></div>`}
+};
+
+function render(){
+  const g=document.getElementById('grid');
+  g.innerHTML=PAGES[page].map((o,idx)=>{const [w,h]=o.s.split('x');let html=R[o.k](o.s,o);
+    html=html.replace('class="t','style-hook class="t');
+    return `<div data-idx="${idx}" style="grid-column:span ${w};grid-row:span ${h};display:grid;position:relative">${html.replace('style-hook ','')}<span class="chip" data-chip="${idx}">${o.s.replace('x','×')} ▸</span><span class="x" data-rm="${idx}">✕</span></div>`}).join('')
+   +(editing&&removed.length?`<div class="t center add" style="grid-column:span 1;grid-row:span 1" data-addback>＋<span class="lbl2">Add</span></div>`:'');
+  g.classList.toggle('editing',editing);
+  // make inner tile fill wrapper
+  g.querySelectorAll('[data-idx]>.t').forEach(t=>{t.style.width='100%';t.style.height='100%'});
+  document.querySelectorAll('#pg i').forEach(i=>i.classList.toggle('on',+i.dataset.p===page));
+  document.getElementById('editLbl').textContent=editing?'Done':'Edit';
+  document.getElementById('editBtn').classList.toggle('on',editing);
+}
+render();paintIcons();
+
+/* ---------- notch states ---------- */
+const notch=document.getElementById('notch');
+let manual='rest';
+function setState(s){notch.dataset.s=s;document.querySelectorAll('[data-go]').forEach(b=>b.classList.toggle('on',b.dataset.go===s));
+  if(s==='open'){fitHeight()}
+  else notch.style.height='';}
+function fitHeight(){requestAnimationFrame(()=>{const h=document.getElementById('grid').scrollHeight+14*2+26;notch.style.height=h+'px'})}
+document.querySelectorAll('[data-go]').forEach(b=>b.onclick=()=>{manual=b.dataset.go;setState(manual)});
+notch.addEventListener('mouseenter',()=>{if(notch.dataset.s!=='open')setState('open')});
+notch.addEventListener('mouseleave',()=>{if(!editing&&manual!=='open')setState(manual)});
+document.getElementById('stage').addEventListener('click',e=>{if(!notch.contains(e.target)){editing=false;render();paintIcons();manual=manual==='open'?'rest':manual;setState(manual)}});
+
+/* ---------- interactions inside ---------- */
+document.getElementById('open').addEventListener('click',e=>{
+  e.stopPropagation();
+  const t=e.target.closest('[data-act],[data-chip],[data-rm],[data-addback],[data-p],#editBtn');if(!t)return;
+  if(t.id==='editBtn'){editing=!editing}
+  else if(t.dataset.p!==undefined){page=+t.dataset.p}
+  else if(t.dataset.chip!==undefined){const o=PAGES[page][+t.dataset.chip],L=SIZES[o.k];o.s=L[(L.indexOf(o.s)+1)%L.length]}
+  else if(t.dataset.rm!==undefined){removed.push(PAGES[page].splice(+t.dataset.rm,1)[0])}
+  else if(t.dataset.addback!==undefined){PAGES[page].push(removed.shift())}
+  else if(editing){return}
+  else if(t.dataset.act==='timer'){timerRun=!timerRun}
+  else if(t.dataset.act==='plus'){timerSec+=60}
+  else if(t.dataset.act==='minus'){timerSec=Math.max(60,timerSec-60)}
+  else if(t.dataset.act==='awake'){awake=!awake}
+  render();paintIcons();fitHeight();
+});
+
+/* ---------- live bits ---------- */
+function tick(){const n=new Date(),h=String(n.getHours()).padStart(2,'0'),m=String(n.getMinutes()).padStart(2,'0');
+  document.getElementById('rtime').innerHTML=dots(h+':'+m,{d:2.6,gap:1,fill:'#eee'});
+  document.getElementById('ttime').innerHTML=dots(fmt(timerSec),{d:2.6,gap:1,fill:'#eee'});
+  document.getElementById('tring').innerHTML=`<svg width="22" height="22" style="display:block">${ring(22,16,Math.max(1,Math.round(timerSec/(25*60)*16)),1.2)}</svg>`;
+  if(timerRun&&timerSec>0){timerSec--;if(page===0){const i=PAGES[0].findIndex(o=>o.k==='timer');const w=document.querySelector(`#grid>[data-idx="${i}"]`);
+    if(i>=0&&w){const t=w.querySelector('.t');const tmp=document.createElement('div');tmp.innerHTML=R.timer(PAGES[0][i].s);const nt=tmp.firstElementChild;nt.style.width='100%';nt.style.height='100%';t.replaceWith(nt);paintIcons(w)}}}}
+tick();setInterval(tick,1000);
+setInterval(()=>{document.getElementById('meq').innerHTML=eqSVG(10,4,1.6,5)},150);
+
+function fit(){const w=document.getElementById('fit').clientWidth,s=w/1280;document.getElementById('stage').style.transform=`scale(${s})`;document.getElementById('fit').style.height=470*s+'px'}
+addEventListener('resize',fit);fit();setState('open');manual='rest';
+</script>
+</body>
+</html>
