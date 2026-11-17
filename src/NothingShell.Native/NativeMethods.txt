@@ -1,0 +1,7 @@
+SHAppBarMessage
+FindWindowEx
+ShowWindow
+IsWindowVisible
+GetWindowThreadProcessId
+OpenProcess
+QueryFullProcessImageName

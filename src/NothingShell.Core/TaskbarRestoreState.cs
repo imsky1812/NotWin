@@ -1,8 +1,14 @@
 using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace NothingShell.Core;
 
 public sealed record TaskbarRestoreState(bool WasAutoHide);
+
+// Source-generated so the Native AOT watchdog can read the file without reflection.
+[JsonSourceGenerationOptions(PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase)]
+[JsonSerializable(typeof(TaskbarRestoreState))]
+internal sealed partial class RestoreStateJsonContext : JsonSerializerContext;
 
 public sealed class TaskbarRestoreStore(string directory)
 {
@@ -15,7 +21,7 @@ public sealed class TaskbarRestoreStore(string directory)
         try
         {
             if (!File.Exists(path)) return false;
-            var loaded = JsonSerializer.Deserialize<TaskbarRestoreState>(File.ReadAllText(path), JsonFile.Options);
+            var loaded = JsonSerializer.Deserialize(File.ReadAllText(path), RestoreStateJsonContext.Default.TaskbarRestoreState);
             if (loaded is null) return false;
             state = loaded;
             return true;
