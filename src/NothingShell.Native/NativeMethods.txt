@@ -5,3 +5,14 @@ IsWindowVisible
 GetWindowThreadProcessId
 OpenProcess
 QueryFullProcessImageName
+SetWinEventHook
+UnhookWinEvent
+GetForegroundWindow
+MonitorFromWindow
+GetMonitorInfo
+DwmGetWindowAttribute
+IsZoomed
+GetClassName
+SHQueryUserNotificationState
+GetWindowRect
+WINEVENTPROC
