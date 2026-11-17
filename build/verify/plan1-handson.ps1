@@ -36,6 +36,10 @@ $script:PreexistingIds = @{}       # name -> pids that existed before we started
 $script:CleanedUp      = $false
 $script:BannersOff     = $false
 $script:LastSpikeMode  = ''
+$script:LastLaunchError = ''
+$script:LastSpikeElevated = -1
+$script:foundProc      = $null
+$script:VerifyTasks    = [System.Collections.Generic.List[string]]::new()
 $script:npFound        = $null
 $script:TempFiles      = [System.Collections.Generic.List[string]]::new()
 
@@ -68,6 +72,23 @@ public static class NsWin
     [DllImport("kernel32.dll")] static extern IntPtr OpenProcess(uint a, bool i, uint pid);
     [DllImport("kernel32.dll", CharSet = CharSet.Unicode)] static extern bool QueryFullProcessImageNameW(IntPtr h, uint f, StringBuilder sb, ref uint n);
     [DllImport("kernel32.dll")] static extern bool CloseHandle(IntPtr h);
+    [DllImport("advapi32.dll", SetLastError = true)] static extern bool OpenProcessToken(IntPtr p, uint access, out IntPtr tok);
+    [DllImport("advapi32.dll", SetLastError = true)] static extern bool GetTokenInformation(IntPtr tok, int cls, out uint info, int len, out int ret);
+
+    // 1 = elevated (high integrity token), 0 = not elevated, -1 = could not be read
+    public static int IsElevated(uint pid)
+    {
+        IntPtr p = OpenProcess(0x1000, false, pid);
+        if (p == IntPtr.Zero) return -1;
+        try
+        {
+            IntPtr tok;
+            if (!OpenProcessToken(p, 0x8, out tok)) return -1;
+            try { uint v; int n; if (!GetTokenInformation(tok, 20, out v, 4, out n)) return -1; return v != 0 ? 1 : 0; }
+            finally { CloseHandle(tok); }
+        }
+        finally { CloseHandle(p); }
+    }
 
     public static void Init() { try { SetProcessDPIAware(); } catch { } }
 
@@ -304,20 +325,62 @@ function Invoke-RestoreNow {
     } catch { Write-Bad "restore-now failed to run: $($_.Exception.Message)"; return -2 }
 }
 
-function Invoke-Unelevated([string]$CommandLine, [string]$LogFile, [switch]$Wait, [int]$TimeoutSec = 60) {
-    # Runs a command with a normal (non-elevated) token through runas /trustlevel; output goes to $LogFile.
-    $id = [guid]::NewGuid().ToString('N')
+function Remove-VerifyTask([string]$Name) {
+    try { Unregister-ScheduledTask -TaskName $Name -Confirm:$false -ErrorAction SilentlyContinue } catch { }
+}
+
+# Runs a command as the interactive user at NORMAL (limited, medium integrity) level through a one-shot
+# scheduled task. Output goes to $LogFile when given. No elevated fallback: returns $false and sets
+# $script:LastLaunchError on failure.
+function Invoke-Unelevated([string]$CommandLine, [string]$LogFile, [switch]$Wait, [int]$TimeoutSec = 60, [string]$WorkDir = '') {
+    $id = [guid]::NewGuid().ToString('N').Substring(0, 8)
     $cmd = Join-Path $env:TEMP "nsho-$id.cmd"
     $done = Join-Path $env:TEMP "nsho-$id.done"
+    $taskName = "NothingShellVerify_$id"
     $script:TempFiles.Add($cmd); $script:TempFiles.Add($done)
-    $lines = @('@echo off', "$CommandLine > `"$LogFile`" 2>&1", "echo done> `"$done`"")
+    $run = if ($LogFile) { "$CommandLine > `"$LogFile`" 2>&1" } else { $CommandLine }
+    $lines = @('@echo off')
+    if ($WorkDir) { $lines += "cd /d `"$WorkDir`"" }
+    $lines += $run
+    $lines += "echo done> `"$done`""
     Set-Content -Path $cmd -Value $lines -Encoding ASCII
-    Start-Process -FilePath 'runas.exe' -ArgumentList ('/trustlevel:0x20000 "\"{0}\""' -f $cmd) -WindowStyle Hidden | Out-Null
+    try {
+        $user = (Get-CimInstance Win32_ComputerSystem).UserName
+        if (-not $user) { $user = "$env:USERDOMAIN\$env:USERNAME" }
+        $action    = New-ScheduledTaskAction -Execute $cmd
+        $trigger   = New-ScheduledTaskTrigger -Once -At ((Get-Date).Date.AddHours(23).AddMinutes(59))
+        $principal = New-ScheduledTaskPrincipal -UserId $user -LogonType Interactive -RunLevel Limited
+        $settings  = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -ExecutionTimeLimit ([TimeSpan]::Zero) -StartWhenAvailable
+        Register-ScheduledTask -TaskName $taskName -Action $action -Trigger $trigger -Principal $principal -Settings $settings -Force | Out-Null
+        $script:VerifyTasks.Add($taskName)
+        Start-ScheduledTask -TaskName $taskName
+    } catch {
+        $script:LastLaunchError = "scheduled task launch failed: $($_.Exception.Message)"
+        Write-Bad $script:LastLaunchError
+        Remove-VerifyTask $taskName
+        return $false
+    }
     if ($Wait) {
         $ms = Wait-Until { Test-Path -LiteralPath $done } ($TimeoutSec * 1000) 200
+        Remove-VerifyTask $taskName
+        if ($ms -lt 0) { $script:LastLaunchError = "command did not finish within $TimeoutSec s" }
         return ($ms -ge 0)
     }
     return $true
+}
+
+# Starts a long-running program at normal user level and returns its Process (newest, not seen before), or $null.
+function Start-LimitedProcess([string]$Name, [string]$CommandLine, [string]$LogFile, [string]$WorkDir = '') {
+    $pre = @(Get-Process -Name $Name -ErrorAction SilentlyContinue | ForEach-Object { $_.Id })
+    $t0 = (Get-Date).AddSeconds(-2)
+    $script:LastLaunchError = ''
+    if (-not (Invoke-Unelevated $CommandLine $LogFile -WorkDir $WorkDir)) { return $null }
+    $ms = Wait-Until {
+        $c = @(Get-Process -Name $Name -ErrorAction SilentlyContinue | Where-Object { $pre -notcontains $_.Id -and $_.StartTime -ge $t0 } | Sort-Object StartTime -Descending)
+        if ($c.Count -gt 0) { $script:foundProc = $c[0]; $true } else { $false }
+    } 12000 200
+    if ($ms -lt 0) { $script:LastLaunchError = "process '$Name' did not appear within 12 s of starting the task"; return $null }
+    return $script:foundProc
 }
 
 function Ensure-Explorer {
@@ -365,6 +428,7 @@ function Invoke-Cleanup {
             Write-Info "auto-hide set back to the original ($($script:OrigAutoHide))"
         }
     } catch { }
+    foreach ($t in $script:VerifyTasks) { Remove-VerifyTask $t }
     foreach ($f in $script:TempFiles) { try { Remove-Item -LiteralPath $f -Force -ErrorAction SilentlyContinue } catch { } }
     if ($script:BannersOff) {
         Write-Host ''
@@ -376,7 +440,11 @@ function Invoke-Cleanup {
 # ---------- app / window helpers ----------
 function Start-App {
     if ((Get-AppProcess).Count -gt 0) { throw 'NothingShell is already running before a test step; aborting.' }
-    $p = Start-Process -FilePath $AppExe -WorkingDirectory $AppDir -PassThru
+    $p = Start-LimitedProcess 'NothingShell' ('"{0}"' -f $AppExe) '' $AppDir
+    if (-not $p) {
+        [void](Complete-Check -Id 'LAUNCH.app' -Description 'Start NothingShell.exe as the normal (non-elevated) user' -Measured @{ error = $script:LastLaunchError } -MeasuredPass $false -Notes $script:LastLaunchError)
+        throw "Could not start the app de-elevated: $($script:LastLaunchError)"
+    }
     $script:StartedProcs.Add($p)
     Start-Sleep -Seconds 3
     $p.Refresh()
@@ -426,22 +494,16 @@ function Start-Spike([string]$Name, [string]$Exe, [string]$ArgString, [string]$L
     Stop-OursByName $Name
     Set-Content -Path $LogFile -Value '' -Encoding ASCII
     $script:TempFiles.Add($LogFile)
-    $pre = @(Get-Process -Name $Name -ErrorAction SilentlyContinue | ForEach-Object { $_.Id })
-    $mode = 'normal user'
-    [void](Invoke-Unelevated ('"{0}" {1}' -f $Exe, $ArgString) $LogFile)
-    $up = Wait-Until { Get-Process -Name $Name -ErrorAction SilentlyContinue | Where-Object { $pre -notcontains $_.Id } } 8000 200
-    if ($up -lt 0) {
-        $mode = 'elevated (fallback)'
-        Write-Info 'Could not start it with a normal token; starting it the elevated way instead.'
-        $sp = @{ FilePath = $Exe; PassThru = $true; WindowStyle = 'Hidden'; RedirectStandardOutput = $LogFile; RedirectStandardError = "$LogFile.err" }
-        if ($ArgString) { $sp.ArgumentList = $ArgString }
-        $p = Start-Process @sp
-        $script:StartedProcs.Add($p)
-        $script:TempFiles.Add("$LogFile.err")
-        $up = Wait-Until { Get-Process -Name $Name -ErrorAction SilentlyContinue | Where-Object { $pre -notcontains $_.Id } } 5000 200
+    $p = Start-LimitedProcess $Name ('"{0}" {1}' -f $Exe, $ArgString) $LogFile
+    if (-not $p) {
+        $script:LastSpikeMode = "FAILED: $($script:LastLaunchError)"
+        $script:LastSpikeElevated = -1
+        [void](Complete-Check -Id "LAUNCH.$Name" -Description "Start $Name as the normal (non-elevated) user" -Measured @{ error = $script:LastLaunchError } -MeasuredPass $false -Notes $script:LastLaunchError)
+        return $false
     }
-    $script:LastSpikeMode = $mode
-    return ($up -ge 0)
+    $script:LastSpikeElevated = [NsWin]::IsElevated([uint32]$p.Id)
+    $script:LastSpikeMode = if ($script:LastSpikeElevated -eq 0) { 'normal user (limited scheduled task)' } else { "UNEXPECTED elevation=$($script:LastSpikeElevated)" }
+    return $true
 }
 # ===== END HELPERS =====
 
@@ -559,6 +621,7 @@ try {
     $app = Start-App
     $trayState = [NsWin]::TrayState(); $ah = [NsWin]::GetAutoHide()
     $wdInfo = Test-WatchdogForApp $app
+    $elev = [NsWin]::IsElevated([uint32]$app.Id)
     $logNew = Get-LogSince $AppLog $logOff
     $uiOk = $logNew -match ('startup uiAccess=1 pid={0}\b' -f $app.Id)
     $state = Read-StateFile
@@ -592,9 +655,9 @@ try {
         [NsWin]::CloseWindow($np); [void](Wait-Until { -not [NsWin]::WindowExists($np) } 4000 200)
         if ([NsWin]::WindowExists($np)) { Write-Do 'Please close the Notepad window yourself (do not save).' }
     }
-    $pass = ($trayState -eq 0) -and $ah -and $wdInfo.found -and $wdInfo.parentStartMatches -and $uiOk -and $stateOk -and ($fills -eq $true)
-    [void](Complete-Check -Id 'C8.1' -Description 'App start: taskbar hidden, auto-hide on, watchdog (--parent-start matches), uiAccess=1, maximized window fills screen' `
-        -Measured @{ trayState = $trayState; autoHide = $ah; appPid = $app.Id; watchdog = $wdInfo; uiAccessLog = $uiOk; stateFileOk = $stateOk; notepad = $npM } `
+    $pass = ($trayState -eq 0) -and $ah -and $wdInfo.found -and $wdInfo.parentStartMatches -and $uiOk -and $stateOk -and ($fills -eq $true) -and ($elev -eq 0)
+    [void](Complete-Check -Id 'C8.1' -Description 'App start (normal user, not elevated): taskbar hidden, auto-hide on, watchdog (--parent-start matches), uiAccess=1, maximized window fills screen' `
+        -Measured @{ trayState = $trayState; autoHide = $ah; appPid = $app.Id; appElevated = ($elev -eq 1); appElevationRead = ($elev -ge 0); watchdog = $wdInfo; uiAccessLog = $uiOk; stateFileOk = $stateOk; notepad = $npM } `
         -MeasuredPass $pass -Answer $ans -Expect 'y' -AnswerRequired $false `
         -Notes $(if ($null -eq $fills) { 'Notepad size could not be measured.' } else { '' }))
 
@@ -723,14 +786,14 @@ try {
     # ================================================================ SPIKES
     # ---------------------------------------------------------------- KeySpike
     Write-Step 'SPIKE 1: Windows key (KeySpike)'
-    Write-Info 'A small test program will watch the Windows key. A black window may pop up: leave it alone.'
+    Write-Info 'A small test program (started as your normal user) will watch the Windows key. A black window may pop up: leave it alone.'
     Write-Info 'After each key test: close anything that opened (Esc), then click THIS window and answer.'
     $keyExe = Join-Path $SpikeRoot 'KeySpike\KeySpike.exe'
     $keyLog = Join-Path $env:TEMP "nsho-keyspike-$Stamp.txt"
     if (-not (Test-Path $keyExe)) { throw "KeySpike not installed at $keyExe" }
     $up = Start-Spike 'KeySpike' $keyExe '' $keyLog
     $hookUp = (Wait-Until { (Read-SharedText $keyLog) -match 'hook installed' } 6000 200) -ge 0
-    [void](Complete-Check -Id 'K.0' -Description 'KeySpike started and hook installed' -Measured @{ processUp = $up; hookInstalled = $hookUp; launchedAs = $script:LastSpikeMode } -MeasuredPass ($up -and $hookUp))
+    [void](Complete-Check -Id 'K.0' -Description 'KeySpike started and hook installed' -Measured @{ processUp = $up; hookInstalled = $hookUp; launchedAs = $script:LastSpikeMode } -MeasuredPass ($up -and $hookUp -and $script:LastSpikeElevated -eq 0))
     if ($up -and $hookUp) {
         $keyTests = @(
             @{ id = 'K.1'; desc = 'Win key alone: Start does NOT open, launcher event logged'; todo = 'Tap the Windows key ONCE, by itself.'; q = 'Did the Start menu open?'; expect = 'n'; launcherMin = 1; launcherMax = 99; panelMin = 0 }
@@ -835,7 +898,7 @@ try {
     $dlLog = Join-Path $env:TEMP "nsho-desktoplayer-$Stamp.txt"
     $up = Start-Spike 'DesktopLayerSpike' $dlExe '--option A --stay' $dlLog
     Start-Sleep -Seconds 3
-    [void](Complete-Check -Id 'D.0' -Description 'DesktopLayerSpike started' -Measured @{ processUp = $up; launchedAs = $script:LastSpikeMode } -MeasuredPass $up)
+    [void](Complete-Check -Id 'D.0' -Description 'DesktopLayerSpike started' -Measured @{ processUp = $up; launchedAs = $script:LastSpikeMode } -MeasuredPass ($up -and $script:LastSpikeElevated -eq 0))
     if ($up) {
         Write-Do 'Press Win+D to show the desktop. Look for a grey square saying "clicks: 0" on the left (about 100 px in, 300 px down).'
         Write-Do 'Click it with the mouse. Then press Win+D again to come back to this window.'
@@ -884,7 +947,7 @@ try {
     $allowed = $txt -match 'RequestAccessAsync returned Allowed'
     [void](Complete-Check -Id 'N.1' -Description 'Installed NotifySpike: tokenUIAccess=1, package identity, access Allowed' `
         -Measured @{ processUp = $up; tokenUIAccess1 = $uia; package = $pkg; accessAllowed = $allowed; launchedAs = $script:LastSpikeMode; log = @($txt.Trim() -split "`r?`n" | Select-Object -First 8) } `
-        -MeasuredPass ($up -and $uia -and $allowed -and [bool]$pkg))
+        -MeasuredPass ($up -and $uia -and $allowed -and [bool]$pkg -and $script:LastSpikeElevated -eq 0))
     if ($listening) {
         $toastText = "NothingShell spike test $(Get-Date -Format HH:mm:ss) auto"
         $off = Get-LogLength $nsLog
