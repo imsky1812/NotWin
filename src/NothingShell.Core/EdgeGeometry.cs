@@ -8,9 +8,12 @@ namespace NothingShell.Core;
 /// </summary>
 public static class EdgeGeometry
 {
-    /// <summary>True when the cursor is on the last row of the monitor and its X is within the monitor.</summary>
+    /// <summary>
+    /// True only when the cursor is on the monitor's last pixel row (Y == Bottom - 1) and X is in
+    /// [Left, Right). Bounded above Bottom so a monitor stacked below does not count as the edge.
+    /// </summary>
     public static bool IsAtBottomEdge(PointI cursor, RectI monitor) =>
-        cursor.Y >= monitor.Bottom - 1 &&
+        cursor.Y >= monitor.Bottom - 1 && cursor.Y < monitor.Bottom &&
         cursor.X >= monitor.Left && cursor.X < monitor.Right;
 
     /// <summary>
@@ -18,6 +21,8 @@ public static class EdgeGeometry
     /// above <c>monitor.Bottom</c>. Width, height and gap are each rounded to the nearest integer
     /// (midpoint away from zero); the horizontal leftover is split with integer division, so an odd
     /// leftover puts the extra pixel on the right and the dock width is always preserved exactly.
+    /// The 60/12 defaults are DIP values: when the monitor is in physical pixels the caller must
+    /// pass width, height and gap already scaled by the monitor DPI.
     /// </summary>
     public static RectI DockBounds(RectI monitor, double width, double height = 60, double bottomGap = 12)
     {

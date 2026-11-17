@@ -32,8 +32,16 @@ public sealed class EdgeGeometryTests
     public void IsAtBottomEdge_SecondaryMonitorWithOffset()
     {
         var mon = new RectI(1920, 0, 3840, 1080);
-        Assert.True(EdgeGeometry.IsAtBottomEdge(new PointI(2000, 1080), mon));
+        Assert.True(EdgeGeometry.IsAtBottomEdge(new PointI(2000, 1079), mon));
         Assert.False(EdgeGeometry.IsAtBottomEdge(new PointI(100, 1079), mon));
+    }
+
+    [Fact]
+    public void IsAtBottomEdge_MonitorStackedBelow_DoesNotTrigger()
+    {
+        var primary = new RectI(0, 0, 1920, 1080);
+        Assert.False(EdgeGeometry.IsAtBottomEdge(new PointI(500, 1500), primary));
+        Assert.False(EdgeGeometry.IsAtBottomEdge(new PointI(500, 1080), primary));
     }
 
     [Fact]
