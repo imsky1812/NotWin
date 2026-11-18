@@ -50,6 +50,20 @@
                     <TextBlock Text="…" FontSize="12" Foreground="{StaticResource Brush.Dim}" />
                 </StackPanel>
 
+                <!-- Plugged in / unplugged: bolt + label | level dots + percent in dots (user request 2026-11-19) -->
+                <DockPanel x:Name="PowerLayer" Margin="16,0" Opacity="0">
+                    <TextBlock x:Name="PowerBolt" Text="⚡" FontSize="13" Foreground="#FFE8231F" DockPanel.Dock="Left"
+                               VerticalAlignment="Center" Margin="0,0,7,1" />
+                    <StackPanel Orientation="Horizontal" DockPanel.Dock="Right" VerticalAlignment="Center">
+                        <local:DotBar x:Name="PowerBar" Dot="4" Gap="2" VerticalAlignment="Center" Margin="0,0,10,0" />
+                        <local:DotMatrix x:Name="PowerPercent" Dot="2.6" Gap="1" Fill="#FFEEEEEE" VerticalAlignment="Center" />
+                        <TextBlock Text="%" FontFamily="{StaticResource Font.GeistMono}" FontWeight="Medium" FontSize="11"
+                                   Foreground="{StaticResource Brush.Dim}" VerticalAlignment="Center" Margin="2,0,0,0" />
+                    </StackPanel>
+                    <TextBlock x:Name="PowerLabel" FontSize="12" FontWeight="Medium" VerticalAlignment="Center"
+                               TextTrimming="CharacterEllipsis" />
+                </DockPanel>
+
                 <!-- Music: mini art | equalizer (Task 5) -->
                 <DockPanel x:Name="MusicLayer" Margin="14,0" Opacity="0">
                     <Border x:Name="ArtBox" Width="22" Height="22" CornerRadius="7" Background="#FF3A3A3A" ClipToBounds="True"

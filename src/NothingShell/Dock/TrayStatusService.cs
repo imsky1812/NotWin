@@ -87,6 +87,15 @@ public sealed class TrayStatusService : INotifyPropertyChanged, IDisposable
         }
     }
 
+    /// <summary>On mains power (the charger is in), whether or not the battery is taking charge right now.</summary>
+    public bool PluggedIn
+    {
+        get => _pluggedIn;
+        private set => Set(ref _pluggedIn, value);
+    }
+
+    private bool _pluggedIn;
+
     public bool Charging
     {
         get => _charging;
@@ -137,6 +146,7 @@ public sealed class TrayStatusService : INotifyPropertyChanged, IDisposable
             ReadBattery();
             PowerManager.RemainingChargePercentChanged += OnPowerChanged;
             PowerManager.BatteryStatusChanged += OnPowerChanged;
+            PowerManager.PowerSupplyStatusChanged += OnPowerChanged;
         }
         catch (Exception e) { Log.Error("battery status unavailable", e); }
     }
@@ -152,6 +162,7 @@ public sealed class TrayStatusService : INotifyPropertyChanged, IDisposable
             HasBattery = status != BatteryStatus.NotPresent;
             BatteryPercent = Math.Clamp(PowerManager.RemainingChargePercent, 0, 100);
             Charging = status == BatteryStatus.Charging;
+            PluggedIn = PowerManager.PowerSupplyStatus != PowerSupplyStatus.NotPresent;
         }
         catch (Exception e) { Log.Error("battery read failed", e); }
     }
@@ -270,6 +281,7 @@ public sealed class TrayStatusService : INotifyPropertyChanged, IDisposable
             SystemEvents.TimeChanged -= OnSystemTimeChanged;
             PowerManager.RemainingChargePercentChanged -= OnPowerChanged;
             PowerManager.BatteryStatusChanged -= OnPowerChanged;
+            PowerManager.PowerSupplyStatusChanged -= OnPowerChanged;
             if (_netHandler is not null) NetworkInformation.NetworkStatusChanged -= _netHandler;
             foreach (var r in _radios) r.StateChanged -= OnRadioStateChanged;
             _radios.Clear();

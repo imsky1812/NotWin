@@ -102,6 +102,41 @@ public sealed class NotchStateMachineTests
     }
 
     [Fact]
+    public void Power_ShowsFor2400ms_ThenFallsBack()
+    {
+        var m = new NotchStateMachine();
+        m.SetMusicPlaying(true);
+        m.PowerChanged(charging: true, percent: 36, T0);
+        Assert.Equal(NotchState.Power, m.StateAt(Ms(2399)));
+        Assert.Equal((true, 36), m.CurrentPower);
+        Assert.Equal(NotchState.Music, m.StateAt(Ms(2400)));
+        Assert.Equal(TimeSpan.FromMilliseconds(2400), NotchStateMachine.PowerTime);
+    }
+
+    [Fact]
+    public void Power_BelowNotification_AboveOpening()
+    {
+        var m = new NotchStateMachine();
+        m.Opening("Calculator", T0);
+        m.PowerChanged(false, 80, Ms(100));
+        Assert.Equal(NotchState.Power, m.StateAt(Ms(200)));      // replaces the opening hint
+        m.Notify(N1, Ms(300));
+        Assert.Equal(NotchState.Notification, m.StateAt(Ms(400))); // a notification still wins
+        m.PowerChanged(true, 81, Ms(500));                          // during a notification: dropped
+        Assert.Equal(NotchState.Resting, m.StateAt(Ms(3900)));
+    }
+
+    [Fact]
+    public void Power_IgnoredInFullscreen()
+    {
+        var m = new NotchStateMachine();
+        m.SetFullscreen(true);
+        m.PowerChanged(true, 50, T0);
+        m.SetFullscreen(false);
+        Assert.Equal(NotchState.Resting, m.StateAt(Ms(100)));
+    }
+
+    [Fact]
     public void NextChangeAt_IsTransientEnd()
     {
         var m = new NotchStateMachine();

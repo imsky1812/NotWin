@@ -17,6 +17,7 @@ public sealed class NotchController : IDisposable
     private readonly TrayStatusService _tray;
     private readonly DispatcherTimer _transient;
     private NotchState _last = (NotchState)(-1);
+    private bool? _plugged; // null until the first reading: the start-up value is not a plug event
 
     public NotchController(TrayStatusService tray)
     {
@@ -26,6 +27,7 @@ public sealed class NotchController : IDisposable
         _tray.PropertyChanged += OnTrayChanged;
         _window.Initialize();
         UpdateClockAndBattery();
+        _plugged = _tray.HasBattery ? _tray.PluggedIn : null;
         Render();
     }
 
@@ -59,8 +61,29 @@ public sealed class NotchController : IDisposable
     private void OnTrayChanged(object? sender, PropertyChangedEventArgs e)
     {
         if (e.PropertyName is nameof(TrayStatusService.Time) or nameof(TrayStatusService.BatteryPercent)
-            or nameof(TrayStatusService.Charging) or nameof(TrayStatusService.HasBattery))
+            or nameof(TrayStatusService.Charging) or nameof(TrayStatusService.HasBattery)
+            or nameof(TrayStatusService.PluggedIn))
+        {
             UpdateClockAndBattery();
+            CheckPlug();
+        }
+    }
+
+    // Plug in / unplug: show the charging card once per change (desktops without a battery never show it).
+    // Follows the charger (PowerSupplyStatus), not BatteryStatus: plugged in at 100 % or at a charge limit is "Idle".
+    private void CheckPlug()
+    {
+        if (!_tray.HasBattery) { _plugged = null; return; }
+        var plugged = _tray.PluggedIn;
+        if (_plugged is { } was && was != plugged)
+        {
+            var now = DateTimeOffset.Now;
+            _machine.PowerChanged(plugged, _tray.BatteryPercent, now);
+            if (_machine.StateAt(now) == NotchState.Power && _machine.CurrentPower is { } p) _window.SetPower(p.Charging, p.Percent);
+            Log.Info($"notch power plugged={plugged}");
+            Render();
+        }
+        _plugged = plugged;
     }
 
     private void UpdateClockAndBattery()

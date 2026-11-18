@@ -21,8 +21,13 @@ public partial class NotchWindow : Window
     private const double BandWidth = 480, BandHeight = 112; // DIPs: room for the 420x64 pill plus its shadow
     private static readonly Duration Resize = new(TimeSpan.FromMilliseconds(300));
     private static readonly KeySpline Ease = new(0.2, 0.8, 0.2, 1);
+    private static readonly TimeSpan FillDelay = TimeSpan.FromMilliseconds(300), FillStep = TimeSpan.FromMilliseconds(70);
     private static readonly Brush Lit = Frozen(0xF2, 0xF2, 0xF2), Red = Frozen(0xE8, 0x23, 0x1F), Off = Frozen(0x22, 0x22, 0x22);
     private readonly DispatcherTimer _eq;
+    private readonly DispatcherTimer _fill;
+    private readonly SolidColorBrush _accent = new(Color.FromRgb(0xE8, 0x23, 0x1F)); // animated: pulses while charging
+    private int _fillTarget;
+    private bool _charging;
     private readonly Random _rng = new();
     private nint _hwnd;
     private NotchState _shown = NotchState.Resting;
@@ -40,6 +45,16 @@ public partial class NotchWindow : Window
         };
         _eq = new DispatcherTimer(DispatcherPriority.Render) { Interval = TimeSpan.FromMilliseconds(125) };
         _eq.Tick += (_, _) => DrawEqualizer();
+        _fill = new DispatcherTimer(DispatcherPriority.Render) { Interval = FillStep };
+        _fill.Tick += (_, _) =>
+        {
+            _fill.Interval = FillStep;
+            if (PowerBar.Lit >= _fillTarget) { _fill.Stop(); return; }
+            PowerBar.Lit++;
+        };
+        PowerBar.On = Lit;
+        PowerBar.Off = Frozen(0x2A, 0x2A, 0x2A);
+        PowerBar.Accent = _accent;
         SystemEvents.DisplaySettingsChanged += OnDisplayChanged;
         Closed += (_, _) => SystemEvents.DisplaySettingsChanged -= OnDisplayChanged;
     }
@@ -79,6 +94,28 @@ public partial class NotchWindow : Window
 
     public void SetOpening(string name) => OpeningName.Text = name;
 
+    /// <summary>
+    /// Fills the plugged-in / unplugged card (<paramref name="charging"/> = the charger is in). Plugging in fills the
+    /// level dots one by one (the last lit dot red and pulsing); unplugging shows the level at once with a grey bolt.
+    /// </summary>
+    public void SetPower(bool charging, int percent)
+    {
+        percent = Math.Clamp(percent, 0, 100);
+        _charging = charging;
+        _fillTarget = percent == 0 ? 0 : (int)Math.Ceiling(percent / 10.0);
+        PowerLabel.Text = !charging ? "On battery" : percent >= 100 ? "Fully charged" : "Charging";
+        PowerBolt.Foreground = charging ? _accent : Frozen(0x6A, 0x6A, 0x6A);
+        PowerPercent.Text = percent.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        _fill.Stop();
+        if (charging)
+        {
+            PowerBar.Lit = 0;
+            _fill.Interval = FillDelay; // the first dot lights once the pill has widened and the card faded in
+            _fill.Start();
+        }
+        else PowerBar.Lit = _fillTarget;
+    }
+
     public void SetMusicArt(ImageSource? art)
     {
         Art.Source = art;
@@ -98,6 +135,7 @@ public partial class NotchWindow : Window
         if (state == NotchState.Hidden)
         {
             _eq.Stop();
+            StopPower();
             Hide();
             _shown = state;
             return;
@@ -111,6 +149,7 @@ public partial class NotchWindow : Window
             NotchState.Music => (300.0, 34.0, 20.0),
             NotchState.Timer => (270.0, 34.0, 20.0),
             NotchState.Opening => (300.0, 34.0, 20.0),
+            NotchState.Power => (300.0, 34.0, 20.0),
             NotchState.Notification => (420.0, 64.0, 30.0),
             _ => (196.0, 34.0, 20.0),
         };
@@ -122,9 +161,25 @@ public partial class NotchWindow : Window
         Fade(OpeningLayer, state == NotchState.Opening);
         Fade(MusicLayer, state == NotchState.Music);
         Fade(NotifyLayer, state == NotchState.Notification);
+        Fade(PowerLayer, state == NotchState.Power);
+
+        if (state == NotchState.Power && _charging)
+            _accent.BeginAnimation(SolidColorBrush.OpacityProperty, new DoubleAnimation(1, 0.35, new Duration(TimeSpan.FromMilliseconds(600)))
+            {
+                AutoReverse = true,
+                RepeatBehavior = RepeatBehavior.Forever,
+            });
+        else if (state != NotchState.Power) StopPower(); // nothing animates once the card is gone (spec §7)
 
         if (state == NotchState.Music) { DrawEqualizer(); _eq.Start(); }
         else _eq.Stop(); // the equalizer only runs while it is visible (spec §7)
+    }
+
+    private void StopPower()
+    {
+        _fill.Stop();
+        PowerBar.Lit = _fillTarget;
+        _accent.BeginAnimation(SolidColorBrush.OpacityProperty, null);
     }
 
     private static void Animate(FrameworkElement el, DependencyProperty p, double to) =>
