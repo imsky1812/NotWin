@@ -135,7 +135,7 @@ tests/NothingShell.Core.Tests/{Notch,Panel,Shell}/*Tests.cs
   - `KeyVerdict` gains `bool OpenPanel` as a 4th positional member with default `false`: `KeyVerdict(bool Swallow, bool InjectMaskFirst, bool OpenLauncher, bool OpenPanel = false)`.
   - `WinKeyListener.PanelRequested` (event `Action`, raised on the UI thread).
 
-- [ ] **Step 1: Create the branch.** Run `git switch -c plan3-panel-notch plan2-launcher`.
+- [ ] **Step 1: Confirm the branch.** `plan3-panel-notch` was created from `plan2-launcher` together with this plan. Run `git branch --show-current`. Expected: `plan3-panel-notch`.
 - [ ] **Step 2: Write the failing tests.** Use A = `0x41`, N = `0x4E`, LShift = `0xA0`, LCtrl = `0xA2`, LMenu = `0xA4`.
   - `WinA_SwallowsLetterAndOpensPanel`: down(LWin); down(A) → `(Swallow:true, InjectMaskFirst:false, OpenLauncher:false, OpenPanel:true)`; up(A) → Swallow only; up(LWin) → `(false, InjectMaskFirst:true, false, false)`.
   - `WinN_SameAsWinA`.
