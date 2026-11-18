@@ -40,6 +40,12 @@ public sealed class DockController : IDisposable
         _dock.OverflowClicked += OverflowOpener.Open;
         _dock.StartContext += OnStartContext;
         _dock.PlacementChanged += _appBar.Refresh;
+        _appBar.GrantedChanged += g =>
+        {
+            void Place() => _dock.SetReservedBottom(g == default ? null : g.Bottom);
+            if (_dock.Dispatcher.CheckAccess()) Place();
+            else { try { _dock.Dispatcher.BeginInvoke(Place); } catch (Exception) { /* shutting down */ } }
+        };
     }
 
     // Until the Plan 3 quick-settings panel exists, the tray opens Windows' own (Win+A).

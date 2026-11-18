@@ -169,12 +169,17 @@ public sealed class DockRevealMachineTests
     }
 
     [Fact]
-    public void KeepVisible_BeatsFullscreen()
+    public void Fullscreen_BeatsKeepVisible()
     {
         var m = DockRevealMachine.CreateDefault();
-        m.Update(Idle with { KeepVisible = true, Fullscreen = true }, Ms(0));
+        m.Update(Idle with { KeepVisible = true }, Ms(0));
         Assert.True(m.Visible);
+        m.Update(Idle with { KeepVisible = true, Fullscreen = true, CursorAtEdge = true }, Ms(10));
+        Assert.False(m.Visible);
         Assert.Null(m.NextDeadline);
+        // Fullscreen ends: a KeepVisible dock is back at once, no edge needed.
+        m.Update(Idle with { KeepVisible = true }, Ms(20));
+        Assert.True(m.Visible);
     }
 
     [Fact]

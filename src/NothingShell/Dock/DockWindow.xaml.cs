@@ -36,6 +36,7 @@ public partial class DockWindow : Window
     private DockPlacement _placement;
     private int _animation;
     private bool _repositionQueued;
+    private int? _reservedBottom;
 
     public DockWindow(DockViewModel vm)
     {
@@ -106,6 +107,19 @@ public partial class DockWindow : Window
         if (_placement.Window != before) PlacementChanged?.Invoke();
     }
 
+    /// <summary>
+    /// When the dock reserves space as an appbar, the bottom of the granted strip (physical px); the dock is laid out
+    /// above it (pill bottom = granted bottom - gap) instead of above the raw monitor bottom. Null = not reserved.
+    /// </summary>
+    public void SetReservedBottom(int? bottom)
+    {
+        if (_reservedBottom == bottom) return;
+        _reservedBottom = bottom;
+        var before = _placement.Window;
+        Reposition();
+        if (_placement.Window != before) PlacementChanged?.Invoke();
+    }
+
     public DockPlacement Placement => _placement;
 
     public nint Handle => _hwnd;
@@ -158,8 +172,9 @@ public partial class DockWindow : Window
         {
             var (monitor, dpi) = DockWindowNative.GetPrimaryMonitor();
             var scale = dpi / 96.0;
-            var pill = EdgeGeometry.DockBounds(monitor, ContentWidth * scale, PillHeight * scale, BottomGap * scale);
-            var window = new RectI(pill.Left, pill.Top, pill.Right, monitor.Bottom);
+            var layout = _reservedBottom is { } rb ? monitor with { Bottom = Math.Min(rb, monitor.Bottom) } : monitor;
+            var pill = EdgeGeometry.DockBounds(layout, ContentWidth * scale, PillHeight * scale, BottomGap * scale);
+            var window = new RectI(pill.Left, pill.Top, pill.Right, layout.Bottom);
             var changed = window != _placement.Window || dpi != _placement.Dpi;
             _placement = new DockPlacement(monitor, pill, window, dpi);
             DockWindowNative.PlaceTopmost(_hwnd, window);

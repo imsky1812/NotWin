@@ -26,6 +26,9 @@ public sealed class DockAppBar : IDisposable
 
     public bool IsRegistered => _registered;
 
+    /// <summary>Raised (possibly off the UI thread on crash paths) when the granted rect changes; default = released.</summary>
+    public event Action<RectI>? GrantedChanged;
+
     /// <summary>Last rectangle the system granted (physical pixels); default when not registered.</summary>
     public RectI Granted => _granted;
 
@@ -36,8 +39,8 @@ public sealed class DockAppBar : IDisposable
         {
             try
             {
-                var hwnd = new WindowInteropHelper(dock).Handle;
-                if (hwnd == 0) { Log.Info("appbar: dock has no HWND yet"); return; }
+                var hwnd = new WindowInteropHelper(dock).EnsureHandle();
+                if (hwnd == 0) { Log.Error("appbar: dock has no HWND"); return; }
 
                 if (_registered && hwnd != _hwnd) UnregisterCore();
                 if (!_registered)
@@ -97,7 +100,10 @@ public sealed class DockAppBar : IDisposable
         var before = _granted;
         _granted = AppBarNative.SetBottom(_hwnd, monitor, height, _granted == default ? null : _granted);
         if (_granted != before)
+        {
             Log.Info($"appbar set: monitor={monitor} dpi={dpi} height={height} granted={_granted}");
+            RaiseGranted();
+        }
     }
 
     private void UnregisterCore()
@@ -110,6 +116,13 @@ public sealed class DockAppBar : IDisposable
         _source = null;
         _granted = default;
         Log.Info("appbar unregistered");
+        RaiseGranted();
+    }
+
+    private void RaiseGranted()
+    {
+        try { GrantedChanged?.Invoke(_granted); }
+        catch (Exception e) { Log.Error("appbar GrantedChanged handler failed", e); }
     }
 
     private IntPtr WndProc(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)

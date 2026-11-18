@@ -7,6 +7,7 @@ public readonly record struct DockInputs(
 /// Deterministic dock show/hide state machine. It never reads a clock: the caller passes <c>now</c>
 /// to <see cref="Update"/> and should call it again at <see cref="NextDeadline"/> (null = nothing
 /// pending, so no timer is needed). Deadlines are inclusive: elapsed >= delay fires.
+/// Rule order: 1 Fullscreen hides; 2 KeepVisible / 5 open panel pin visible; 3 edge reveals; 4 idle hides.
 /// </summary>
 public sealed class DockRevealMachine(TimeSpan revealDelay, TimeSpan hideDelay)
 {
@@ -23,8 +24,10 @@ public sealed class DockRevealMachine(TimeSpan revealDelay, TimeSpan hideDelay)
 
     public void Update(DockInputs input, TimeSpan now)
     {
-        // 1. Fullscreen (without KeepVisible) hides immediately and ignores edge input.
-        if (input.Fullscreen && !input.KeepVisible)
+        // 1. Fullscreen hides immediately (even with KeepVisible or an open panel) and ignores edge input;
+        //    the appbar reservation, if any, stays registered. Leaving fullscreen re-evaluates from scratch,
+        //    so a KeepVisible dock reappears at once.
+        if (input.Fullscreen)
         {
             Visible = false;
             _edgeSince = null;
@@ -32,7 +35,7 @@ public sealed class DockRevealMachine(TimeSpan revealDelay, TimeSpan hideDelay)
             return;
         }
 
-        // 2 + 5. KeepVisible and an open panel both pin the dock visible.
+        // 2 + 5. KeepVisible and an open panel both pin the dock visible (rule 1 already handled fullscreen).
         if (input.KeepVisible || input.PanelOpen)
         {
             Visible = true;
