@@ -32,15 +32,41 @@ public static unsafe class TrayInputNative
     /// <summary>Win+A (Windows quick settings).</summary>
     public static bool SendQuickSettings() => SendChord(VIRTUAL_KEY.VK_LWIN, VIRTUAL_KEY.VK_A);
 
+    // The last foreground window that was NOT the explorer tray: where focus goes back to after the flyout.
+    private static nint s_previous;
+
     /// <summary>
     /// Opens Windows' own tray-overflow flyout while the taskbar is hidden: Win+B (focus "Show hidden icons" on the
-    /// tray), wait for focus to land on the explorer-owned Shell_TrayWnd, then Enter. Enter is only sent when that
-    /// focus check passes. Blocks for up to ~1.5 s: call it off the UI thread. Never sends Esc or anything else.
+    /// tray), then Enter. Enter is sent only when Win+B demonstrably worked: the foreground must CHANGE from a
+    /// non-tray window to the explorer-owned Shell_TrayWnd after Win+B. If the foreground is already the tray beforehand
+    /// (left there by a previous flyout), focus is first handed back to the last real window; if that is not possible
+    /// the open is refused. Blocks for up to ~1.5 s: call it off the UI thread. Never sends Esc or anything else.
+    /// <paramref name="detail"/> describes what was seen (for the log).
     /// </summary>
-    public static OverflowResult OpenOverflow(out long flyoutMs)
+    public static OverflowResult OpenOverflow(out long flyoutMs, out string detail)
     {
         flyoutMs = -1;
+        detail = "";
         if (!TaskbarNative.HasTray()) return OverflowResult.NoTray;
+
+        var before = (nint)PInvoke.GetForegroundWindow();
+        if (TaskbarNative.IsExplorerTrayWindow(before))
+        {
+            // Stale tray focus: a "tray is foreground" check would pass before Win+B is even processed.
+            var prev = s_previous;
+            if (prev != 0 && PInvoke.IsWindow(new HWND(prev))) PInvoke.SetForegroundWindow(new HWND(prev));
+            var neutral = false;
+            for (var i = 0; i < 30; i++)
+            {
+                Thread.Sleep(10);
+                if (!TaskbarNative.IsExplorerTrayWindow(PInvoke.GetForegroundWindow())) { neutral = true; break; }
+            }
+            if (!neutral) { detail = "foreground already the tray and could not be moved; refused"; return OverflowResult.FocusNotOnTray; }
+            before = (nint)PInvoke.GetForegroundWindow();
+            detail = "stale tray focus cleared; ";
+        }
+        if (before != 0) s_previous = before;
+        detail += $"before={ClassOf(before)}; ";
 
         SendChord(VIRTUAL_KEY.VK_LWIN, VIRTUAL_KEY.VK_B);
 
@@ -48,10 +74,12 @@ public static unsafe class TrayInputNative
         var sw = Stopwatch.StartNew();
         while (sw.ElapsedMilliseconds < 600)
         {
-            if (TaskbarNative.IsExplorerTrayWindow(PInvoke.GetForegroundWindow())) { focused = true; break; }
+            var fg = (nint)PInvoke.GetForegroundWindow();
+            if (fg != before && TaskbarNative.IsExplorerTrayWindow(fg)) { focused = true; break; }
             Thread.Sleep(10);
         }
-        if (!focused) return OverflowResult.FocusNotOnTray;
+        if (!focused) { detail += "foreground never changed to the tray; Enter NOT sent"; return OverflowResult.FocusNotOnTray; }
+        detail += $"foreground changed to tray after {sw.ElapsedMilliseconds} ms; ";
 
         Thread.Sleep(30); // let the tray settle its keyboard focus on the chevron
         // Re-check right before Enter: the foreground must still be the tray.
@@ -65,6 +93,45 @@ public static unsafe class TrayInputNative
             Thread.Sleep(10);
         }
         return OverflowResult.EnterSentNoFlyout;
+    }
+
+    /// <summary>
+    /// After the flyout opened: waits (cheap 200 ms polls, up to 2 minutes) for it to close, then, if focus was left on the
+    /// explorer tray, hands it back to the window that had it before. Returns true when focus was restored.
+    /// </summary>
+    public static bool RestoreFocusAfterFlyout()
+    {
+        var sw = Stopwatch.StartNew();
+        while (FlyoutVisible() && sw.Elapsed < TimeSpan.FromMinutes(2)) Thread.Sleep(200);
+        var prev = s_previous;
+        if (prev == 0 || !PInvoke.IsWindow(new HWND(prev))) return false;
+        // After the flyout closes the shell moves focus to the (hidden) tray a moment later: wait for it to settle.
+        for (var i = 0; i < 100; i++)
+        {
+            var fg = PInvoke.GetForegroundWindow();
+            if (TaskbarNative.IsExplorerTrayWindow(fg)) { AllowForeground(); return PInvoke.SetForegroundWindow(new HWND(prev)); }
+            var settledElsewhere = fg != HWND.Null && ClassOf(fg) != OverflowClass;
+            if (settledElsewhere && i > 20) return false; // the user already went to another window
+            Thread.Sleep(10);
+        }
+        return false;
+    }
+
+    // SetForegroundWindow is only honoured for the process that last received input: a zero-distance marked mouse move
+    // from us makes that true without any visible effect.
+    private static void AllowForeground()
+    {
+        var input = new INPUT { type = INPUT_TYPE.INPUT_MOUSE };
+        input.Anonymous.mi = new MOUSEINPUT { dwFlags = MOUSE_EVENT_FLAGS.MOUSEEVENTF_MOVE, dwExtraInfo = Mark };
+        Span<INPUT> one = [input];
+        Send(one);
+    }
+
+    private static string ClassOf(nint hwnd)
+    {
+        Span<char> cls = stackalloc char[64];
+        var n = PInvoke.GetClassName(new HWND(hwnd), cls);
+        return n > 0 ? new string(cls[..n]) : "none";
     }
 
     /// <summary>Win+B reveals the (explorer) bar; put it back the way the shell had it. Safe to call any time.</summary>

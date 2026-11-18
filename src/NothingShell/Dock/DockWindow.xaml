@@ -35,7 +35,7 @@
                     <Setter Property="Opacity" Value="0.4" />
                 </DataTrigger>
                 <DataTrigger Binding="{Binding Tray.WifiEnabled}" Value="False">
-                    <Setter Property="Opacity" Value="0.75" />
+                    <Setter Property="Opacity" Value="0.25" />
                 </DataTrigger>
             </Style.Triggers>
         </Style>
@@ -99,7 +99,7 @@
             <Setter Property="Background" Value="Transparent" />
             <Style.Triggers>
                 <Trigger Property="IsMouseOver" Value="True">
-                    <Setter Property="Background" Value="#14FFFFFF" />
+                    <Setter Property="Background" Value="{StaticResource Brush.Hover}" />
                 </Trigger>
             </Style.Triggers>
         </Style>
@@ -137,19 +137,19 @@
                             <Grid>
                                 <Image Source="{Binding Icon}" Width="22" Height="22"
                                        RenderOptions.BitmapScalingMode="HighQuality" />
-                                <Ellipse x:Name="Dot" Width="4" Height="4" Fill="#FFBBBBBB" Visibility="Collapsed"
+                                <Ellipse x:Name="Dot" Width="4" Height="4" Fill="{StaticResource Brush.RunDot}" Visibility="Collapsed"
                                          VerticalAlignment="Bottom" HorizontalAlignment="Center" Margin="0,0,0,2" />
                             </Grid>
                         </Border>
                         <DataTemplate.Triggers>
                             <Trigger SourceName="Slot" Property="IsMouseOver" Value="True">
-                                <Setter TargetName="Slot" Property="Background" Value="#14FFFFFF" />
+                                <Setter TargetName="Slot" Property="Background" Value="{StaticResource Brush.Hover}" />
                             </Trigger>
                             <DataTrigger Binding="{Binding Running}" Value="True">
                                 <Setter TargetName="Dot" Property="Visibility" Value="Visible" />
                             </DataTrigger>
                             <DataTrigger Binding="{Binding Focused}" Value="True">
-                                <Setter TargetName="Slot" Property="Background" Value="#1FFFFFFF" />
+                                <Setter TargetName="Slot" Property="Background" Value="{StaticResource Brush.Active}" />
                                 <Setter TargetName="Dot" Property="Fill" Value="{StaticResource Brush.Red}" />
                             </DataTrigger>
                         </DataTemplate.Triggers>
@@ -199,7 +199,7 @@
                         <Rectangle Canvas.Left="2" Canvas.Top="2" Height="5" RadiusX="1" RadiusY="1"
                                    Width="{Binding Tray.BatteryFillWidth}" Style="{StaticResource BatteryFill}" />
                         <Path Style="{StaticResource BatteryBolt}" Data="M8,1 L4.5,5 H7 L6,8 L9.5,4 H7 Z"
-                              Fill="#FF101010" Stroke="#FFF2F2F2" StrokeThickness="0.6" StrokeLineJoin="Round" />
+                              Fill="{StaticResource Brush.Ink}" Stroke="{StaticResource Brush.Text}" StrokeThickness="0.6" StrokeLineJoin="Round" />
                     </Canvas>
 
                     <!-- Time 12 px Space Mono, day 10 px dim underneath, right aligned (mockup .tm, line-height 1.15). -->

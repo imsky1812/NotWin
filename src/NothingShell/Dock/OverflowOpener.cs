@@ -22,12 +22,14 @@ public static class OverflowOpener
         {
             try
             {
-                var result = TrayInputNative.OpenOverflow(out var ms);
-                Log.Info($"overflow: {result}{(ms >= 0 ? $" (flyout {ms} ms after Enter)" : "")}");
+                var result = TrayInputNative.OpenOverflow(out var ms, out var detail);
+                Log.Info($"overflow: {result}{(ms >= 0 ? $" (flyout {ms} ms after Enter)" : "")} [{detail}]");
                 // Win+B can reveal the explorer bar; put it back (the flyout survives the hide, per the spike).
                 TrayInputNative.RehideTaskbarIfShown();
                 Thread.Sleep(500);
                 TrayInputNative.RehideTaskbarIfShown();
+                if (result == OverflowResult.Opened)
+                    Log.Info($"overflow closed; focus restored to previous window: {TrayInputNative.RestoreFocusAfterFlyout()}");
             }
             catch (Exception e) { Log.Error("overflow open failed", e); }
             finally { Interlocked.Exchange(ref _busy, 0); }

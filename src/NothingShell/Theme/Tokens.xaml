@@ -13,6 +13,10 @@
     <SolidColorBrush x:Key="Brush.Text" Color="#FFF2F2F2" po:Freeze="True" />
     <SolidColorBrush x:Key="Brush.Dim" Color="#FF8A8A8A" po:Freeze="True" />
     <SolidColorBrush x:Key="Brush.Red" Color="#FFE8231F" po:Freeze="True" />
+    <SolidColorBrush x:Key="Brush.Hover" Color="#14FFFFFF" po:Freeze="True" />
+    <SolidColorBrush x:Key="Brush.Active" Color="#1FFFFFFF" po:Freeze="True" />
+    <SolidColorBrush x:Key="Brush.RunDot" Color="#FFBBBBBB" po:Freeze="True" />
+    <SolidColorBrush x:Key="Brush.Ink" Color="#FF101010" po:Freeze="True" />
 
     <!-- Corner radii (DIP). -->
     <CornerRadius x:Key="Radius.Dock">30</CornerRadius>

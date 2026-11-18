@@ -53,7 +53,8 @@ public sealed unsafe class AudioVolumeWatcher : IDisposable
 
             _deviceCb = Callback.Create(this, DeviceVtable, IMMNotificationClient.IID_Guid);
             _volumeCb = Callback.Create(this, VolumeVtable, IAudioEndpointVolumeCallback.IID_Guid);
-            _enumerator->RegisterEndpointNotificationCallback((IMMNotificationClient*)_deviceCb);
+            var hr = ((delegate* unmanaged[Stdcall]<IMMDeviceEnumerator*, IMMNotificationClient*, HRESULT>)(*(void***)_enumerator)[6])(_enumerator, (IMMNotificationClient*)_deviceCb);
+            if (hr.Failed) { OnError?.Invoke($"RegisterEndpointNotificationCallback failed 0x{hr.Value:X8}", null); return false; }
             return true;
         }
         catch (Exception e)
@@ -71,17 +72,25 @@ public sealed unsafe class AudioVolumeWatcher : IDisposable
         IMMDevice* device = null;
         try
         {
-            _enumerator->GetDefaultAudioEndpoint(EDataFlow.eRender, ERole.eConsole, &device);
-            var iid = IAudioEndpointVolume.IID_Guid;
-            void* raw;
-            device->Activate(&iid, CLSCTX.CLSCTX_ALL, null, &raw);
-            _volume = (IAudioEndpointVolume*)raw;
-            _volume->RegisterControlChangeNotify((IAudioEndpointVolumeCallback*)_volumeCb);
+            var hr = ((delegate* unmanaged[Stdcall]<IMMDeviceEnumerator*, EDataFlow, ERole, IMMDevice**, HRESULT>)(*(void***)_enumerator)[4])(_enumerator, EDataFlow.eRender, ERole.eConsole, &device);
+            if (hr.Failed || device is null) return Fail("GetDefaultAudioEndpoint", hr); // e.g. no render device
 
-            float level;
-            BOOL mute;
-            _volume->GetMasterVolumeLevelScalar(&level);
-            _volume->GetMute(&mute);
+            var iid = IAudioEndpointVolume.IID_Guid;
+            void* raw = null;
+            hr = ((delegate* unmanaged[Stdcall]<IMMDevice*, Guid*, CLSCTX, void*, void**, HRESULT>)(*(void***)device)[3])(device, &iid, CLSCTX.CLSCTX_ALL, null, &raw);
+            if (hr.Failed || raw is null) return Fail("Activate(IAudioEndpointVolume)", hr);
+            _volume = (IAudioEndpointVolume*)raw;
+
+            hr = ((delegate* unmanaged[Stdcall]<IAudioEndpointVolume*, IAudioEndpointVolumeCallback*, HRESULT>)(*(void***)_volume)[3])(_volume, (IAudioEndpointVolumeCallback*)_volumeCb);
+            if (hr.Failed) { _volume->Release(); _volume = null; return Fail("RegisterControlChangeNotify", hr); }
+
+            float level = 0;
+            BOOL mute = default;
+            hr = ((delegate* unmanaged[Stdcall]<IAudioEndpointVolume*, float*, HRESULT>)(*(void***)_volume)[9])(_volume, &level);
+            if (hr.Failed) return Fail("GetMasterVolumeLevelScalar", hr);
+            hr = ((delegate* unmanaged[Stdcall]<IAudioEndpointVolume*, BOOL*, HRESULT>)(*(void***)_volume)[15])(_volume, &mute);
+            if (hr.Failed) return Fail("GetMute", hr);
+            _failLogged = false;
             return (ToPercent(level), mute);
         }
         catch (Exception e)
@@ -94,6 +103,19 @@ public sealed unsafe class AudioVolumeWatcher : IDisposable
         {
             if (device is not null) device->Release();
         }
+    }
+
+    // The generated HRESULT-returning overloads are private and the public ones throw, so the checked calls go through
+    // the vtable slots directly (IMMDeviceEnumerator: 4 GetDefaultAudioEndpoint, 6 RegisterEndpointNotificationCallback;
+    // IMMDevice: 3 Activate; IAudioEndpointVolume: 3 RegisterControlChangeNotify, 9 GetMasterVolumeLevelScalar, 15 GetMute).
+    private bool _failLogged;
+
+    // Logs once per failure streak (default-device flapping must not spam); returns null = "no usable endpoint".
+    private (int Percent, bool Muted)? Fail(string call, HRESULT hr)
+    {
+        if (!_failLogged) { _failLogged = true; OnError?.Invoke($"audio: {call} failed 0x{hr.Value:X8}", null); }
+        Detach();
+        return null;
     }
 
     private void Detach()

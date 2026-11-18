@@ -117,7 +117,7 @@ public sealed class TrayStatusService : INotifyPropertyChanged, IDisposable
     private void TickClock()
     {
         var now = DateTime.Now;
-        Time = now.ToString("HH:mm", CultureInfo.CurrentCulture);
+        Time = now.ToString("HH:mm", CultureInfo.InvariantCulture);
         Day = now.ToString("ddd d", CultureInfo.CurrentCulture);
         // Re-arm to the next whole minute from the real time: no drift, and a late tick (sleep, load) self-corrects.
         var next = new DateTime(now.Year, now.Month, now.Day, now.Hour, now.Minute, 0, now.Kind).AddMinutes(1);

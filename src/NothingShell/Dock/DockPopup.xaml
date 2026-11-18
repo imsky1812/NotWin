@@ -32,7 +32,7 @@
                     </Border>
                     <DataTemplate.Triggers>
                         <Trigger SourceName="Row" Property="IsMouseOver" Value="True">
-                            <Setter TargetName="Row" Property="Background" Value="#14FFFFFF" />
+                            <Setter TargetName="Row" Property="Background" Value="{StaticResource Brush.Hover}" />
                         </Trigger>
                     </DataTemplate.Triggers>
                 </DataTemplate>
