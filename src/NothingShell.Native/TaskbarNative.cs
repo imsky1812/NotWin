@@ -35,10 +35,15 @@ public static class TaskbarNative
         PInvoke.SHAppBarMessage(AbmSetState, ref data);
     }
 
-    public static void HideAll() => ShowAllWindows(SHOW_WINDOW_CMD.SW_HIDE);
+    /// <summary>Hides every explorer-owned tray window without waiting for Explorer (see ShowAllWindows).</summary>
+    public static void HideAll() => ShowAllWindows(SHOW_WINDOW_CMD.SW_HIDE, async: true);
 
-    /// <summary>Shows every explorer-owned tray window. Returns false when no explorer tray exists (e.g. Explorer restarting).</summary>
-    public static bool ShowAll() => ShowAllWindows(SHOW_WINDOW_CMD.SW_SHOW);
+    /// <summary>
+    /// Shows every explorer-owned tray window and waits until Explorer has done it, so the restore order
+    /// (show, then auto-hide) holds and the bar is really back before the shell/watchdog exits.
+    /// Returns false when no explorer tray exists (e.g. Explorer restarting).
+    /// </summary>
+    public static bool ShowAll() => ShowAllWindows(SHOW_WINDOW_CMD.SW_SHOW, async: false);
 
     /// <summary>True when an explorer-owned primary tray window exists.</summary>
     public static bool HasTray() => FindPrimary() != HWND.Null;
@@ -87,15 +92,23 @@ public static class TaskbarNative
         return HWND.Null;
     }
 
-    // ShowWindowAsync only posts the request to Explorer's thread and returns. A synchronous ShowWindow can stall
-    // while Explorer is busy (just after a full-screen window closed, during its startup); callers run on the UI
-    // thread that hosts the WH_MOUSE_LL hook, and Windows silently removes an LL hook whose thread is that slow.
-    private static bool ShowAllWindows(SHOW_WINDOW_CMD cmd)
+    // Hiding uses ShowWindowAsync: it only posts the request to Explorer's thread and returns. A synchronous
+    // ShowWindow can stall while Explorer is busy (just after a full-screen window closed, during its startup);
+    // hides run on the UI thread that hosts the WH_MOUSE_LL hook, and Windows silently removes an LL hook whose
+    // thread is that slow. Showing (restore) stays synchronous: it runs at exit (after the mouse hook is gone)
+    // or in the watchdog, where finishing the restore matters more than latency.
+    private static bool ShowAllWindows(SHOW_WINDOW_CMD cmd, bool async)
     {
         var primaries = FindExplorerWindows(PrimaryClass);
-        foreach (var h in primaries) PInvoke.ShowWindowAsync(h, cmd);
-        foreach (var h in FindExplorerWindows(SecondaryClass)) PInvoke.ShowWindowAsync(h, cmd);
+        foreach (var h in primaries) Show(h, cmd, async);
+        foreach (var h in FindExplorerWindows(SecondaryClass)) Show(h, cmd, async);
         return primaries.Count > 0;
+    }
+
+    private static void Show(HWND h, SHOW_WINDOW_CMD cmd, bool async)
+    {
+        if (async) PInvoke.ShowWindowAsync(h, cmd);
+        else PInvoke.ShowWindow(h, cmd);
     }
 
     private static List<HWND> FindExplorerWindows(string className)
