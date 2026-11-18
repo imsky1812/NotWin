@@ -73,6 +73,10 @@ public static unsafe class DockWindowNative
     public static PointI? GetCursorPos() =>
         PInvoke.GetCursorPos(out var p) ? new PointI(p.X, p.Y) : null;
 
+    /// <summary>True while any of the left / right / middle mouse buttons is physically down.</summary>
+    public static bool AnyMouseButtonDown() =>
+        (((ushort)PInvoke.GetAsyncKeyState(0x01) | (ushort)PInvoke.GetAsyncKeyState(0x02) | (ushort)PInvoke.GetAsyncKeyState(0x04)) & 0x8000) != 0;
+
     public static RectI GetWindowRect(nint hwnd) =>
         PInvoke.GetWindowRect((HWND)hwnd, out var r) ? new RectI(r.left, r.top, r.right, r.bottom) : default;
 }

@@ -10,12 +10,18 @@ namespace NothingShell.Dock;
 public sealed record PopupRow(string Text, Action Invoke, bool? Checked = null);
 
 /// <summary>
-/// A tiny non-activating glass popup (window list / context menu). It closes itself when the pointer has left
-/// it for a moment, never having entered it for a while, or after a row is chosen.
+/// A tiny non-activating glass popup (window list / context menu). It stays open until a row is chosen, a mouse
+/// button goes down outside the popup and its owner dock, 400 ms after the pointer leaves it (once it has entered),
+/// or 8 s if the pointer never enters it. The outside-click check polls only while the popup is open.
 /// </summary>
 public partial class DockPopup : Window
 {
-    private readonly DispatcherTimer _autoClose = new() { Interval = TimeSpan.FromMilliseconds(1500) };
+    private static readonly TimeSpan NeverEnteredTimeout = TimeSpan.FromSeconds(8);
+    private static readonly TimeSpan LeaveDelay = TimeSpan.FromMilliseconds(400);
+
+    private readonly DispatcherTimer _autoClose = new() { Interval = NeverEnteredTimeout };
+    private readonly DispatcherTimer _outsideClick = new() { Interval = TimeSpan.FromMilliseconds(40) };
+    private nint _hwnd, _owner;
     private bool _closed;
 
     public DockPopup(IReadOnlyList<PopupRow> rows)
@@ -23,9 +29,10 @@ public partial class DockPopup : Window
         InitializeComponent();
         Rows.ItemsSource = rows;
         SourceInitialized += (_, _) => DockWindowNative.ApplyDockStyles(new System.Windows.Interop.WindowInteropHelper(this).Handle);
-        MouseEnter += (_, _) => _autoClose.Stop();
-        MouseLeave += (_, _) => { _autoClose.Interval = TimeSpan.FromMilliseconds(400); _autoClose.Start(); };
+        MouseEnter += (_, _) => _autoClose.Stop();;
+        MouseLeave += (_, _) => { _autoClose.Interval = LeaveDelay; _autoClose.Start(); };
         _autoClose.Tick += (_, _) => CloseIfOpen();
+        _outsideClick.Tick += (_, _) => CheckOutsideClick();
     }
 
     /// <summary>Raised once when the popup closes, for any reason.</summary>
@@ -42,6 +49,7 @@ public partial class DockPopup : Window
     {
         var helper = new System.Windows.Interop.WindowInteropHelper(this);
         helper.Owner = ownerHwnd;
+        _owner = ownerHwnd;
         Opacity = 0; // invisible until placed, so it never flashes at the wrong spot
         Left = monitor.Left; Top = monitor.Top;
         Show();
@@ -59,8 +67,20 @@ public partial class DockPopup : Window
         Opacity = 1;
         Log.Info($"popup placed: rect={rect} dpiScale={scale:F2} owner={ownerHwnd}");
 
-        _autoClose.Interval = TimeSpan.FromMilliseconds(1500);
+        _hwnd = helper.EnsureHandle();
+        _autoClose.Interval = NeverEnteredTimeout;
         _autoClose.Start();
+        _outsideClick.Start();
+    }
+
+    private void CheckOutsideClick()
+    {
+        if (_closed || !DockWindowNative.AnyMouseButtonDown()) return;
+        if (DockWindowNative.GetCursorPos() is not { } c) return;
+        static bool In(RectI r, PointI p) => p.X >= r.Left && p.X < r.Right && p.Y >= r.Top && p.Y < r.Bottom;
+        var inPopup = In(DockWindowNative.GetWindowRect(_hwnd), c);
+        var inDock = _owner != 0 && In(DockWindowNative.GetWindowRect(_owner), c);
+        if (!inPopup && !inDock) CloseIfOpen();
     }
 
     public void CloseIfOpen()
@@ -68,6 +88,7 @@ public partial class DockPopup : Window
         if (_closed) return;
         _closed = true;
         _autoClose.Stop();
+        _outsideClick.Stop();
         Dismissed?.Invoke();
         Close();
     }
