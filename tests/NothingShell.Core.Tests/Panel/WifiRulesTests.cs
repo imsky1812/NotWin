@@ -37,6 +37,15 @@ public sealed class WifiRulesTests
     [Fact] public void Hint_RadioOff() => Assert.NotNull(WifiRules.Hint(WifiScanStatus.RadioOff));
     [Fact] public void Hint_Ok_IsNull() => Assert.Null(WifiRules.Hint(WifiScanStatus.Ok));
 
+    [Theory]
+    [InlineData(null, false, null, "Unavailable")]
+    [InlineData(false, false, null, "Off")]
+    [InlineData(true, false, null, "Not connected")]
+    [InlineData(true, true, null, "Connected")]       // connected, SSID withheld (no location consent): never "not connected"
+    [InlineData(true, true, "home", "home")]
+    public void TileSubline_NeverNeedsAScan(bool? radioOn, bool connected, string? ssid, string expected)
+        => Assert.Equal(expected, WifiRules.TileSubline(radioOn, connected, ssid));
+
     [Fact]
     public void OpenProfileXml_EscapesSsid()
     {

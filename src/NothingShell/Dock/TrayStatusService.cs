@@ -227,7 +227,12 @@ public sealed class TrayStatusService : INotifyPropertyChanged, IDisposable
         var v = _audio.Rebind();
         if (v is { } vol) ApplyVolume(vol.Percent, vol.Muted);
         else ApplyVolume(0, true); // no output device: show the muted glyph
+        try { DefaultDeviceChanged?.Invoke(); }
+        catch (Exception e) { Log.Error("default-device handler failed", e); }
     }
+
+    /// <summary>The default playback device changed (UI thread): e.g. headphones plugged in or out.</summary>
+    public event Action? DefaultDeviceChanged;
 
     private void ApplyVolume(int percent, bool muted)
     {

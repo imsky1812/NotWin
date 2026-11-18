@@ -148,21 +148,26 @@ public partial class App : Application
         }
         _fullscreen!.Changed += fs => { if (fs) { _launcher?.Close(); _panel?.Close(); } };
 
-        // Quick-settings panel (spec §6.3): Win+A / Win+N (below) and the dock tray.
-        _panel = new Panel.QuickPanelController(_reveal);
-        if (_dock is not null) _dock.TrayClicked += _panel.Toggle;
-        var tiles = new Panel.TilesSection(_panel.Window.TilesHost);
-        _panel.Opening += tiles.Refresh;
-        var sliders = new Panel.SlidersSection(_panel.Window.SlidersHost, _tray!, new Panel.BrightnessService());
-        _panel.Opening += sliders.Refresh;
-        if (_notifications is not null && _controller is not null)
+        // Quick-settings panel (spec §6.3): Win+A / Win+N (below) and the dock tray. Guarded like the notch: a failure
+        // here must never take the dock and launcher down with it (Win+A / Win+N then simply do nothing).
+        try
         {
-            var controller = _controller;
-            var panel = _panel;
-            var notes = new Panel.NotificationsSection(panel.Window.NotificationsHost, _notifications,
-                () => controller.Settings, controller.UpdateSettings, panel.Close, () => panel.IsOpen);
-            panel.Opening += () => _ = notes.RefreshAsync();
+            var panel = new Panel.QuickPanelController(_reveal);
+            var tiles = new Panel.TilesSection(panel.Window.TilesHost);
+            panel.Opening += tiles.Refresh;
+            var sliders = new Panel.SlidersSection(panel.Window.SlidersHost, _tray!, new Panel.BrightnessService());
+            panel.Opening += sliders.Refresh;
+            if (_notifications is not null && _controller is not null)
+            {
+                var controller = _controller;
+                var notes = new Panel.NotificationsSection(panel.Window.NotificationsHost, _notifications,
+                    () => controller.Settings, controller.UpdateSettings, panel.Close, () => panel.IsOpen);
+                panel.Opening += () => _ = notes.RefreshAsync();
+            }
+            _panel = panel;
+            if (_dock is not null) _dock.TrayClicked += panel.Toggle;
         }
+        catch (Exception e) { Log.Error("quick-settings panel failed to start", e); }
 
         try
         {

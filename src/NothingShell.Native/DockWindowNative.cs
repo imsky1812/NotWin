@@ -34,6 +34,14 @@ public static unsafe class DockWindowNative
         PInvoke.DwmSetWindowAttribute(h, DWMWINDOWATTRIBUTE.DWMWA_WINDOW_CORNER_PREFERENCE, &pref, (uint)sizeof(DWM_WINDOW_CORNER_PREFERENCE));
     }
 
+    /// <summary>ORs <paramref name="bits"/> into the window's extended style (e.g. WS_EX_TRANSPARENT = 0x20: click-through).</summary>
+    public static void AddExStyle(nint hwnd, int bits)
+    {
+        var h = (HWND)hwnd;
+        var ex = (nint)PInvoke.GetWindowLongPtr(h, WINDOW_LONG_PTR_INDEX.GWL_EXSTYLE);
+        PInvoke.SetWindowLongPtr(h, WINDOW_LONG_PTR_INDEX.GWL_EXSTYLE, ex | bits);
+    }
+
     public static int GetExStyle(nint hwnd) =>
         (int)(nint)PInvoke.GetWindowLongPtr((HWND)hwnd, WINDOW_LONG_PTR_INDEX.GWL_EXSTYLE);
 

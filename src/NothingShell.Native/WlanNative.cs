@@ -59,6 +59,29 @@ public static unsafe class WlanNative
         }
     }
 
+    /// <summary>
+    /// Whether the first Wi-Fi interface is connected. Reads only the interface state, which is not location-gated:
+    /// no scan, no Windows location prompt (the tile uses this on every panel open).
+    /// </summary>
+    public static bool IsConnected()
+    {
+        HANDLE h = default;
+        WLAN_INTERFACE_INFO_LIST* ifaces = null;
+        try
+        {
+            uint ver;
+            if (PInvoke.WlanOpenHandle(2, null, &ver, &h) != 0) return false;
+            if (PInvoke.WlanEnumInterfaces(h, null, &ifaces) != 0 || ifaces is null || ifaces->dwNumberOfItems == 0) return false;
+            return ifaces->InterfaceInfo[0].isState == WLAN_INTERFACE_STATE.wlan_interface_state_connected;
+        }
+        catch { return false; }
+        finally
+        {
+            if (ifaces is not null) PInvoke.WlanFreeMemory(ifaces);
+            if (!h.IsNull) PInvoke.WlanCloseHandle(h, null);
+        }
+    }
+
     /// <summary>Connects with the saved profile named <paramref name="profileName"/> (Windows names profiles after the SSID).</summary>
     public static bool Connect(string profileName) => WithFirstInterface((h, guid) =>
     {

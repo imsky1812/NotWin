@@ -47,6 +47,18 @@ public static class WifiRules
         _ => null,
     };
 
+    /// <summary>
+    /// The Wi-Fi tile's small line, from data that needs no scan (a scan is location-gated and shows Windows' location
+    /// prompt / indicator, so it only happens when the user expands the list). Connected but SSID withheld → "Connected".
+    /// </summary>
+    public static string TileSubline(bool? radioOn, bool connected, string? ssid) => radioOn switch
+    {
+        null => "Unavailable",
+        false => "Off",
+        _ when !connected => "Not connected",
+        _ => string.IsNullOrWhiteSpace(ssid) ? "Connected" : ssid,
+    };
+
     /// <summary>A minimal WLAN profile for an open (no password) network.</summary>
     public static string OpenProfileXml(string ssid)
     {

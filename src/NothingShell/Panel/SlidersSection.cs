@@ -49,6 +49,8 @@ public sealed class SlidersSection
         _volume.ValueChanged += v => _tray.SetVolume(v);
         _brightness.ValueChanged += v => _brightnessService.Set(v);
         _tray.PropertyChanged += OnTrayChanged;
+        // Headphones plugged in/out while the panel is open: re-read the devices so the chip never shows a stale one.
+        _tray.DefaultDeviceChanged += () => { _outputs.Refresh(); UpdateChip(); };
     }
 
     /// <summary>Called when the panel opens: re-read devices, volume and brightness.</summary>

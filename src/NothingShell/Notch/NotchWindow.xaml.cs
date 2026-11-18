@@ -32,7 +32,11 @@ public partial class NotchWindow : Window
         InitializeComponent();
         SourceInitialized += (_, _) =>
         {
-            DockWindowNative.ApplyDockStyles(new WindowInteropHelper(this).Handle);
+            var hwnd = new WindowInteropHelper(this).Handle;
+            DockWindowNative.ApplyDockStyles(hwnd);
+            // Plan 3's notch has no click or hover behaviour: make the whole band click-through (WS_EX_TRANSPARENT),
+            // so the pill's soft shadow never swallows clicks on the title bars below. Plan 4 (hover dashboard) revisits.
+            DockWindowNative.AddExStyle(hwnd, 0x00000020);
         };
         _eq = new DispatcherTimer(DispatcherPriority.Render) { Interval = TimeSpan.FromMilliseconds(125) };
         _eq.Tick += (_, _) => DrawEqualizer();

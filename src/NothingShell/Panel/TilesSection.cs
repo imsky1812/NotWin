@@ -75,7 +75,7 @@ public sealed class TilesSection
         _btList.Clear();
         if (_btOn != true) _btList.AddRow("Bluetooth is off", null, null, dim: true);
         foreach (var d in devices)
-            _btList.AddRow(d.Name, d.Connected ? "Connected" : "Connect", () => _ = ConnectAsync(d));
+            _btList.AddRow(d.Name, BluetoothRules.ActionLabel(d), () => _ = ConnectAsync(d));
         _btList.AddRow("Bluetooth settings", "›", () => OpenSettings("ms-settings:bluetooth"), dim: true);
     }
 
@@ -109,13 +109,21 @@ public sealed class TilesSection
     private async Task RefreshWifiAsync()
     {
         _wifiOn = await RadioService.IsOnAsync(RadioKind.WiFi);
-        var connected = _wifiOn == true ? await Task.Run(() => WifiRules.Order(WlanNative.GetNetworks().Networks).FirstOrDefault(n => n.Connected)) : null;
-        _wifi.SetOn(_wifiOn == true, _wifiOn switch
+        // No scan here: a scan is location-gated (Windows' location prompt + indicator on every Win+A). The interface
+        // state says "connected"; the SSID comes from the connection profile when Windows allows it.
+        var (connected, ssid) = _wifiOn == true ? await Task.Run(ConnectedSsid) : (false, null);
+        _wifi.SetOn(_wifiOn == true, WifiRules.TileSubline(_wifiOn, connected, ssid));
+    }
+
+    private static (bool Connected, string? Ssid) ConnectedSsid()
+    {
+        if (!WlanNative.IsConnected()) return (false, null);
+        try
         {
-            null => "Unavailable",
-            false => "Off",
-            _ => connected?.Ssid ?? "Not connected",
-        });
+            var p = global::Windows.Networking.Connectivity.NetworkInformation.GetInternetConnectionProfile();
+            return (true, p?.IsWlanConnectionProfile == true ? p.WlanConnectionProfileDetails?.GetConnectedSsid() : null);
+        }
+        catch { return (true, null); }
     }
 
     private async Task ToggleWifiAsync()

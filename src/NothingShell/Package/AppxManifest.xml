@@ -41,5 +41,8 @@
     <uap3:Capability Name="userNotificationListener" />
     <DeviceCapability Name="radios" />
     <DeviceCapability Name="bluetooth" />
+    <!-- With a package identity Windows may judge Wi-Fi scan access per app rather than as a "desktop app";
+         declaring location (the consent Wi-Fi scans are tied to since 24H2) lets the user grant it to Nothing Shell. -->
+    <DeviceCapability Name="location" />
   </Capabilities>
 </Package>
