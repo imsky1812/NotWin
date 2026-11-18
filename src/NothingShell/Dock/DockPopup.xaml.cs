@@ -31,16 +31,34 @@ public partial class DockPopup : Window
     /// <summary>Raised once when the popup closes, for any reason.</summary>
     public event Action? Dismissed;
 
-    /// <summary>Shows the popup centred above <paramref name="anchorCenterX"/>, its bottom at <paramref name="bottomY"/> (physical px).</summary>
-    public void ShowAbove(double anchorCenterX, double bottomY, RectI monitor, uint dpi)
+    /// <summary>
+    /// Shows the popup centred above <paramref name="anchorCenterX"/> with its bottom at <paramref name="bottomY"/>
+    /// (both physical px), clamped to <paramref name="monitor"/>. The popup is owned by the dock window (an owned
+    /// window always stays above its owner) and placed with SetWindowPos in physical pixels from its real laid-out
+    /// size: measuring before the window is shown under-reports the height (rows are not generated yet), which
+    /// let it grow down over the pill.
+    /// </summary>
+    public void ShowAbove(nint ownerHwnd, double anchorCenterX, double bottomY, RectI monitor)
     {
-        var scale = dpi / 96.0;
-        Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
-        var w = DesiredSize.Width; var h = DesiredSize.Height;
-        var left = Math.Clamp(anchorCenterX / scale - w / 2, monitor.Left / scale + 8, monitor.Right / scale - w - 8);
-        Left = left;
-        Top = bottomY / scale - h;
+        var helper = new System.Windows.Interop.WindowInteropHelper(this);
+        helper.Owner = ownerHwnd;
+        Opacity = 0; // invisible until placed, so it never flashes at the wrong spot
+        Left = monitor.Left; Top = monitor.Top;
         Show();
+        UpdateLayout();
+
+        var scale = System.Windows.Media.VisualTreeHelper.GetDpi(this).DpiScaleX;
+        var wPx = (int)Math.Ceiling(ActualWidth * scale);
+        var hPx = (int)Math.Ceiling(ActualHeight * scale);
+        var margin = (int)Math.Round(8 * scale);
+        var left = (int)Math.Round(anchorCenterX - wPx / 2.0);
+        left = Math.Max(monitor.Left + margin, Math.Min(left, monitor.Right - wPx - margin));
+        var bottom = (int)Math.Round(bottomY);
+        var rect = new RectI(left, bottom - hPx, left + wPx, bottom);
+        DockWindowNative.PlaceTopmost(helper.EnsureHandle(), rect);
+        Opacity = 1;
+        Log.Info($"popup placed: rect={rect} dpiScale={scale:F2} owner={ownerHwnd}");
+
         _autoClose.Interval = TimeSpan.FromMilliseconds(1500);
         _autoClose.Start();
     }

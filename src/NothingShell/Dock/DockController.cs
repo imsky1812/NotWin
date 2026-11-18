@@ -169,7 +169,7 @@ public sealed class DockController : IDisposable
         _reveal.SetPanelOpen(true); // keeps the dock up while the popup is open
         var p = _dock.Placement;
         var top = anchor.PointToScreen(new Point(anchor.ActualWidth / 2, 0));
-        popup.ShowAbove(top.X, p.Pill.Top - 8 * (p.Dpi / 96.0), p.Monitor, p.Dpi);
+        popup.ShowAbove(_dock.Handle, top.X, p.Pill.Top - 8 * (p.Dpi / 96.0), p.Monitor);
     }
 
     // Interim settings menu (right-click on the start button) until the Plan 3 notch provides Settings.
