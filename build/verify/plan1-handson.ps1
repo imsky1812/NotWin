@@ -749,6 +749,12 @@ try {
     if ($fennSkipped) { Write-Bad 'Continuing with Fenn still running (recorded).' } else { Write-Good 'Fenn is not running.' }
     Start-Sleep -Seconds 2
 
+    # A running Nothing Shell (e.g. the installed copy, maybe with "Keep taskbar visible" on) would make its own
+    # reserved strip part of the "starting" work area: close it first so the baseline is the plain Windows one.
+    foreach ($old in @(Get-AppProcess)) {
+        Write-Info ("A Nothing Shell copy is running (pid {0}); closing it before measuring the starting point." -f $old.Id)
+        [void](Quit-App $old)
+    }
     # A leftover state file from an earlier run would change the starting point: give the taskbar back first.
     $leftover = Read-StateFile
     if ($null -ne $leftover) {
@@ -1169,6 +1175,8 @@ try {
         $logOff = Get-LogLength $AppLog
         $app = Start-App
         $elev = [NsWin]::IsElevated([uint32]$app.Id)
+        # Startup can take a few seconds (icons, tray, appbar): wait for the line instead of reading once.
+        [void](Wait-Until { (Get-LogSince $AppLog $logOff) -match 'dock ready' } 15000 250)
         $logNew = Get-LogSince $AppLog $logOff
         $ready = $logNew -match 'dock ready'
         $mon = [NsWin]::PrimaryMonitor()
@@ -1385,16 +1393,19 @@ try {
         Write-Do 'Next I restart Windows Explorer. The screen flickers for a few seconds; this is normal.'
         Wait-Enter 'Press Enter to restart Explorer'
         $waBefore = [NsWin]::WorkArea()
+        $rsOff = Get-LogLength $AppLog
         Stop-Process -Name explorer -Force
-        $trayMs = Wait-Until { [NsWin]::HasTray() } 5000 50
-        if ($trayMs -lt 0) { Ensure-Explorer }
-        $hideMs = Wait-Until { [NsWin]::TrayState() -eq 0 } 10000 100
+        # Wait for the NEW Explorer: the app logs this once it has re-hidden the taskbar and re-reserved its strip.
+        # (Reading right after the kill measured the dying Explorer's stale values.)
+        $tcMs = Wait-Until { (Get-LogSince $AppLog $rsOff) -match 'TaskbarCreated received' } 20000 200
+        if ($tcMs -lt 0) { Ensure-Explorer }
+        $hideMs = Wait-Until { [NsWin]::HasTray() -and [NsWin]::TrayState() -eq 0 } 10000 100
         $reMs = Wait-Until { (([NsWin]::WorkArea()) -join ',') -eq ($waBefore -join ',') } 15000 200
         Start-Sleep -Seconds 2
         $waAfter = [NsWin]::WorkArea()
         $a = Ask-YN 'Is the dock still showing, with the space under it still reserved (windows stop above it)?'
         [void](Complete-Check -Id 'RS.6' -Description 'Explorer restart: reservation still there' `
-            -Measured @{ workAreaBefore = ($waBefore -join ','); workAreaAfter = ($waAfter -join ','); trayHiddenAgainMs = $hideMs; workAreaBackMs = $reMs } `
+            -Measured @{ workAreaBefore = ($waBefore -join ','); workAreaAfter = ($waAfter -join ','); taskbarCreatedLoggedMs = $tcMs; trayHiddenAgainMs = $hideMs; workAreaBackMs = $reMs } `
             -MeasuredPass (($waAfter -join ',') -eq ($waBefore -join ',') -and $hideMs -ge 0) -Answer $a -Expect 'y' -AnswerRequired $false)
         [void](Ask-Check 'RS.7' "Start button's last dot is red" 'Look closely at the start button (left-most).' 'Is the LAST dot of the start button red?')
         Write-Do 'Right-click the start button and click "Keep taskbar visible" again to turn it OFF.'
