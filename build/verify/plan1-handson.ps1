@@ -10,13 +10,15 @@
 #>
 [CmdletBinding()]
 param(
-    # Run only these sections (default: everything). Example: -Only KeySpike,Notify
-    [ValidateSet('Task8', 'KeySpike', 'Overflow', 'Desktop', 'Notify')]
+    # Run only these sections. Default (no -Only): reinstall + Dock, Apps, Tray, Reserve, Startup.
+    # Example: -Only KeySpike,Notify
+    [ValidateSet('Task8', 'KeySpike', 'Overflow', 'Desktop', 'Notify', 'Dock', 'Apps', 'Tray', 'Reserve', 'Startup')]
     [string[]]$Only,
     # With -Only the reinstall step is skipped unless -Reinstall is given.
     [switch]$Reinstall
 )
 $ErrorActionPreference = 'Stop'
+$Sections = if ($Only) { @($Only) } else { @('Dock', 'Apps', 'Tray', 'Reserve', 'Startup') }
 
 # =====================================================================================
 # HELPERS (everything above the "END HELPERS" marker is safe to dot-source for testing)
@@ -43,6 +45,9 @@ $script:CleanedUp      = $false
 $script:BannersOff     = $false
 $script:LastSpikeMode  = ''
 $script:LastLaunchError = ''
+$script:OrigWorkArea   = $null
+$script:KeepRunning    = $false
+$script:KeepChoice     = $null
 $script:LastSpikeElevated = -1
 $script:foundProc      = $null
 $script:VerifyTasks    = [System.Collections.Generic.List[string]]::new()
@@ -170,6 +175,24 @@ public static class NsWin
         return w.Length;
     }
 
+    [DllImport("user32.dll", EntryPoint = "SystemParametersInfoW")] static extern bool SystemParametersInfoRect(uint a, uint b, out RECT r, uint f);
+
+    // SPI_GETWORKAREA of the primary monitor: left, top, right, bottom
+    public static int[] WorkArea()
+    {
+        RECT r; if (!SystemParametersInfoRect(0x0030, 0, out r, 0)) return null;
+        return new[] { r.L, r.T, r.R, r.B };
+    }
+
+    // WM_CLOSE to EVERY top-level window of the process, hidden ones included. Returns how many were posted.
+    public static int CloseAllWindows(uint pid)
+    {
+        var list = new List<IntPtr>();
+        EnumWindows((h, l) => { uint p; GetWindowThreadProcessId(h, out p); if (p == pid) list.Add(h); return true; }, IntPtr.Zero);
+        foreach (var h in list) PostMessageW(h, 0x10, IntPtr.Zero, IntPtr.Zero);
+        return list.Count;
+    }
+
     public static void CloseWindow(IntPtr h) { PostMessageW(h, 0x10, IntPtr.Zero, IntPtr.Zero); }
     public static void Maximize(IntPtr h) { ShowWindow(h, 3); }
 
@@ -271,7 +294,7 @@ function Complete-Check {
 }
 
 # ---------- generic ----------
-function Test-Section([string]$Name) { (-not $Only) -or ($Only -contains $Name) }
+function Test-Section([string]$Name) { $Sections -contains $Name }
 
 function Wait-Until([scriptblock]$Condition, [int]$TimeoutMs, [int]$PollMs = 100) {
     $sw = [System.Diagnostics.Stopwatch]::StartNew()
@@ -421,21 +444,25 @@ function Invoke-Cleanup {
             try { if ($p -and -not $p.HasExited -and $p.ProcessName -in @('taskmgr', 'notepad')) { [void][NsWin]::CloseProcessWindows([uint32]$p.Id) } } catch { }
         }
     } catch { }
-    try { Stop-OursByName 'NothingShell' } catch { }
-    try {
-        Ensure-Explorer
-        $rc = Invoke-RestoreNow
-        if ($rc -eq 3) { Ensure-Explorer; $rc = Invoke-RestoreNow }
-        Write-Info "restore-now exit code: $rc"
-    } catch { Write-Bad "restore failed: $($_.Exception.Message)" }
-    try { Stop-OursByName 'NothingShell.Watchdog' } catch { }
-    try {
-        if ([NsWin]::TrayState() -ne 1) { [void][NsWin]::ShowTrays() }
-        if ($null -ne $script:OrigAutoHide -and [NsWin]::HasTray() -and ([NsWin]::GetAutoHide() -ne $script:OrigAutoHide)) {
-            [NsWin]::SetAutoHide($script:OrigAutoHide)
-            Write-Info "auto-hide set back to the original ($($script:OrigAutoHide))"
-        }
-    } catch { }
+    if ($script:KeepRunning) {
+        Write-Info 'Leaving Nothing Shell running (your choice).'
+    } else {
+        try { Stop-OursByName 'NothingShell' } catch { }
+        try {
+            Ensure-Explorer
+            $rc = Invoke-RestoreNow
+            if ($rc -eq 3) { Ensure-Explorer; $rc = Invoke-RestoreNow }
+            Write-Info "restore-now exit code: $rc"
+        } catch { Write-Bad "restore failed: $($_.Exception.Message)" }
+        try { Stop-OursByName 'NothingShell.Watchdog' } catch { }
+        try {
+            if ([NsWin]::TrayState() -ne 1) { [void][NsWin]::ShowTrays() }
+            if ($null -ne $script:OrigAutoHide -and [NsWin]::HasTray() -and ([NsWin]::GetAutoHide() -ne $script:OrigAutoHide)) {
+                [NsWin]::SetAutoHide($script:OrigAutoHide)
+                Write-Info "auto-hide set back to the original ($($script:OrigAutoHide))"
+            }
+        } catch { }
+    }
     foreach ($t in $script:VerifyTasks) { Remove-VerifyTask $t }
     foreach ($f in $script:TempFiles) { try { Remove-Item -LiteralPath $f -Force -ErrorAction SilentlyContinue } catch { } }
     if ($script:BannersOff) {
@@ -459,10 +486,36 @@ function Start-App {
     return $p
 }
 
-function Quit-App($p) {
-    $ok = $false
-    try { $p.Refresh(); $ok = $p.CloseMainWindow() } catch { }
-    if (-not $ok) { try { [void][NsWin]::CloseProcessWindows([uint32]$p.Id) } catch { } }
+# Quits the app by posting WM_CLOSE to EVERY top-level window of its process (the dock window is hidden, so a
+# title lookup or MainWindow does not work). Never kills. Then asserts the work area equals the starting value
+# (a leaked appbar reservation would leave a dead strip). -NoWait: only post the messages (for timing tests).
+function Quit-App($p, [switch]$NoWait) {
+    $closed = 0
+    try { $closed = [NsWin]::CloseAllWindows([uint32]$p.Id) } catch { }
+    if ($NoWait) { return @{ windowsClosed = $closed } }
+    $sw = [System.Diagnostics.Stopwatch]::StartNew()
+    $exited = $false
+    try { $exited = $p.WaitForExit(5000) } catch { $exited = $true }
+    $exitMs = [int]$sw.ElapsedMilliseconds
+    if (-not $exited) { Write-Bad "  The app did not exit within 5 s after WM_CLOSE (not killing it)." }
+    $trayMs = Wait-Until { [NsWin]::TrayState() -eq 1 } 4000 100
+    $wa = [NsWin]::WorkArea()
+    $waOk = $false
+    if ($script:OrigWorkArea) {
+        [void](Wait-Until { (([NsWin]::WorkArea()) -join ',') -eq ($script:OrigWorkArea -join ',') } 4000 200)
+        $wa = [NsWin]::WorkArea()
+        $waOk = (($wa -join ',') -eq ($script:OrigWorkArea -join ','))
+        if (-not $waOk) { Write-Bad ("  WORK AREA LEAK: now {0}, expected {1}" -f ($wa -join ','), ($script:OrigWorkArea -join ',')) }
+    }
+    return @{ windowsClosed = $closed; exited = $exited; exitMs = $exitMs; trayVisible = ($trayMs -ge 0); trayBackMs = $trayMs
+              workAreaOk = $waOk; workArea = ($wa -join ','); startWorkArea = ($script:OrigWorkArea -join ',') }
+}
+
+function Complete-Quit([string]$Id, $app, [string]$What = 'app') {
+    $q = Quit-App $app
+    [void](Complete-Check -Id $Id -Description "Quit ($What): exits on WM_CLOSE, taskbar back, work area back to the start value" -Measured $q `
+        -MeasuredPass ($q.exited -and $q.trayVisible -and $q.workAreaOk))
+    [void](Ensure-TaskbarBack "after $Id")
 }
 
 function Test-WatchdogForApp($app) {
@@ -517,6 +570,68 @@ function Start-Spike([string]$Name, [string]$Exe, [string]$ArgString, [string]$L
     $script:LastSpikeMode = if ($script:LastSpikeElevated -eq 0) { 'normal user (limited scheduled task)' } else { "UNEXPECTED elevation=$($script:LastSpikeElevated)" }
     return $true
 }
+
+function Ask-Check {
+    param([string]$Id, [string]$Description, [string]$Todo, [string]$Question, [string]$Expect = 'y',
+          $Measured = @{}, $MeasuredPass = $null, [bool]$AnswerRequired = $true, [string]$Notes = '')
+    if ($Todo) { Write-Do $Todo }
+    $a = Ask-YN $Question
+    [void](Complete-Check -Id $Id -Description $Description -Measured $Measured -MeasuredPass $MeasuredPass -Answer $a -Expect $Expect -AnswerRequired $AnswerRequired -Notes $Notes)
+    return $a
+}
+
+function Read-DockSettings {
+    $f = Join-Path $StateDir 'settings.json'
+    if (-not (Test-Path -LiteralPath $f)) { return $null }
+    try { return (Get-Content -LiteralPath $f -Raw | ConvertFrom-Json) } catch { return $null }
+}
+function Get-Prop($o, [string]$Name) {
+    if ($null -eq $o) { return $null }
+    $pr = $o.PSObject.Properties | Where-Object { $_.Name -ieq $Name } | Select-Object -First 1
+    if ($pr) { return $pr.Value }
+    return $null
+}
+function Get-PinnedList {
+    $pins = Get-Prop (Read-DockSettings) 'PinnedApps'
+    @($pins | Where-Object { $_ } | ForEach-Object { '{0} | {1}' -f (Get-Prop $_ 'DisplayName'), (Get-Prop $_ 'AppId') })
+}
+function Set-SettingBool([string]$Name, [bool]$Value) {
+    $f = Join-Path $StateDir 'settings.json'
+    if (-not (Test-Path -LiteralPath $f)) { return $false }
+    $t = Get-Content -LiteralPath $f -Raw
+    $v = if ($Value) { 'true' } else { 'false' }
+    $t2 = [regex]::Replace($t, ('("{0}"\s*:\s*)(true|false)' -f $Name), ('${1}' + $v), 'IgnoreCase')
+    if ($t2 -eq $t) { return $false }
+    Set-Content -LiteralPath $f -Value $t2 -Encoding UTF8
+    return $true
+}
+
+# Opens windows as the normal user and returns the NEW visible top-level windows of that class.
+function Open-LimitedWindows([string]$Class, [string[]]$CommandLines, [int]$TimeoutMs = 12000) {
+    $before = @([NsWin]::VisibleByClass($Class))
+    foreach ($c in $CommandLines) { [void](Invoke-Unelevated $c ''); Start-Sleep -Milliseconds 700 }
+    $want = $CommandLines.Count
+    [void](Wait-Until { @([NsWin]::VisibleByClass($Class) | Where-Object { $before -notcontains $_ }).Count -ge $want } $TimeoutMs 250)
+    return @([NsWin]::VisibleByClass($Class) | Where-Object { $before -notcontains $_ })
+}
+function Close-Hwnds($hwnds) { foreach ($h in @($hwnds)) { try { [NsWin]::CloseWindow([IntPtr]$h) } catch { } } }
+
+function Get-DockTimeText([int]$ProcId) {
+    try {
+        Add-Type -AssemblyName UIAutomationClient, UIAutomationTypes -ErrorAction Stop
+        $ae = [System.Windows.Automation.AutomationElement]
+        $cond = [System.Windows.Automation.PropertyCondition]::new($ae::ProcessIdProperty, $ProcId)
+        foreach ($w in $ae::RootElement.FindAll([System.Windows.Automation.TreeScope]::Children, $cond)) {
+            foreach ($el in $w.FindAll([System.Windows.Automation.TreeScope]::Descendants, [System.Windows.Automation.Condition]::TrueCondition)) {
+                $n = $el.Current.Name
+                if ($n -match '^\d{1,2}:\d{2}(\s?[AaPp][Mm])?$') { return $n }
+            }
+        }
+    } catch { }
+    return $null
+}
+
+function Get-RunValue { try { (Get-ItemProperty 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run' -Name 'NothingShell' -ErrorAction Stop).NothingShell } catch { $null } }
 # ===== END HELPERS =====
 
 # =====================================================================================
@@ -590,7 +705,7 @@ try {
     Write-Good 'Install done.'
     } else {
         Write-Info 'Skipping the reinstall (use -Reinstall to force it).'
-        if ((Test-Section 'Task8') -or (Test-Section 'Overflow')) {
+        if ((Test-Section 'Task8') -or (Test-Section 'Overflow') -or (Test-Section 'Dock') -or (Test-Section 'Apps') -or (Test-Section 'Tray') -or (Test-Section 'Reserve') -or (Test-Section 'Startup')) {
             if (-not (Test-Path $AppExe) -or -not (Test-Path $Watchdog)) { throw 'The app is not installed. Run again with -Reinstall.' }
         }
     }
@@ -611,7 +726,7 @@ try {
     Write-Step 'STEP 1: close Fenn'
     $fenn = @(Get-Process -Name 'fenn' -ErrorAction SilentlyContinue)
     $fennSkipped = $false
-    $needFennGone = (Test-Section 'Task8') -or (Test-Section 'Overflow')
+    $needFennGone = (Test-Section 'Task8') -or (Test-Section 'Overflow') -or (Test-Section 'Dock') -or (Test-Section 'Apps') -or (Test-Section 'Tray') -or (Test-Section 'Reserve')
     if ($fenn.Count -gt 0 -and $needFennGone) {
         Write-Do 'Please quit Fenn now: find its icon in the tray (bottom right), right-click it and choose Quit.'
         Write-Info 'I will wait until it is gone.  (Press S here to continue anyway - results may then be wrong.)'
@@ -637,11 +752,12 @@ try {
     }
     $script:OrigAutoHide = [NsWin]::GetAutoHide()
     $script:OrigTray     = [NsWin]::TrayState()
+    $script:OrigWorkArea = [NsWin]::WorkArea()
     $mon = [NsWin]::PrimaryMonitor()
     $startInfo = @{
         autoHide = $script:OrigAutoHide; trayState = $script:OrigTray
         fennRunning = (@(Get-Process -Name fenn -ErrorAction SilentlyContinue).Count -gt 0)
-        fennSkipped = $fennSkipped; leftoverStateFileFound = ($null -ne $leftover)
+        workArea = ($script:OrigWorkArea -join ','); fennSkipped = $fennSkipped; leftoverStateFileFound = ($null -ne $leftover)
         primaryMonitor = if ($mon) { "$($mon[2] - $mon[0])x$($mon[3] - $mon[1])" } else { $null }
     }
     Write-Info ("Starting point: taskbar auto-hide = {0}, taskbar visible = {1}" -f $script:OrigAutoHide, ($script:OrigTray -eq 1))
@@ -710,7 +826,7 @@ try {
 
     # ---------------------------------------------------------------- C8.2
     Write-Step 'CHECK 2: quit the app normally - the taskbar should come back'
-    Quit-App $app
+    Quit-App $app -NoWait
     $backMs = Wait-Until { [NsWin]::TrayState() -eq 1 } 6000 100
     $exited = $app.WaitForExit(5000)
     Start-Sleep -Milliseconds 800
@@ -767,7 +883,7 @@ try {
         -Measured @{ hiddenBeforeRestart = ($pre -eq 0); newTrayAppearedMs = $trayMs; hiddenAfterTrayMs = $hideMs; autoHide = $ah4; taskbarCreatedLogged = $sawMsg; appStillAlive = $appAlive; explorerStartedByScript = $startedExplorer } `
         -MeasuredPass $pass -Answer $ans1 -Expect 'y' -AnswerRequired $false)
     Write-Info 'Now quitting the app normally...'
-    Quit-App $app
+    Quit-App $app -NoWait
     $backMs = Wait-Until { [NsWin]::TrayState() -eq 1 } 6000 100
     [void]$app.WaitForExit(5000)
     $ans2 = Ask-YN 'Is the Windows taskbar back?'
@@ -801,7 +917,7 @@ try {
     $logNew = Get-LogSince $AppLog $logOff
     $leftoverSeen = $logNew -match 'leftover=True'
     $origLogged = [regex]::Match($logNew, 'taskbar original autoHide=(True|False)').Groups[1].Value
-    Quit-App $app2
+    Quit-App $app2 -NoWait
     $backMs = Wait-Until { [NsWin]::TrayState() -eq 1 } 6000 100
     [void]$app2.WaitForExit(5000)
     Start-Sleep -Milliseconds 800
@@ -924,7 +1040,7 @@ try {
     [void](Complete-Check -Id 'O.3' -Description 'Win+B then Enter shows correct hidden icons (taskbar hidden)' -Measured @{} -Answer $a1 -Expect 'y')
     [void](Complete-Check -Id 'O.4' -Description 'Right-click menus on flyout icons work' -Measured @{} -Answer $a2 -Expect 'y')
     Write-Info 'Quitting the app...'
-    Quit-App $app
+    Quit-App $app -NoWait
     [void](Wait-Until { [NsWin]::TrayState() -eq 1 } 6000 100); [void]$app.WaitForExit(5000)
     [void](Ensure-TaskbarBack 'after overflow test')
     $ahNow = [NsWin]::GetAutoHide()
@@ -1040,6 +1156,348 @@ try {
     [void](Complete-Check -Id 'N.4' -Description 'Test toasts cleaned up (--cleanup)' -Measured @{ ran = $cleanOk; log = @($cl.Trim() -split "`r?`n" | Select-Object -Last 3) } -MeasuredPass ($cleanOk -and $cl -match 'cleanup: removed'))
     }
 
+
+    # ================================================================ DOCK (tasks 11)
+    if (Test-Section 'Dock') {
+        Write-Step 'DOCK: reveal feel, look, full screen, idle CPU'
+        $logOff = Get-LogLength $AppLog
+        $app = Start-App
+        $elev = [NsWin]::IsElevated([uint32]$app.Id)
+        $logNew = Get-LogSince $AppLog $logOff
+        $ready = $logNew -match 'dock ready'
+        $mon = [NsWin]::PrimaryMonitor()
+        $geo = @{}; $geoPass = $null
+        $pm = [regex]::Match($logNew, 'dock placed:.*?pill=RectI \{ Left = (-?\d+), Top = (-?\d+), Right = (-?\d+), Bottom = (-?\d+) \}')
+        if ($pm.Success -and $mon) {
+            $pl = [int]$pm.Groups[1].Value; $pr = [int]$pm.Groups[3].Value; $pb = [int]$pm.Groups[4].Value
+            $cx = (($pl + $pr) / 2) - (($mon[0] + $mon[2]) / 2); $gap = $mon[3] - $pb
+            $geo = @{ pillLeft = $pl; pillRight = $pr; pillBottom = $pb; centerOffsetPx = $cx; gapAboveBottomPx = $gap }
+            $geoPass = ([math]::Abs($cx) -le 3) -and ($gap -ge 8) -and ($gap -le 30)
+        }
+        [void](Complete-Check -Id 'DK.0' -Description 'Dock starts (normal user), pill centered, about 12 DIP above the bottom' `
+            -Measured (@{ dockReady = $ready; elevated = ($elev -eq 1); workAreaWhileRunning = ((([NsWin]::WorkArea()) -join ',')) } + $geo) `
+            -MeasuredPass ($ready -and ($elev -eq 0) -and ($geoPass -ne $false)))
+        Write-Info 'The dock is hidden until you push the mouse to the bottom edge of the screen.'
+        [void](Ask-Check 'DK.1' 'Pointer held at the bottom edge: dock slides up after a short pause' `
+            'Push the mouse to the very bottom edge of the screen and hold it still for a second.' 'Did the dock slide up after a short pause?')
+        [void](Ask-Check 'DK.2' 'Smooth slide animation' '' 'Did it slide smoothly (not jerky)?')
+        [void](Ask-Check 'DK.3' 'Leaving the edge hides the dock after about half a second' `
+            'Move the mouse up and away from the dock.' 'Did it hide about half a second later?')
+        [void](Ask-Check 'DK.4' 'Resting on the pill keeps it up' `
+            'Show the dock again, then rest the pointer ON the dock for 3 seconds.' 'Did it stay up the whole time?')
+        [void](Ask-Check 'DK.5' 'A quick flick to the edge does not show the dock' `
+            'Move to the middle of the screen, then flick the mouse quickly down to the bottom edge and straight back up. Do that 4 times.' `
+            'Did the dock appear during the flicks? (a single flash is OK, answer n)' -Expect 'n')
+        [void](Ask-Check 'DK.6' 'Dock looks centered with a small gap under it' 'Show the dock and look at it.' 'Is it centered, with a small gap between it and the screen bottom?')
+        $fsOff = Get-LogLength $AppLog
+        Write-Do 'FULL SCREEN: open a YouTube video in your browser and make it full screen (or press F11 on any page). Stay in full screen.'
+        Wait-Enter 'Press Enter when you are in full screen'
+        Write-Do 'Now push the mouse to the bottom edge and hold it for 2 seconds.'
+        $fsLog = Get-LogSince $AppLog $fsOff
+        $a = Ask-YN 'Did the dock stay hidden?'
+        $fsLog = Get-LogSince $AppLog $fsOff
+        [void](Complete-Check -Id 'DK.7' -Description 'Full screen: the bottom edge does nothing' `
+            -Measured @{ fullscreenTrueLogged = ($fsLog -match 'fullscreen=True') } -MeasuredPass ($fsLog -match 'fullscreen=True') -Answer $a -Expect 'y' -AnswerRequired $true)
+        Write-Do 'Leave full screen (Esc or F11), then push the mouse to the bottom edge again.'
+        $a = Ask-YN 'Does the dock work again?'
+        $fsLog2 = Get-LogSince $AppLog $fsOff
+        [void](Complete-Check -Id 'DK.8' -Description 'After leaving full screen the edge works again' `
+            -Measured @{ fullscreenFalseLogged = ($fsLog2 -match 'fullscreen=False') } -MeasuredPass ($fsLog2 -match 'fullscreen=False') -Answer $a -Expect 'y')
+        Write-Do 'IDLE CPU TEST: move the mouse to the TOP of the screen and do not touch the mouse or keyboard for 30 seconds.'
+        Wait-Enter 'Press Enter, then keep still'
+        $p0 = Get-Process -Id $app.Id; $t0 = $p0.TotalProcessorTime
+        1..30 | ForEach-Object { Start-Sleep -Seconds 1; if ($_ % 5 -eq 0) { Write-Host -NoNewline "$_ " } }
+        Write-Host ''
+        $p1 = Get-Process -Id $app.Id
+        $cpuMs = [int]($p1.TotalProcessorTime - $t0).TotalMilliseconds
+        [void](Complete-Check -Id 'DK.9' -Description 'Idle CPU about 0 over 30 s (mouse still)' `
+            -Measured @{ cpuMsOver30s = $cpuMs; workingSetMB = [math]::Round($p1.WorkingSet64 / 1MB, 1); privateMB = [math]::Round($p1.PrivateMemorySize64 / 1MB, 1) } -MeasuredPass ($cpuMs -le 300) `
+            -Notes 'Passes at 300 ms or less of CPU time in 30 s.')
+        Complete-Quit 'DK.quit' $app 'dock section'
+    }
+
+    # ================================================================ APPS (tasks 12, 13)
+    if (Test-Section 'Apps') {
+        Write-Step 'APPS: pinned and running apps'
+        $sf = Join-Path $StateDir 'settings.json'
+        if (Test-Path -LiteralPath $sf) {
+            Copy-Item -LiteralPath $sf -Destination "$sf.handson-bak-$Stamp" -Force
+            Remove-Item -LiteralPath $sf -Force
+            Write-Info "Started fresh: your old settings.json was copied to settings.json.handson-bak-$Stamp"
+        }
+        $app = Start-App
+        Start-Sleep -Seconds 2
+        $pins = @(Get-PinnedList)
+        $hasChrome = [bool]($pins | Where-Object { $_ -match 'chrome' })
+        Write-Info ('Pinned apps found: ' + (($pins | ForEach-Object { ($_ -split ' \| ')[0] }) -join ', '))
+        [void](Ask-Check 'AP.1' 'First run shows your old taskbar pins, including Chrome' `
+            'Show the dock (mouse to the bottom edge) and look at the icons.' 'Do you see Chrome (and your other pinned apps) in the dock, with no dots under them?' `
+            -Measured @{ pinned = $pins; chromePinned = $hasChrome } -MeasuredPass ($pins.Count -ge 1) -Notes 'Chrome is only expected if it was pinned to the old taskbar.')
+        [void](Ask-Check 'AP.2' 'Clicking a closed pinned app launches it' `
+            'Make sure Chrome is closed. Click the Chrome icon in the dock.' 'Did Chrome open?')
+        [void](Ask-Check 'AP.3' 'Clicking a running app that is not in front brings it to the front' `
+            'Open Notepad or any other window on top of Chrome, then click Chrome in the dock.' 'Did Chrome come to the front?')
+        [void](Ask-Check 'AP.4' 'Clicking the app that is already in front minimizes it' `
+            'With Chrome in front, click the Chrome icon in the dock once more.' 'Did Chrome minimize?')
+        [void](Ask-Check 'AP.5' 'The focused app shows a red dot, running apps a grey dot' `
+            'Click Chrome again to bring it back, then look at its icon.' 'Is there a RED dot under the active app and a grey dot under other running apps?')
+
+        Write-Info 'Opening 3 File Explorer windows and the Settings app for you...'
+        $ex = Open-LimitedWindows 'CabinetWClass' @('explorer.exe "C:\Windows"', 'explorer.exe "C:\Users"', 'explorer.exe "C:\Program Files"')
+        $se = Open-LimitedWindows 'ApplicationFrameWindow' @('start ms-settings:')
+        Start-Sleep -Seconds 2
+        [void](Ask-Check 'AP.6' 'Three Explorer windows = ONE dock item' 'Look at the dock.' 'Is there ONE File Explorer item (not three)?' `
+            -Measured @{ explorerWindowsOpened = $ex.Count } -MeasuredPass ($ex.Count -ge 3))
+        [void](Ask-Check 'AP.7' 'Explorer item shows a list of its windows; a row click switches window' `
+            'Click (or hover) the File Explorer item, then click one row in the small list.' 'Did a list of 3 windows appear and did the row bring that window forward?')
+        [void](Ask-Check 'AP.8' 'Settings = one item, no strange extra item' '' 'Is there ONE Settings item, with no extra odd item (like "ApplicationFrameHost")?' `
+            -Measured @{ settingsWindowOpened = ($se.Count -ge 1) })
+        Close-Hwnds $ex; Close-Hwnds $se
+        Start-Sleep -Seconds 2
+
+        $np = Open-LimitedWindows 'Notepad' @('start "" notepad.exe')
+        [void](Ask-Check 'AP.9' 'Right-click a running app: menu with Pin / Close window(s)' `
+            'Right-click the Notepad icon in the dock (show the dock first). Choose "Pin to dock".' 'Did a menu appear and did you pin Notepad?')
+        Close-Hwnds $np; Start-Sleep -Seconds 2
+        $pinsNow = @(Get-PinnedList); $notepadPinned = [bool]($pinsNow | Where-Object { $_ -match 'notepad' })
+        [void](Ask-Check 'AP.10' 'Pinned Notepad stays in the dock after it closes' '' 'With Notepad closed, is a Notepad icon still in the dock?' `
+            -Measured @{ pinnedAfterClose = $pinsNow } -MeasuredPass $notepadPinned)
+        Complete-Quit 'AP.quit1' $app 'before restart'
+        $app = Start-App
+        Start-Sleep -Seconds 2
+        $pinsRestart = @(Get-PinnedList)
+        [void](Ask-Check 'AP.11' 'Pin survives restarting the app' 'Show the dock.' 'After the restart, is Notepad still in the dock?' `
+            -Measured @{ pinnedAfterRestart = $pinsRestart } -MeasuredPass ([bool]($pinsRestart | Where-Object { $_ -match 'notepad' })))
+        Write-Do 'Right-click the Notepad icon and choose "Unpin from dock".'
+        $a = Ask-YN 'Did the Notepad icon disappear?'
+        Start-Sleep -Milliseconds 800
+        $pinsUnpinned = @(Get-PinnedList)
+        [void](Complete-Check -Id 'AP.12' -Description 'Unpin removes it and saves' -Measured @{ pinnedAfterUnpin = $pinsUnpinned } `
+            -MeasuredPass (-not [bool]($pinsUnpinned | Where-Object { $_ -match 'notepad' })) -Answer $a -Expect 'y')
+        $np = Open-LimitedWindows 'Notepad' @('start "" notepad.exe')
+        Write-Do 'Right-click the Notepad icon and choose "Close window(s)".'
+        $a = Ask-YN 'Did Notepad close?'
+        Start-Sleep -Seconds 1
+        $left = @($np | Where-Object { [NsWin]::WindowExists([IntPtr]$_) })
+        [void](Complete-Check -Id 'AP.13' -Description 'Close window(s) closes the app windows' -Measured @{ windowsStillOpen = $left.Count } -MeasuredPass ($left.Count -eq 0) -Answer $a -Expect 'y')
+        Close-Hwnds $left
+        Complete-Quit 'AP.quit2' $app 'apps section'
+    }
+
+    # ================================================================ TRAY (task 14)
+    if (Test-Section 'Tray') {
+        Write-Step 'TRAY: Wi-Fi, volume, battery, overflow arrow, clock'
+        $wifi = @(Get-NetAdapter -Physical -ErrorAction SilentlyContinue | Where-Object { $_.PhysicalMediaType -match '802\.11' })
+        $battery = @(Get-CimInstance Win32_Battery -ErrorAction SilentlyContinue)
+        [void](Complete-Check -Id 'TR.0' -Description 'This PC: Wi-Fi adapter and battery present' -Measured @{
+            wifiAdapters = @($wifi | ForEach-Object { "$($_.Name) $($_.Status)" }); batteries = $battery.Count } -Info)
+        $logOff = Get-LogLength $AppLog
+        $app = Start-App
+        Start-Sleep -Seconds 2
+        [void](Ask-Check 'TR.1' 'Right end of the dock shows: up-arrow, Wi-Fi, speaker, (battery), time' `
+            'Show the dock and look at its right end.' 'Do you see an up-arrow, Wi-Fi, speaker, battery (if a laptop) and the time?')
+        if ($wifi.Count -gt 0) {
+            [void](Ask-Check 'TR.2' 'Turning Wi-Fi off updates the symbol within 2 s' `
+                'Turn Wi-Fi OFF (Win+A, then the Wi-Fi button). Watch the dock.' 'Did the Wi-Fi symbol change (crossed out / dimmer) within about 2 seconds?')
+            [void](Ask-Check 'TR.3' 'Turning Wi-Fi on updates the symbol' 'Turn Wi-Fi back ON.' 'Did the symbol go back to normal?')
+        } else { [void](Complete-Check -Id 'TR.2' -Description 'Wi-Fi symbol follows Wi-Fi on/off' -Measured @{} -Answer 's' -Expect 'y' -Notes 'No Wi-Fi adapter on this PC.') }
+        [void](Ask-Check 'TR.4' 'Volume change updates the speaker symbol' `
+            'Change the volume (volume keys or the slider) between loud, quiet and zero.' 'Did the speaker symbol change within about 2 seconds?')
+        [void](Ask-Check 'TR.5' 'Mute updates the speaker symbol' 'Mute, then unmute.' 'Did the speaker show a mute mark when muted, and go back when unmuted?')
+        if ($battery.Count -gt 0) {
+            [void](Ask-Check 'TR.6' 'Charger plug/unplug updates the battery symbol' `
+                'Unplug the charger, wait a moment, then plug it back in.' 'Did a lightning bolt appear when charging and disappear when unplugged, each within about 2 seconds?')
+        } else { [void](Complete-Check -Id 'TR.6' -Description 'Battery symbol follows the charger' -Measured @{} -Answer 's' -Expect 'y' -Notes 'No battery on this PC.') }
+        $ovOff = Get-LogLength $AppLog
+        [void](Ask-Check 'TR.7' 'Up-arrow opens Windows hidden-icons panel' `
+            'Click the up-arrow (^) at the left of the tray area.' 'Did Windows hidden-icons panel open (with your Discord / Steam style icons)?')
+        [void](Ask-Check 'TR.8' 'Right-click menus work on those icons' 'Right-click one icon in the panel.' 'Did its menu appear? (then press Esc twice)')
+        $ovLog = Get-LogSince $AppLog $ovOff
+        $ovLines = @($ovLog -split "`r?`n" | Where-Object { $_ -match 'overflow|FocusNotOnTray|Opened' } | Select-Object -Last 6)
+        [void](Ask-Check 'TR.9' 'Taskbar flash when opening the panel is brief' '' 'Did you see the Windows taskbar flash when the panel opened? (n = no flash; a very short flash is fine)' -Expect 'n' `
+            -Measured @{ overflowLogLines = $ovLines } -AnswerRequired $false -Notes 'Informational: a brief flash is known and acceptable.')
+        [void](Ask-Check 'TR.10' 'Clicking the tray (Wi-Fi/speaker/battery) opens Windows Quick Settings' `
+            'Click the Wi-Fi / speaker area of the dock (not the up-arrow).' 'Did Windows Quick Settings open? (press Esc to close it)')
+        # Clock minute rollover
+        $t0 = Get-DockTimeText $app.Id
+        if ($t0) {
+            Write-Info "Clock text read by the script: $t0. Waiting for the next minute..."
+            $ch = Wait-Until { (Get-DockTimeText $app.Id) -ne $t0 } 75000 200
+            $now = Get-Date; $msPastMinute = $now.Second * 1000 + $now.Millisecond
+            [void](Complete-Check -Id 'TR.11' -Description 'Clock text changes within 2 s of the minute rollover' `
+                -Measured @{ firstText = $t0; changedAfterMs = $ch; msPastMinuteWhenSeen = $msPastMinute } -MeasuredPass ($ch -ge 0 -and $msPastMinute -le 2500))
+        } else {
+            $secs = 60 - (Get-Date).Second
+            Write-Info "The script cannot read the clock text. The next minute starts in about $secs seconds."
+            Write-Do 'Show the dock and watch the time. Do not look away at the minute change.'
+            Start-Sleep -Seconds ($secs + 2)
+            $a = Ask-YN 'Did the time on the dock change at the minute (within about 2 seconds of it)?'
+            [void](Complete-Check -Id 'TR.11' -Description 'Clock text changes within 2 s of the minute rollover' -Measured @{ readByScript = $false } -Answer $a -Expect 'y')
+        }
+        Complete-Quit 'TR.quit' $app 'tray section'
+    }
+
+    # ================================================================ RESERVE (task 15)
+    if (Test-Section 'Reserve') {
+        Write-Step 'RESERVE: keep the dock visible and reserve screen space'
+        $app = Start-App
+        Start-Sleep -Seconds 2
+        $waRun = [NsWin]::WorkArea(); $mon = [NsWin]::PrimaryMonitor()
+        Write-Info ('Work area now (app running, taskbar hidden): ' + ($waRun -join ','))
+        [void](Ask-Check 'RS.1' 'Right-click on the start button shows the menu' `
+            'Show the dock and right-click the START button (the left-most one).' 'Does a menu appear with: Keep taskbar visible, Start with Windows, Quit Nothing Shell?')
+        Write-Do 'Click "Keep taskbar visible" so it gets a tick.'
+        $kvMs = Wait-Until { $w = [NsWin]::WorkArea(); $w -and ($w[3] -lt $waRun[3] - 40) } 20000 200
+        $waKeep = [NsWin]::WorkArea()
+        [void](Complete-Check -Id 'RS.2' -Description 'Keep visible ON: the work area shrinks (space reserved)' `
+            -Measured @{ workAreaBefore = ($waRun -join ','); workAreaAfter = ($waKeep -join ','); shrinkSeenAfterMs = $kvMs } -MeasuredPass ($kvMs -ge 0))
+        $np = Open-LimitedWindows 'Notepad' @('start "" notepad.exe')
+        $fills = $null; $npM = @{ opened = ($np.Count -ge 1) }
+        if ($np.Count -ge 1) {
+            [NsWin]::Maximize($np[0]); Start-Sleep -Milliseconds 1200
+            $fb = [NsWin]::FrameBounds($np[0])
+            if ($fb -and $waKeep) { $npM.frame = ($fb -join ','); $npM.workArea = ($waKeep -join ','); $fills = ([math]::Abs($fb[3] - $waKeep[3]) -le 3) -and ($fb[3] -lt $mon[3] - 40) }
+        }
+        [void](Ask-Check 'RS.3' 'A maximized window ends ABOVE the dock' 'Look at the maximized Notepad.' 'Does Notepad end above the dock (the dock is not covering its bottom)?' `
+            -Measured $npM -MeasuredPass $fills -AnswerRequired $false)
+        Close-Hwnds $np
+        $fsOff = Get-LogLength $AppLog
+        Write-Do 'FULL SCREEN again: open a YouTube video full screen (or press F11 on a page).'
+        Wait-Enter 'Press Enter when you are in full screen'
+        $a = Ask-YN 'With "Keep taskbar visible" ON, is the dock hidden while in full screen?'
+        $fsLog = Get-LogSince $AppLog $fsOff
+        [void](Complete-Check -Id 'RS.4' -Description 'Full screen hides the dock even in keep-visible mode' -Measured @{ fullscreenTrueLogged = ($fsLog -match 'fullscreen=True') } `
+            -MeasuredPass ($fsLog -match 'fullscreen=True') -Answer $a -Expect 'y')
+        Write-Do 'Leave full screen. The dock should come back by itself.'
+        [void](Ask-Check 'RS.5' 'Leaving full screen brings the kept dock back' '' 'Is the dock back?')
+        Write-Do 'Next I restart Windows Explorer. The screen flickers for a few seconds; this is normal.'
+        Wait-Enter 'Press Enter to restart Explorer'
+        $waBefore = [NsWin]::WorkArea()
+        Stop-Process -Name explorer -Force
+        $trayMs = Wait-Until { [NsWin]::HasTray() } 5000 50
+        if ($trayMs -lt 0) { Ensure-Explorer }
+        $hideMs = Wait-Until { [NsWin]::TrayState() -eq 0 } 10000 100
+        $reMs = Wait-Until { (([NsWin]::WorkArea()) -join ',') -eq ($waBefore -join ',') } 15000 200
+        Start-Sleep -Seconds 2
+        $waAfter = [NsWin]::WorkArea()
+        $a = Ask-YN 'Is the dock still showing, with the space under it still reserved (windows stop above it)?'
+        [void](Complete-Check -Id 'RS.6' -Description 'Explorer restart: reservation still there' `
+            -Measured @{ workAreaBefore = ($waBefore -join ','); workAreaAfter = ($waAfter -join ','); trayHiddenAgainMs = $hideMs; workAreaBackMs = $reMs } `
+            -MeasuredPass (($waAfter -join ',') -eq ($waBefore -join ',') -and $hideMs -ge 0) -Answer $a -Expect 'y' -AnswerRequired $false)
+        [void](Ask-Check 'RS.7' "Start button's last dot is red" 'Look closely at the start button (left-most).' 'Is the LAST dot of the start button red?')
+        Write-Do 'Right-click the start button and click "Keep taskbar visible" again to turn it OFF.'
+        $offMs = Wait-Until { (([NsWin]::WorkArea()) -join ',') -eq ($waRun -join ',') } 20000 200
+        [void](Complete-Check -Id 'RS.8' -Description 'Keep visible OFF: work area back to the value before' `
+            -Measured @{ expected = ($waRun -join ','); now = (([NsWin]::WorkArea()) -join ','); backAfterMs = $offMs } -MeasuredPass ($offMs -ge 0))
+        Write-Do 'Now right-click the start button and choose "Quit Nothing Shell".'
+        $q0 = [System.Diagnostics.Stopwatch]::StartNew()
+        $exited = $app.WaitForExit(60000)
+        $quitMs = [int]$q0.ElapsedMilliseconds
+        $trayMs2 = Wait-Until { [NsWin]::TrayState() -eq 1 } 6000 100
+        [void](Wait-Until { (([NsWin]::WorkArea()) -join ',') -eq ($script:OrigWorkArea -join ',') } 4000 200)
+        $waEnd = [NsWin]::WorkArea()
+        $wdGone = (Wait-Until { (Get-WatchdogInfo).Count -eq 0 } 4000 200) -ge 0
+        $ans = Ask-YN 'Is the Windows taskbar back?'
+        [void](Complete-Check -Id 'RS.9' -Description 'Quit from the menu: taskbar back, work area at start value, helper gone' `
+            -Measured @{ exited = $exited; msAfterPromptToExit = $quitMs; trayBackMs = $trayMs2; workAreaNow = ($waEnd -join ','); workAreaStart = ($script:OrigWorkArea -join ','); watchdogGone = $wdGone; stateFileGone = (-not (Test-Path -LiteralPath $StateFile)) } `
+            -MeasuredPass ($exited -and $trayMs2 -ge 0 -and (($waEnd -join ',') -eq ($script:OrigWorkArea -join ',')) -and $wdGone) -Answer $ans -Expect 'y' -AnswerRequired $false)
+        if (-not $exited) { Complete-Quit 'RS.quit' $app 'fallback quit' }
+        [void](Ensure-TaskbarBack 'after reserve section')
+    }
+
+    # ================================================================ STARTUP (task 16)
+    if (Test-Section 'Startup') {
+        Write-Step 'STARTUP: Fenn guard, single instance, start with Windows'
+        $fennNow = @(Get-Process -Name 'fenn' -ErrorAction SilentlyContinue).Count -gt 0
+        if (-not $fennNow) {
+            Write-Do 'Please START Fenn now (as you normally do). I will wait up to 2 minutes. (Press S to skip this part.)'
+            $skipFenn = $false
+            $sw = [System.Diagnostics.Stopwatch]::StartNew()
+            while (@(Get-Process -Name 'fenn' -ErrorAction SilentlyContinue).Count -eq 0 -and $sw.Elapsed.TotalSeconds -lt 120 -and -not $skipFenn) {
+                try { if ([Console]::KeyAvailable) { $k = [Console]::ReadKey($true); if ($k.KeyChar -in 's', 'S') { $skipFenn = $true } } } catch { }
+                Start-Sleep -Milliseconds 500
+            }
+            $fennNow = @(Get-Process -Name 'fenn' -ErrorAction SilentlyContinue).Count -gt 0
+            if ($fennNow) { Start-Sleep -Seconds 4 }
+        }
+        if ($fennNow) {
+            $ahBefore = [NsWin]::GetAutoHide()
+            $app = Start-App
+            $dialogs = @([NsWin]::TopLevelOfProcess([uint32]$app.Id)).Count
+            $wdCount = (Get-WatchdogInfo).Count; $stateThere = (Test-Path -LiteralPath $StateFile)
+            $ahAfter = [NsWin]::GetAutoHide()
+            $a = Ask-YN 'Is there a box saying "Fenn is running. Quit Fenn to use Nothing Shell..." with "Check again" and "Quit Nothing Shell" buttons?'
+            [void](Complete-Check -Id 'ST.1' -Description 'Fenn running: warning box shown and the taskbar is left alone' `
+                -Measured @{ appAlive = [bool](Get-Process -Id $app.Id -ErrorAction SilentlyContinue); visibleWindows = $dialogs; watchdogProcesses = $wdCount; stateFilePresent = $stateThere; autoHideBefore = $ahBefore; autoHideAfter = $ahAfter } `
+                -MeasuredPass ($wdCount -eq 0 -and -not $stateThere -and $ahBefore -eq $ahAfter -and $dialogs -ge 1) -Answer $a -Expect 'y' -AnswerRequired $false)
+            Write-Do 'Now QUIT Fenn (tray icon > Quit), then click "Check again" in the box.'
+            $sw = [System.Diagnostics.Stopwatch]::StartNew()
+            $takeMs = Wait-Until { (@(Get-Process -Name 'fenn' -ErrorAction SilentlyContinue).Count -eq 0) -and ((Get-WatchdogInfo).Count -gt 0) -and ([NsWin]::TrayState() -eq 0) } 240000 500
+            $a = Ask-YN 'Did Nothing Shell take over (box gone, Windows taskbar hidden, dock works)?'
+            [void](Complete-Check -Id 'ST.2' -Description 'Fenn quit + Check again: Nothing Shell takes over' `
+                -Measured @{ takeoverMs = $takeMs; watchdogProcesses = (Get-WatchdogInfo).Count; trayHidden = ([NsWin]::TrayState() -eq 0) } -MeasuredPass ($takeMs -ge 0) -Answer $a -Expect 'y' -AnswerRequired $false)
+        } else {
+            [void](Complete-Check -Id 'ST.1' -Description 'Fenn running: warning box shown and the taskbar is left alone' -Measured @{ fennStarted = $false } -Answer 's' -Expect 'y' -Notes 'Skipped (Fenn not started).')
+            $app = Start-App
+            Start-Sleep -Seconds 2
+        }
+        # second copy
+        $cnt0 = @(Get-Process -Name NothingShell -ErrorAction SilentlyContinue).Count
+        $winsBefore = @([NsWin]::TopLevelOfProcess([uint32]$app.Id)).Count
+        [void](Invoke-Unelevated ('"{0}"' -f $AppExe) '')
+        Start-Sleep -Seconds 5
+        $cnt1 = @(Get-Process -Name NothingShell -ErrorAction SilentlyContinue).Count
+        $a = Ask-YN 'I just started a second copy. Did anything visible happen (box, window, flicker)?'
+        [void](Complete-Check -Id 'ST.3' -Description 'Second copy: nothing happens, still one process' `
+            -Measured @{ processesBefore = $cnt0; processesAfter = $cnt1 } -MeasuredPass ($cnt1 -eq $cnt0 -and $cnt1 -eq 1) -Answer $a -Expect 'n' -AnswerRequired $false)
+        # Run value
+        $rv = Get-RunValue
+        $want = '"' + $AppExe + '"'
+        [void](Complete-Check -Id 'ST.4' -Description 'Start with Windows: HKCU Run value points at the installed copy' `
+            -Measured @{ runValue = $rv; expected = $want; startWithWindowsSetting = (Get-Prop (Read-DockSettings) 'StartWithWindows') } `
+            -MeasuredPass (($rv -replace '"', '') -ieq $AppExe))
+        [void](Ask-Check 'ST.5' 'Menu shows a tick next to Start with Windows' `
+            'Right-click the start button on the dock.' 'Is there a tick next to "Start with Windows"? (press Esc to close the menu)')
+        $script:StartupApp = $app
+    }
+
+    # ================================================================ LAST QUESTION
+    if ((Test-Section 'Dock') -or (Test-Section 'Apps') -or (Test-Section 'Tray') -or (Test-Section 'Reserve') -or (Test-Section 'Startup')) {
+        Write-Step 'LAST QUESTION'
+        Write-Host '  Keep Nothing Shell as your taskbar from now on?' -ForegroundColor Cyan
+        Write-Host '    y = Nothing Shell starts at sign-in and keeps running (Fenn must stay closed)'
+        Write-Host '    n = go back to Fenn (Nothing Shell is closed and will not start at sign-in)'
+        do { $keep = (Read-Host '  ? Keep Nothing Shell? [y/n]').Trim().ToLowerInvariant() } until ($keep -in 'y', 'n', 'yes', 'no')
+        $keepYes = $keep -in 'y', 'yes'
+        $script:KeepChoice = if ($keepYes) { 'y' } else { 'n' }
+        $running = @(Get-AppProcess)
+        foreach ($rp in $running) { $qr = Quit-App $rp; Write-Info ("closed running copy: exited={0}, work area ok={1}" -f $qr.exited, $qr.workAreaOk) }
+        if ($keepYes) {
+            Write-Info 'Starting Nothing Shell for good (independent of this script)...'
+            [void](Invoke-Unelevated ('explorer.exe "{0}"' -f $AppExe) '')
+            $upMs = Wait-Until { (Get-AppProcess).Count -gt 0 } 15000 250
+            $hideMs = Wait-Until { [NsWin]::TrayState() -eq 0 } 10000 200
+            $rv = Get-RunValue; $fixed = $false
+            if (($rv -replace '"', '') -ine $AppExe) {
+                Set-ItemProperty -Path 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run' -Name 'NothingShell' -Value ('"' + $AppExe + '"')
+                [void](Set-SettingBool 'startWithWindows' $true)
+                $fixed = $true; $rv = Get-RunValue
+            }
+            $script:KeepRunning = ($upMs -ge 0)
+            $elevK = $null; if ($upMs -ge 0) { $elevK = [NsWin]::IsElevated([uint32](Get-AppProcess)[0].Id) }
+            [void](Complete-Check -Id 'KEEP' -Description 'Final choice: keep Nothing Shell as the taskbar' `
+                -Measured @{ answer = 'y'; appStartedMs = $upMs; taskbarHiddenMs = $hideMs; runValue = $rv; runValueWrittenByScript = $fixed; appElevated = ($elevK -eq 1); watchdogProcesses = (Get-WatchdogInfo).Count } `
+                -MeasuredPass ($upMs -ge 0 -and $hideMs -ge 0 -and (($rv -replace '"', '') -ieq $AppExe) -and $elevK -eq 0) -Answer 'y' -AnswerRequired $false)
+        } else {
+            try { Remove-ItemProperty -Path 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run' -Name 'NothingShell' -ErrorAction SilentlyContinue } catch { }
+            $setOff = Set-SettingBool 'startWithWindows' $false
+            [void](Ensure-TaskbarBack 'after quitting')
+            [void](Complete-Check -Id 'KEEP' -Description 'Final choice: go back to Fenn' `
+                -Measured @{ answer = 'n'; runValueNow = (Get-RunValue); settingStartWithWindowsOff = $setOff; trayVisible = ([NsWin]::TrayState() -eq 1) } `
+                -MeasuredPass ($null -eq (Get-RunValue) -and [NsWin]::TrayState() -eq 1) -Answer 'n' -AnswerRequired $false)
+            Write-Good '  Nothing Shell is closed. Start Fenn again from the Start menu.'
+        }
+    }
 }
 catch {
     $fatal = $_
@@ -1060,9 +1518,16 @@ finally {
         $leftoverProcs = @(foreach ($n in ($SpikeNames + 'NothingShell' + 'NothingShell.Watchdog')) {
             Get-Process -Name $n -ErrorAction SilentlyContinue | Where-Object { @($script:PreexistingIds[$n]) -notcontains $_.Id } | ForEach-Object { $_.ProcessName }
         })
-        [void](Complete-Check -Id 'END' -Description 'Final state equals starting state; no test processes left' `
-            -Measured @{ startAutoHide = $script:OrigAutoHide; endAutoHide = $endAh; startTrayState = $script:OrigTray; endTrayState = $endTray; leftoverProcesses = $leftoverProcs; stateFilePresent = (Test-Path -LiteralPath $StateFile) } `
-            -MeasuredPass ($same -and $leftoverProcs.Count -eq 0))
+        if ($script:KeepRunning) {
+            $keepApp = @(Get-AppProcess)
+            [void](Complete-Check -Id 'END' -Description 'Kept running: Nothing Shell up, Windows taskbar hidden, helper alive, Run value set' `
+                -Measured @{ appRunning = ($keepApp.Count -eq 1); trayState = $endTray; watchdogProcesses = (Get-WatchdogInfo).Count; runValue = (Get-RunValue); workArea = (([NsWin]::WorkArea()) -join ',') } `
+                -MeasuredPass ($keepApp.Count -eq 1 -and $endTray -eq 0 -and (Get-WatchdogInfo).Count -ge 1))
+        } else {
+            [void](Complete-Check -Id 'END' -Description 'Final state equals starting state; no test processes left' `
+                -Measured @{ startAutoHide = $script:OrigAutoHide; endAutoHide = $endAh; startTrayState = $script:OrigTray; endTrayState = $endTray; startWorkArea = ($script:OrigWorkArea -join ','); endWorkArea = (([NsWin]::WorkArea()) -join ','); leftoverProcesses = $leftoverProcs; stateFilePresent = (Test-Path -LiteralPath $StateFile) } `
+                -MeasuredPass ($same -and $leftoverProcs.Count -eq 0 -and ((([NsWin]::WorkArea()) -join ',') -eq ($script:OrigWorkArea -join ','))))
+        }
     } catch { Write-Host "  final check error: $($_.Exception.Message)" -ForegroundColor Red }
 
     Write-Host ''
@@ -1074,7 +1539,18 @@ finally {
         Write-Host ("  Totals: " + ($counts -join '  '))
     } catch { }
     Write-Host ''
-    Write-Good '  You can start Fenn again now.'
+    if ($script:KeepRunning) {
+        Write-Good '  Nothing Shell is running as your taskbar. Keep Fenn closed.'
+        Write-Host ''
+        Write-Host '  LAST CHECK (please do this now):' -ForegroundColor Cyan
+        Write-Host '    Sign out of Windows and sign back in.'
+        Write-Host '    The dock should work and the Windows taskbar should stay hidden, with no prompts.'
+        Write-Host '    Then tell Claude what you saw.'
+    } elseif ($script:KeepChoice -eq 'n') {
+        Write-Good '  You can start Fenn again now.'
+    } else {
+        Write-Good '  You can start Fenn again now.'
+    }
     Write-Host "  Log file:     $LogPath"
     Write-Host "  Results file: $($script:ResultsPath)"
     Write-Host '  The app and test programs stay installed. Please tell Claude that the run finished.'
