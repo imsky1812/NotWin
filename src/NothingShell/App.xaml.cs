@@ -102,6 +102,7 @@ public partial class App : Application
             Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "NothingShell");
         var store = new SettingsStore(settingsDir);
         var loaded = store.Load();
+        // A corrupt file is renamed to .bad and counts as a successful load, so defaults (StartWithWindows=true) apply.
         var loadedOk = store.LastLoadSucceeded;
         var settings = PinnedAppsImporter.ApplyFirstRun(loaded, store);
 

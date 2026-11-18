@@ -29,9 +29,24 @@ public static class ConflictGate
 
     private static List<string> ProcessNames()
     {
-        var procs = Process.GetProcesses();
-        try { return procs.Select(p => p.ProcessName).ToList(); }
-        finally { foreach (var p in procs) p.Dispose(); }
+        // Fail open: if the scan itself breaks we must not block startup; TaskbarController keeps its own safety net.
+        try
+        {
+            var procs = Process.GetProcesses();
+            var names = new List<string>(procs.Length);
+            foreach (var p in procs)
+            {
+                try { names.Add(p.ProcessName); }
+                catch (Exception) { /* process exited or access denied: skip it */ }
+                finally { p.Dispose(); }
+            }
+            return names;
+        }
+        catch (Exception e)
+        {
+            Log.Error("conflict scan failed; treating as no conflict", e);
+            return [];
+        }
     }
 
     private sealed class ConflictWindow : Window
