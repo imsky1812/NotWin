@@ -67,6 +67,9 @@ If the shell is killed, the watchdog (`NothingShell.Watchdog.exe`) restores the 
 & 'C:\Program Files\NothingShell\NothingShell.Watchdog.exe' --restore-now --state "$env:APPDATA\NothingShell"
 ```
 
+Ending the shell with Task Manager's "End process tree" also ends the watchdog, so the taskbar can stay hidden until
+the next start; use the `--restore-now` command above.
+
 ## Development
 
 ```powershell

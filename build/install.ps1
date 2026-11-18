@@ -77,15 +77,7 @@ try {
     Invoke-Native $dotnet @('publish', (Join-Path $repo 'src/NothingShell.Watchdog'), '-c', 'Release', '-p:PublishAot=false', '-o', $outApp)
 }
 
-# 4. Stop running instances so files can be replaced
-if (-not $SkipAdminSteps) {
-    foreach ($name in 'NothingShell', 'NothingShell.Watchdog') {
-        Get-Process -Name $name -ErrorAction SilentlyContinue | Stop-Process -Force
-    }
-    Start-Sleep -Milliseconds 500
-}
-
-# 5. Sign every exe/dll (signtool from the Microsoft.Windows.SDK.BuildTools NuGet package)
+# 4. Sign every exe/dll (signtool from the Microsoft.Windows.SDK.BuildTools NuGet package)
 Invoke-Native $dotnet @('restore', (Join-Path $repo 'build/tools/tools.csproj'), '--verbosity', 'quiet')
 $pkgRoot = ((& $dotnet nuget locals global-packages --list) -replace '^global-packages:\s*', '').Trim()
 $signtool = Get-ChildItem (Join-Path $pkgRoot 'microsoft.windows.sdk.buildtools') -Recurse -Filter signtool.exe -ErrorAction SilentlyContinue |
@@ -101,11 +93,34 @@ foreach ($f in $files) {
 }
 Write-Host "Signed $($files.Count) files."
 
-# 6. Mirror to Program Files
+# 5. Stop the running copy so files can be replaced. Done only now, after everything that can throw (publish, signing),
+#    so a failed run never leaves the user's taskbar hidden with the shell and its watchdog gone.
 if ($SkipAdminSteps) {
     Write-Host "SkipAdminSteps: not copying to $install. Output is in $outApp"
     return
 }
+$watchdogWasRunning = [bool](Get-Process -Name 'NothingShell.Watchdog' -ErrorAction SilentlyContinue)
+# Only the shell is killed: the watchdog sees it die and restores the taskbar by itself.
+Get-Process -Name 'NothingShell' -ErrorAction SilentlyContinue | Stop-Process -Force
+$deadline = (Get-Date).AddSeconds(10)
+while ((Get-Process -Name 'NothingShell.Watchdog' -ErrorAction SilentlyContinue) -and (Get-Date) -lt $deadline) {
+    Start-Sleep -Milliseconds 250
+}
+# Watchdog still running (stuck) or never ran: restore explicitly with the installed copy before replacing files.
+$installedWatchdog = Join-Path $install 'NothingShell.Watchdog.exe'
+if ((-not $watchdogWasRunning) -or (Get-Process -Name 'NothingShell.Watchdog' -ErrorAction SilentlyContinue)) {
+    if (Test-Path $installedWatchdog) {
+        # WinExe: '&' would not wait, so use Start-Process -Wait to get a real exit code.
+        $p = Start-Process -FilePath $installedWatchdog -ArgumentList '--restore-now', '--state', ('"{0}"' -f (Join-Path $env:APPDATA 'NothingShell')) -Wait -PassThru
+        if ($p.ExitCode -ne 0) {
+            throw "Watchdog --restore-now failed (exit $($p.ExitCode)). Aborting before replacing files in $install so the installed watchdog stays available to retry the taskbar restore."
+        }
+    }
+    Get-Process -Name 'NothingShell.Watchdog' -ErrorAction SilentlyContinue | Stop-Process -Force
+}
+Start-Sleep -Milliseconds 500
+
+# 6. Mirror to Program Files
 robocopy $outApp $install /MIR /NFL /NDL /NJH /NJS /NP | Out-Null
 if ($LASTEXITCODE -ge 8) { throw "robocopy failed (exit $LASTEXITCODE)" }
 $global:LASTEXITCODE = 0
