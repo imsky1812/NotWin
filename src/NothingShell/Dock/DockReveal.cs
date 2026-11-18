@@ -73,12 +73,20 @@ public sealed class DockReveal : IDisposable
         Evaluate(on ? "keep-on" : "keep-off");
     }
 
-    public void SetPanelOpen(bool open)
+    /// <summary>
+    /// <paramref name="source"/> ("popup", "panel", …) holds the dock up while open. Each source has its own flag
+    /// (<see cref="PanelTracker"/>), so closing a dock popup never releases the quick-settings panel's hold.
+    /// </summary>
+    public void SetPanelOpen(string source, bool open)
     {
-        if (_panelOpen == open) return;
-        _panelOpen = open;
-        Evaluate(open ? "panel-open" : "panel-closed");
+        var before = _panels.AnyOpen;
+        _panels.Set(source, open);
+        _panelOpen = _panels.AnyOpen;
+        if (_panelOpen == before) return;
+        Evaluate(_panelOpen ? "panel-open" : "panel-closed");
     }
+
+    private readonly Core.Shell.PanelTracker _panels = new();
 
     /// <summary>Re-runs the machine with the current inputs (e.g. after the display layout changed).</summary>
     public void Refresh() => Evaluate("refresh");

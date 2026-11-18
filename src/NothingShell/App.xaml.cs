@@ -26,6 +26,7 @@ public partial class App : Application
     private Notch.NotchController? _notch;
     private Media.MediaSessionService? _media;
     private Notifications.NotificationService? _notifications;
+    private Panel.QuickPanelController? _panel;
     private bool _secondInstance;
 
     protected override void OnStartup(StartupEventArgs e)
@@ -145,13 +146,17 @@ public partial class App : Application
             _dock.StartClicked += _launcher.Toggle;
             _dock.SearchClicked += _launcher.Toggle;
         }
-        _fullscreen!.Changed += fs => { if (fs) _launcher?.Close(); };
+        _fullscreen!.Changed += fs => { if (fs) { _launcher?.Close(); _panel?.Close(); } };
+
+        // Quick-settings panel (spec §6.3): Win+A / Win+N (below) and the dock tray.
+        _panel = new Panel.QuickPanelController(_reveal);
+        if (_dock is not null) _dock.TrayClicked += _panel.Toggle;
 
         try
         {
             _winKeys = new Launcher.WinKeyListener(_hooks!, Dispatcher);
             _winKeys.LauncherRequested += _launcher.Toggle;
-            _winKeys.PanelRequested += () => Log.Info("panel requested (panel arrives in Plan 3 Task 7)");
+            _winKeys.PanelRequested += () => _panel?.Toggle();
         }
         catch (Exception e)
         {
@@ -242,6 +247,7 @@ public partial class App : Application
             _launcher?.Dispose();
             _media?.Dispose();
             _notifications?.Dispose();
+            _panel?.Dispose();
             _notch?.Dispose();
             _controller?.Dispose();
             _tray?.Dispose();

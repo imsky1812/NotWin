@@ -51,12 +51,8 @@ public sealed class DockController : IDisposable
         };
     }
 
-    // Until the Plan 3 quick-settings panel exists, the tray opens Windows' own (Win+A).
-    private void OnTrayClicked()
-    {
-        ClosePopup();
-        if (!TrayInputNative.SendQuickSettings()) Log.Info("tray: Win+A injection failed");
-    }
+    // The tray opens Nothing Shell's quick-settings panel (App wires TrayClicked to it); close any dock menu first.
+    private void OnTrayClicked() => ClosePopup();
 
     public void Start()
     {
@@ -167,9 +163,9 @@ public sealed class DockController : IDisposable
         popup.Dismissed += () =>
         {
             if (ReferenceEquals(_popup, popup)) _popup = null;
-            _reveal.SetPanelOpen(false);
+            _reveal.SetPanelOpen("popup", false);
         };
-        _reveal.SetPanelOpen(true); // keeps the dock up while the popup is open
+        _reveal.SetPanelOpen("popup", true); // keeps the dock up while the popup is open
         var p = _dock.Placement;
         var top = anchor.PointToScreen(new Point(anchor.ActualWidth / 2, 0));
         popup.ShowAbove(_dock.Handle, top.X, p.Pill.Top - 8 * (p.Dpi / 96.0), p.Monitor);
