@@ -1,0 +1,33 @@
+using System.Collections.ObjectModel;
+using System.ComponentModel;
+using System.Runtime.CompilerServices;
+
+namespace NothingShell.Dock;
+
+/// <summary>State the dock window renders. <see cref="IsVisible"/> is driven by <see cref="DockReveal"/>.</summary>
+public sealed class DockViewModel : INotifyPropertyChanged
+{
+    private bool _isVisible;
+
+    public event PropertyChangedEventHandler? PropertyChanged;
+
+    public bool IsVisible
+    {
+        get => _isVisible;
+        set
+        {
+            if (_isVisible == value) return;
+            _isVisible = value;
+            OnPropertyChanged();
+        }
+    }
+
+    /// <summary>Pinned and running apps; filled in Task 12.</summary>
+    public ObservableCollection<object> Items { get; } = [];
+
+    /// <summary>Tray glyphs (Wi-Fi, volume, battery, clock); filled in Task 14.</summary>
+    public ObservableCollection<object> Tray { get; } = [];
+
+    private void OnPropertyChanged([CallerMemberName] string? name = null) =>
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
+}

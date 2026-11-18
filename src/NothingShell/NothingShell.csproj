@@ -12,6 +12,12 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <!-- Bundled OFL fonts (licenses alongside as Theme/Fonts/OFL-*.txt). -->
+    <Resource Include="Theme\Fonts\*.ttf" />
+    <None Include="Theme\Fonts\OFL-*.txt" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\NothingShell.Core\NothingShell.Core.csproj" />
     <ProjectReference Include="..\NothingShell.Native\NothingShell.Native.csproj" />
   </ItemGroup>

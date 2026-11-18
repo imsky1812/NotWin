@@ -16,3 +16,15 @@ GetClassName
 SHQueryUserNotificationState
 GetWindowRect
 WINEVENTPROC
+SetWindowsHookEx
+UnhookWindowsHookEx
+CallNextHookEx
+GetModuleHandle
+MSLLHOOKSTRUCT
+MonitorFromPoint
+GetDpiForMonitor
+SetWindowPos
+GetWindowLongPtr
+SetWindowLongPtr
+DwmSetWindowAttribute
+DWM_WINDOW_CORNER_PREFERENCE
