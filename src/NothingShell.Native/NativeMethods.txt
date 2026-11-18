@@ -85,3 +85,15 @@ PostThreadMessage
 GetCurrentThreadId
 PeekMessage
 KBDLLHOOKSTRUCT
+IEnumShellItems
+IShellItem
+SIGDN
+BHID_EnumItems
+SetSuspendState
+ExitWindowsEx
+AdjustTokenPrivileges
+LookupPrivilegeValue
+OpenProcessToken
+GetCurrentProcess
+TOKEN_PRIVILEGES
+SHUTDOWN_REASON
