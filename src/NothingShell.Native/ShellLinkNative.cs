@@ -41,7 +41,7 @@ public static unsafe class ShellLinkNative
             fixed (char* b = buf)
             {
                 WIN32_FIND_DATAW fd;
-                // SLGP_RAWPATH (4): keep env vars unexpanded? No: we want the expanded path, so flags 0.
+                // Flags 0: the expanded target path (not SLGP_RAWPATH, which keeps environment variables).
                 if (link->GetPath(b, buf.Length, &fd, 0).Succeeded)
                 {
                     var s = new string(b);

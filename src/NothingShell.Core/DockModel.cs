@@ -54,7 +54,9 @@ public static class DockItemsBuilder
                 foreach (var id in order)
                 {
                     if (pinnedIds.Contains(id) || claimed.Contains(id)) continue;
-                    if (!string.Equals(byApp[id][0].ExePath, p.TargetExe, StringComparison.OrdinalIgnoreCase)) continue;
+                    var first = byApp[id][0];
+                    if (!string.Equals(id, first.ExePath, StringComparison.OrdinalIgnoreCase)) continue; // has its own AUMID
+                    if (!string.Equals(first.ExePath, p.TargetExe, StringComparison.OrdinalIgnoreCase)) continue;
                     ws = byApp[id]; claimed.Add(id);
                     break;
                 }

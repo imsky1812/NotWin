@@ -91,14 +91,26 @@ public class DockItemsBuilderTests
     private static DockItem Item(params AppWindow[] ws) => new("a", "A", null, false, ws);
 
     [Fact]
-    public void Build_PinWithoutMatchingAppId_FallsBackToTargetExe()
+    public void Build_PinWithoutMatchingAppId_FallsBackToTargetExe_ForAumidLessWindow()
     {
-        var pin = new PinnedApp(@"c:\apps\x.exe", "X", @"c:\x.lnk", @"c:\apps\x.exe");
-        var items = DockItemsBuilder.Build([pin], [new AppWindow(1, "SomeAumid", "t", @"c:\apps\x.exe", false)]);
+        var pin = new PinnedApp("Chrome", "Chrome", @"c:\x.lnk", @"c:\apps\chrome.exe");
+        var items = DockItemsBuilder.Build([pin], [new AppWindow(1, @"c:\apps\chrome.exe", "t", @"c:\apps\chrome.exe", false)]);
         var item = Assert.Single(items);
         Assert.True(item.Pinned);
         Assert.True(item.Running);
-        Assert.Equal(@"c:\apps\x.exe", item.AppId);
+        Assert.Equal("Chrome", item.AppId);
+    }
+
+    [Fact]
+    public void Build_ExeFallback_DoesNotAbsorbWindowWithOwnAumid()
+    {
+        var pin = new PinnedApp("Chrome", "Chrome", @"c:\x.lnk", @"c:\apps\chrome.exe");
+        var items = DockItemsBuilder.Build([pin], [new AppWindow(1, "Chrome.PWA.xyz", "t", @"c:\apps\chrome.exe", false)]);
+        Assert.Equal(2, items.Count);
+        Assert.True(items[0].Pinned);
+        Assert.False(items[0].Running);
+        Assert.Equal("Chrome.PWA.xyz", items[1].AppId);
+        Assert.False(items[1].Pinned);
     }
 
     [Fact]

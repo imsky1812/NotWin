@@ -79,7 +79,7 @@ public sealed class DockController : IDisposable
     {
         var exe = item.Windows.Count > 0 ? item.Windows[0].ExePath : item.LaunchPath;
         // Packaged apps (AUMID "family!app") get their package logo through shell:AppsFolder.
-        return item.AppId.Contains('!')
+        return IsUwpId(item.AppId)
             ? _icons.Get(item.AppId, exe, IconPx)
             : _icons.Get(exe ?? item.AppId, IconPx);
     }
@@ -170,18 +170,21 @@ public sealed class DockController : IDisposable
     {
         if (_settings.PinnedApps.Any(p => string.Equals(p.AppId, item.AppId, StringComparison.OrdinalIgnoreCase))) return;
         var exe = item.Windows.Count > 0 ? item.Windows[0].ExePath : item.LaunchPath ?? "";
-        var isUwp = item.AppId.Contains('!');
+        var isUwp = IsUwpId(item.AppId);
         var hasExe = !string.IsNullOrEmpty(exe) && System.IO.File.Exists(exe);
         if (!isUwp && !hasExe) { Log.Info($"pin: nothing to launch for {item.AppId}"); return; }
 
         var launch = isUwp ? @"shell:AppsFolder\" + item.AppId : exe;
         var name = hasExe ? FriendlyName(exe, item.DisplayName) : item.DisplayName;
-        var pinned = _settings.PinnedApps.Append(new PinnedApp(item.AppId, name, launch, hasExe ? exe.ToLowerInvariant() : null)).ToList();
+        var pinned = _settings.PinnedApps.Append(new PinnedApp(item.AppId, name, launch, hasExe && !isUwp ? exe.ToLowerInvariant() : null)).ToList(); // no exe key for UWP: the exe may be a shared host
         SavePins(pinned);
     }
 
+    // Packaged-app AUMID "family!app": has '!' and is not a path.
+    private static bool IsUwpId(string id) => id.Contains('!') && !id.Contains('\\') && !id.Contains(':');
+
     private static bool CanPin(DockItem item) =>
-        item.AppId.Contains('!') ||
+        IsUwpId(item.AppId) ||
         (item.Windows.Count > 0 && !string.IsNullOrEmpty(item.Windows[0].ExePath) && System.IO.File.Exists(item.Windows[0].ExePath));
 
     private static string FriendlyName(string exe, string fallback)
