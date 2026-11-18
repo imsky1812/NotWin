@@ -122,8 +122,10 @@ public static unsafe class WindowListNative
         try
         {
             var key = PInvoke.PKEY_AppUserModel_ID;
-            Windows.Win32.System.Com.StructuredStorage.PROPVARIANT pv;
-            try { store->GetValue(&key, &pv); } catch { return null; }
+            Windows.Win32.System.Com.StructuredStorage.PROPVARIANT pv = default; // VT_EMPTY: safe to clear even if GetValue fails
+            // The generated wrapper returns void and throws on a failed HRESULT.
+            try { store->GetValue(&key, &pv); }
+            catch { PInvoke.PropVariantClear(&pv); return null; }
             try
             {
                 PWSTR s;

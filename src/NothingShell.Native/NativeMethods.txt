@@ -51,3 +51,4 @@ CloseHandle
 WM_CLOSE
 DIBSECTION
 SIIGBF
+GetDesktopWindow

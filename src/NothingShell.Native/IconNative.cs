@@ -10,7 +10,7 @@ namespace NothingShell.Native;
 public static unsafe class IconNative
 {
     /// <summary>
-    /// A square 32-bit top-down BGRA image (straight alpha as returned by the shell) of the item's icon,
+    /// A square 32-bit top-down BGRA image (alpha exactly as the shell returned it (measured: straight, not premultiplied, for chrome.exe/claude.exe icons)) of the item's icon,
     /// or null if the shell cannot resolve it. <paramref name="parsingName"/> is a path or "shell:AppsFolder\AUMID".
     /// </summary>
     public static (int Size, byte[] Bgra)? GetIcon(string parsingName, int size)

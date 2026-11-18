@@ -37,8 +37,8 @@ public sealed class AppIconCache
         }
 
         var image = Load(exePathOrAumid, sizePx)
-                    ?? (fallbackPath is { Length: > 0 } ? Load(fallbackPath, sizePx) : null)
-                    ?? Placeholder(sizePx);
+                    ?? (fallbackPath is { Length: > 0 } ? Load(fallbackPath, sizePx) : null);
+        if (image is null) return Placeholder(sizePx); // not cached under the real key: retried on the next refresh
         _map[key] = _lru.AddFirst((key, image));
         while (_map.Count > Capacity)
         {
@@ -63,7 +63,8 @@ public sealed class AppIconCache
         var px = (byte[])bgra.Clone();
         for (var o = 0; o + 3 < px.Length; o += 4)
         {
-            // Rec. 709 luminance on the straight (non-premultiplied) colour; alpha is untouched.
+            // Rec. 709 luminance, alpha untouched. Measured on this machine: IShellItemImageFactory returns STRAIGHT
+            // alpha for these icons (soft-edge pixels routinely have colour > alpha, impossible if premultiplied).
             var lum = (byte)(0.0722 * px[o] + 0.7152 * px[o + 1] + 0.2126 * px[o + 2] + 0.5);
             px[o] = px[o + 1] = px[o + 2] = lum;
         }
