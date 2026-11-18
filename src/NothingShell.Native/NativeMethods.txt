@@ -1,6 +1,7 @@
 SHAppBarMessage
 FindWindowEx
 ShowWindow
+ShowWindowAsync
 IsWindowVisible
 GetWindowThreadProcessId
 OpenProcess

@@ -50,6 +50,14 @@ public static class TaskbarNative
         return h != HWND.Null && PInvoke.IsWindowVisible(h);
     }
 
+    /// <summary>True when any explorer-owned tray window (primary or secondary monitor) is visible.</summary>
+    public static bool IsAnyVisible()
+    {
+        foreach (var h in FindExplorerWindows(PrimaryClass)) if (PInvoke.IsWindowVisible(h)) return true;
+        foreach (var h in FindExplorerWindows(SecondaryClass)) if (PInvoke.IsWindowVisible(h)) return true;
+        return false;
+    }
+
     /// <summary>Shows the taskbar, then applies the saved auto-hide. Returns false (doing nothing more) if no explorer tray exists.</summary>
     public static bool Restore(TaskbarRestoreState s)
     {
@@ -79,11 +87,14 @@ public static class TaskbarNative
         return HWND.Null;
     }
 
+    // ShowWindowAsync only posts the request to Explorer's thread and returns. A synchronous ShowWindow can stall
+    // while Explorer is busy (just after a full-screen window closed, during its startup); callers run on the UI
+    // thread that hosts the WH_MOUSE_LL hook, and Windows silently removes an LL hook whose thread is that slow.
     private static bool ShowAllWindows(SHOW_WINDOW_CMD cmd)
     {
         var primaries = FindExplorerWindows(PrimaryClass);
-        foreach (var h in primaries) PInvoke.ShowWindow(h, cmd);
-        foreach (var h in FindExplorerWindows(SecondaryClass)) PInvoke.ShowWindow(h, cmd);
+        foreach (var h in primaries) PInvoke.ShowWindowAsync(h, cmd);
+        foreach (var h in FindExplorerWindows(SecondaryClass)) PInvoke.ShowWindowAsync(h, cmd);
         return primaries.Count > 0;
     }
 

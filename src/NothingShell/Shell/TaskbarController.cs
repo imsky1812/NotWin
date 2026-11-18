@@ -32,6 +32,11 @@ public sealed class TaskbarController : IDisposable
     private TaskbarShowHook? _showHook;
     private bool _rehideQueued;
     private int _rehideCount;
+    private readonly RehideBackoff _backoff = new();
+    private DispatcherTimer? _resumeTimer;
+    // Set first thing in Dispose: background auto-hide work must not re-enable auto-hide after the taskbar is given back.
+    private volatile bool _stopping;
+    private readonly object _autoHideGate = new();
 
     public TaskbarController(string? stateDir = null)
     {
@@ -42,6 +47,9 @@ public sealed class TaskbarController : IDisposable
 
     /// <summary>Raised on the UI thread after Explorer restarted and the taskbar was hidden again.</summary>
     public event Action? TaskbarRecreated;
+
+    /// <summary>Raised on the UI thread after the show hook hid the taskbar again (Explorer was busy: a good moment to renew UI-thread hooks).</summary>
+    public event Action? TaskbarReHidden;
 
     /// <summary>Set by the TaskbarRecreated handler: whether the appbar was registered again (false when keep-visible is off).</summary>
     public bool AppBarReRegistered { get; set; }
@@ -118,19 +126,76 @@ public sealed class TaskbarController : IDisposable
     private void ReHideAfterShow()
     {
         _rehideQueued = false;
+        var hidden = false;
         lock (_gate)
         {
             if (_showHook is null || _restored) return; // shutting down / taskbar given back on purpose
             try
             {
-                if (!TaskbarNative.IsPrimaryVisible()) return;
+                // Any explorer tray window, so a re-shown secondary-monitor bar is hidden too.
+                if (!TaskbarNative.IsAnyVisible()) return;
+
+                // If Explorer re-shows the bar every time it is hidden, stop fighting it for a while.
+                switch (_backoff.Next(TimeSpan.FromMilliseconds(Environment.TickCount64)))
+                {
+                    case RehideDecision.Paused:
+                        return;
+                    case RehideDecision.PauseStarted:
+                        Log.Info($"taskbar re-shown too often: not re-hiding for {_backoff.PauseLength.TotalSeconds:F0} s");
+                        // One check afterwards: the bar may be visible by then and no further show event may come.
+                        _resumeTimer ??= new DispatcherTimer(DispatcherPriority.Background, _dispatcher!)
+                        {
+                            Interval = _backoff.PauseLength + TimeSpan.FromMilliseconds(100),
+                        };
+                        _resumeTimer.Tick -= OnResumeTick;
+                        _resumeTimer.Tick += OnResumeTick;
+                        _resumeTimer.Start();
+                        return;
+                }
+
                 TaskbarNative.HideAll();
+                hidden = true;
                 _rehideCount++;
                 if (_rehideCount <= 5 || _rehideCount % 50 == 0)
                     Log.Info($"taskbar shown again by Explorer -> hidden again (count {_rehideCount})");
             }
             catch (Exception e) { Log.Error("re-hide after show failed", e); }
         }
+
+        if (!hidden) return;
+        EnsureAutoHideInBackground();
+        // Outside _gate: handlers touch other components.
+        try { TaskbarReHidden?.Invoke(); } catch (Exception e) { Log.Error("TaskbarReHidden handler failed", e); }
+    }
+
+    private void OnResumeTick(object? sender, EventArgs e)
+    {
+        _resumeTimer?.Stop();
+        ReHideAfterShow();
+    }
+
+    /// <summary>
+    /// Re-applies auto-hide if it got turned off (otherwise the work area stays reserved and leaves a dead strip).
+    /// SHAppBarMessage calls into Explorer synchronously, so this runs on a pool thread, never on the UI thread
+    /// that hosts the mouse hook.
+    /// </summary>
+    private void EnsureAutoHideInBackground()
+    {
+        if (_stopping) return;
+        Task.Run(() =>
+        {
+            lock (_autoHideGate)
+            {
+                if (_stopping || _restored) return;
+                try
+                {
+                    if (TaskbarNative.GetAutoHide()) return;
+                    TaskbarNative.SetAutoHide(true);
+                    Log.Info("taskbar auto-hide had been turned off -> applied again");
+                }
+                catch (Exception e) { Log.Error("re-applying auto-hide failed", e); }
+            }
+        });
     }
 
     private IntPtr WndProc(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
@@ -138,7 +203,16 @@ public sealed class TaskbarController : IDisposable
         if (_taskbarCreated != 0 && (uint)msg == _taskbarCreated)
         {
             var hidden = false;
-            try { ApplyHidden(); hidden = true; } catch (Exception e) { Log.Error("re-hide failed", e); }
+            // Under _gate and honouring _restored, like ReHideAfterShow: a Dispose on another thread (crash path) must
+            // not be followed by a re-hide, because it also stops the watchdog. The event is raised outside the lock
+            // (its handlers call into other components); none of them takes _gate, so there is no deadlock either way.
+            lock (_gate)
+            {
+                if (!_started || _restored || _stopping) return IntPtr.Zero;
+                try { TaskbarNative.HideAll(); hidden = true; } catch (Exception e) { Log.Error("re-hide failed", e); }
+            }
+            // Auto-hide is set off the UI thread (synchronous call into a just-restarted Explorer).
+            EnsureAutoHideInBackground();
             try { TaskbarRecreated?.Invoke(); } catch (Exception e) { Log.Error("TaskbarRecreated handler failed", e); }
             Log.Info($"TaskbarCreated received -> re-hid taskbar={hidden}; appbar re-registered={AppBarReRegistered}");
         }
@@ -156,10 +230,12 @@ public sealed class TaskbarController : IDisposable
         lock (_gate)
         {
             if (!_started || _restored) return;
+            _stopping = true;
 
             // Unhook first: the Restore below shows the taskbar, which must not be hidden again.
             try { _showHook?.Dispose(); } catch (Exception e) { Log.Error("taskbar show hook dispose failed", e); }
             _showHook = null;
+            try { _resumeTimer?.Stop(); } catch (Exception) { }
 
             try
             {
@@ -174,13 +250,17 @@ public sealed class TaskbarController : IDisposable
 
             try
             {
-                if (!TaskbarNative.Restore(_original!))
+                // _autoHideGate: wait for an in-flight background auto-hide, so it cannot land after the restore.
+                lock (_autoHideGate)
                 {
-                    // Explorer is mid-restart: keep the state file and let the watchdog finish the job.
-                    Log.Info("taskbar restore: no explorer tray found; leaving state file and watchdog in place");
-                    return;
+                    if (!TaskbarNative.Restore(_original!))
+                    {
+                        // Explorer is mid-restart: keep the state file and let the watchdog finish the job.
+                        Log.Info("taskbar restore: no explorer tray found; leaving state file and watchdog in place");
+                        return;
+                    }
+                    _restored = true;
                 }
-                _restored = true;
                 Log.Info("taskbar restored");
             }
             catch (Exception e)

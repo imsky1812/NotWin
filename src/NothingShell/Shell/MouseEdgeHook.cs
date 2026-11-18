@@ -30,6 +30,7 @@ public sealed class MouseEdgeHook : IDisposable
     private bool _disposed;
     private long _rawCount;
     private long _deliveredCount;
+    private int _reinstallCount;
 
     /// <summary>Raised on the UI thread with the latest cursor point (physical pixels, clamped onto a monitor).</summary>
     public event Action<PointI>? Moved;
@@ -56,18 +57,34 @@ public sealed class MouseEdgeHook : IDisposable
         }
     }
 
-    private void Install()
+    private void Install(bool log = true)
     {
         if (_hook is not null) return;
         try
         {
             _hook = new MouseHookNative.Hook(OnRawMove);
-            Log.Info("mouse edge hook installed");
+            if (log) Log.Info("mouse edge hook installed");
         }
         catch (Exception e)
         {
             Log.Error("mouse edge hook install failed", e);
         }
+    }
+
+    /// <summary>
+    /// Uninstalls and installs the hook again (UI thread). Windows silently drops an LL hook the first time its
+    /// thread misses LowLevelHooksTimeout; Explorer-related events (taskbar re-hidden, TaskbarCreated) are exactly
+    /// when that can have happened, so those call this. Does nothing while paused: the hook is meant to be off then.
+    /// </summary>
+    public void Reinstall()
+    {
+        if (_disposed || _paused) return;
+        _hook?.Dispose();
+        _hook = null;
+        Install(log: false);
+        _reinstallCount++;
+        if (_reinstallCount <= 5 || _reinstallCount % 50 == 0)
+            Log.Info($"mouse edge hook reinstalled (count {_reinstallCount}, installed={_hook is not null})");
     }
 
     private void Uninstall()

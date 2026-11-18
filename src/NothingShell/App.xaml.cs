@@ -31,6 +31,9 @@ public partial class App : Application
             Shutdown(0);
             return;
         }
+        // Diagnoses slow teardown: compare with the "exit" line in the log.
+        AppDomain.CurrentDomain.ProcessExit += (_, _) => Log.Info("process exit");
+
         // Software rendering: the shell's surfaces are small, flat and mostly idle. Measured on the dev PC (Release,
         // ~60 s idle): working set 96 -> 68 MB, private 50 -> 25 MB, same idle CPU (0) and the same reveal frame
         // pacing (~19 ms average frame gap) as hardware rendering. Must be set before any window is created.
@@ -67,7 +70,13 @@ public partial class App : Application
         _taskbar.Start();
         _appBar = new DockAppBar();
         // Explorer restarted: the taskbar was just hidden again; now re-claim the reserved strip.
-        _taskbar.TaskbarRecreated += () => _taskbar.AppBarReRegistered = _appBar.ReRegister();
+        // Both events follow Explorer being busy, which is when Windows may have dropped the LL mouse hook: renew it.
+        _taskbar.TaskbarRecreated += () =>
+        {
+            _taskbar.AppBarReRegistered = _appBar.ReRegister();
+            _mouse?.Reinstall();
+        };
+        _taskbar.TaskbarReHidden += () => _mouse?.Reinstall();
 
 #if DEBUG
         Theme.FontCheck.Run(Resources);
