@@ -97,3 +97,6 @@ OpenProcessToken
 GetCurrentProcess
 TOKEN_PRIVILEGES
 SHUTDOWN_REASON
+AttachThreadInput
+BringWindowToTop
+SetFocus

@@ -18,6 +18,16 @@
     <SolidColorBrush x:Key="Brush.RunDot" Color="#FFBBBBBB" po:Freeze="True" />
     <SolidColorBrush x:Key="Brush.Ink" Color="#FF101010" po:Freeze="True" />
 
+    <!-- Launcher (mockup final-v2 .scrim/.search/.best/.ri/.app/.round). -->
+    <SolidColorBrush x:Key="Brush.Scrim" Color="#47000000" po:Freeze="True" />
+    <SolidColorBrush x:Key="Brush.Field" Color="#0FFFFFFF" po:Freeze="True" />
+    <SolidColorBrush x:Key="Brush.BestCard" Color="#12FFFFFF" po:Freeze="True" />
+    <SolidColorBrush x:Key="Brush.RowSel" Color="#17FFFFFF" po:Freeze="True" />
+    <SolidColorBrush x:Key="Brush.Circle" Color="#FF262626" po:Freeze="True" />
+    <SolidColorBrush x:Key="Brush.Placeholder" Color="#FF666666" po:Freeze="True" />
+    <SolidColorBrush x:Key="Brush.SoftText" Color="#FFCCCCCC" po:Freeze="True" />
+    <SolidColorBrush x:Key="Brush.Icon" Color="#FFAAAAAA" po:Freeze="True" />
+
     <!-- Corner radii (DIP). -->
     <CornerRadius x:Key="Radius.Dock">30</CornerRadius>
     <CornerRadius x:Key="Radius.Panel">28</CornerRadius>
