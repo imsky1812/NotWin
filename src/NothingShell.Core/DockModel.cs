@@ -1,6 +1,10 @@
 namespace NothingShell.Core;
 
-public sealed record PinnedApp(string AppId, string DisplayName, string LaunchPath);
+/// <summary>
+/// A pinned app. <paramref name="TargetExe"/> (lower-case exe path, optional) is a fallback match key for when a running
+/// window's AppId differs from the pin's (e.g. the shortcut has no AUMID but the window does, or vice versa).
+/// </summary>
+public sealed record PinnedApp(string AppId, string DisplayName, string LaunchPath, string? TargetExe = null);
 
 /// <summary>A top-level window the dock tracks. <paramref name="AppId"/> is the AUMID, or the lower-case exe path.</summary>
 public sealed record AppWindow(nint Handle, string AppId, string Title, string ExePath, bool IsForeground);
@@ -37,16 +41,30 @@ public static class DockItemsBuilder
 
         var items = new List<DockItem>();
         var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var pinnedIds = new HashSet<string>(pinned.Select(p => p.AppId), StringComparer.OrdinalIgnoreCase);
+        var claimed = new HashSet<string>(StringComparer.OrdinalIgnoreCase); // running AppIds absorbed by a pin
         foreach (var p in pinned)
         {
             if (!seen.Add(p.AppId)) continue;
-            items.Add(new DockItem(p.AppId, p.DisplayName, p.LaunchPath, true,
-                byApp.TryGetValue(p.AppId, out var ws) ? ws : []));
+            List<AppWindow>? ws = null;
+            if (byApp.TryGetValue(p.AppId, out var exact)) { ws = exact; claimed.Add(p.AppId); }
+            else if (!string.IsNullOrEmpty(p.TargetExe))
+            {
+                // Fallback: an unpinned running app launched from the same exe belongs to this pin.
+                foreach (var id in order)
+                {
+                    if (pinnedIds.Contains(id) || claimed.Contains(id)) continue;
+                    if (!string.Equals(byApp[id][0].ExePath, p.TargetExe, StringComparison.OrdinalIgnoreCase)) continue;
+                    ws = byApp[id]; claimed.Add(id);
+                    break;
+                }
+            }
+            items.Add(new DockItem(p.AppId, p.DisplayName, p.LaunchPath, true, ws ?? []));
         }
 
         foreach (var id in order)
         {
-            if (!seen.Add(id)) continue;
+            if (claimed.Contains(id) || !seen.Add(id)) continue;
             var ws = byApp[id];
             items.Add(new DockItem(id, DisplayNameFor(ws[0]), ws[0].ExePath, false, ws));
         }

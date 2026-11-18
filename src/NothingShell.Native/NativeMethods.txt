@@ -52,3 +52,11 @@ WM_CLOSE
 DIBSECTION
 SIIGBF
 GetDesktopWindow
+IShellLinkW
+IPersistFile
+ShellLink
+CoCreateInstance
+ShellExecuteEx
+SHELLEXECUTEINFOW
+STGM
+WIN32_FIND_DATAW

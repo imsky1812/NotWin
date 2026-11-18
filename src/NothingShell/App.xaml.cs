@@ -56,7 +56,7 @@ public partial class App : Application
         var settingsDir = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "NothingShell");
         var store = new SettingsStore(settingsDir);
-        var settings = store.Load();
+        var settings = PinnedAppsImporter.ApplyFirstRun(store.Load(), store);
 
         var vm = new DockViewModel();
         _dock = new DockWindow(vm);

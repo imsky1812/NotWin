@@ -89,4 +89,26 @@ public class DockItemsBuilderTests
         Assert.Equal(DockClickAction.ShowWindowList, DockItemsBuilder.DecideClick(Item(W(1, "a", fg: true), W(2, "a"))));
 
     private static DockItem Item(params AppWindow[] ws) => new("a", "A", null, false, ws);
+
+    [Fact]
+    public void Build_PinWithoutMatchingAppId_FallsBackToTargetExe()
+    {
+        var pin = new PinnedApp(@"c:\apps\x.exe", "X", @"c:\x.lnk", @"c:\apps\x.exe");
+        var items = DockItemsBuilder.Build([pin], [new AppWindow(1, "SomeAumid", "t", @"c:\apps\x.exe", false)]);
+        var item = Assert.Single(items);
+        Assert.True(item.Pinned);
+        Assert.True(item.Running);
+        Assert.Equal(@"c:\apps\x.exe", item.AppId);
+    }
+
+    [Fact]
+    public void Build_ExactAppIdBeatsExeFallback()
+    {
+        var pinA = new PinnedApp("a", "A", "a.lnk", @"c:\apps\shared.exe");
+        var pinB = new PinnedApp("b", "B", "b.lnk", @"c:\apps\shared.exe");
+        var items = DockItemsBuilder.Build([pinA, pinB],
+            [new AppWindow(1, "b", "t", @"c:\apps\shared.exe", false)]);
+        Assert.False(items[0].Running);
+        Assert.True(items[1].Running);
+    }
 }

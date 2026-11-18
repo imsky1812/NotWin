@@ -124,8 +124,9 @@ public sealed class DockController : IDisposable
         var item = vm.Item;
         var rows = new List<PopupRow>
         {
-            item.Pinned ? new PopupRow("Unpin from dock", () => Unpin(item)) : new PopupRow("Pin to dock", () => Pin(item)),
         };
+        if (item.Pinned) rows.Add(new PopupRow("Unpin from dock", () => Unpin(item)));
+        else if (CanPin(item)) rows.Add(new PopupRow("Pin to dock", () => Pin(item)));
         if (item.Running)
             rows.Add(new PopupRow(item.Windows.Count > 1 ? "Close all windows" : "Close window", () =>
             {
@@ -159,18 +160,39 @@ public sealed class DockController : IDisposable
 
     private static void Launch(DockItem item)
     {
-        if (string.IsNullOrEmpty(item.LaunchPath)) return;
-        // Minimal launch; Task 13 owns the real launch/import logic.
-        Process.Start(new ProcessStartInfo(item.LaunchPath) { UseShellExecute = true });
+        var path = item.LaunchPath;
+        if (string.IsNullOrEmpty(path)) { Log.Info($"launch: no launch path for {item.AppId}"); return; }
+        // ShellExecuteEx with ASYNCOK: returns immediately; shortcuts, exes and shell:AppsFolder\<AUMID> all work.
+        if (!ShellLinkNative.Open(path)) Log.Info($"launch failed for {item.AppId} ({path})");
     }
 
-    // Minimal pin persistence (Task 13 builds on it): update the in-memory list and save via SettingsStore.
     private void Pin(DockItem item)
     {
+        if (_settings.PinnedApps.Any(p => string.Equals(p.AppId, item.AppId, StringComparison.OrdinalIgnoreCase))) return;
         var exe = item.Windows.Count > 0 ? item.Windows[0].ExePath : item.LaunchPath ?? "";
-        var launch = item.AppId.Contains('!') ? @"shell:AppsFolder\" + item.AppId : exe;
-        var pinned = _settings.PinnedApps.Append(new PinnedApp(item.AppId, item.DisplayName, launch)).ToList();
+        var isUwp = item.AppId.Contains('!');
+        var hasExe = !string.IsNullOrEmpty(exe) && System.IO.File.Exists(exe);
+        if (!isUwp && !hasExe) { Log.Info($"pin: nothing to launch for {item.AppId}"); return; }
+
+        var launch = isUwp ? @"shell:AppsFolder\" + item.AppId : exe;
+        var name = hasExe ? FriendlyName(exe, item.DisplayName) : item.DisplayName;
+        var pinned = _settings.PinnedApps.Append(new PinnedApp(item.AppId, name, launch, hasExe ? exe.ToLowerInvariant() : null)).ToList();
         SavePins(pinned);
+    }
+
+    private static bool CanPin(DockItem item) =>
+        item.AppId.Contains('!') ||
+        (item.Windows.Count > 0 && !string.IsNullOrEmpty(item.Windows[0].ExePath) && System.IO.File.Exists(item.Windows[0].ExePath));
+
+    private static string FriendlyName(string exe, string fallback)
+    {
+        try
+        {
+            var d = FileVersionInfo.GetVersionInfo(exe).FileDescription;
+            if (!string.IsNullOrWhiteSpace(d)) return d.Trim();
+        }
+        catch { /* fall back to the exe name */ }
+        return fallback;
     }
 
     private void Unpin(DockItem item) =>
