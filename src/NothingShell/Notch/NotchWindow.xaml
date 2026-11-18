@@ -39,7 +39,8 @@
                         <TextBlock x:Name="BatteryText" FontFamily="{StaticResource Font.GeistMono}" FontWeight="Medium" FontSize="11"
                                    Foreground="#FFDDDDDD" VerticalAlignment="Center" />
                     </StackPanel>
-                    <local:DotMatrix x:Name="Clock" Dot="3" Gap="1" VerticalAlignment="Center" HorizontalAlignment="Left" />
+                    <!-- Mockup rtime: dots(h:m, {d:2.6, gap:1, fill:'#eee'}) -->
+                    <local:DotMatrix x:Name="Clock" Dot="2.6" Gap="1" Fill="#FFEEEEEE" VerticalAlignment="Center" HorizontalAlignment="Left" />
                 </DockPanel>
 
                 <!-- Opening ‹name›… -->
