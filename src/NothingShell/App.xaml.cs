@@ -23,6 +23,7 @@ public partial class App : Application
     private Launcher.WinKeyListener? _winKeys;
     private Launcher.LauncherController? _launcher;
     private Launcher.AppIndex? _index;
+    private Notch.NotchController? _notch;
     private bool _secondInstance;
 
     protected override void OnStartup(StartupEventArgs e)
@@ -115,7 +116,15 @@ public partial class App : Application
     {
         var index = _index!;
         _launcher = new Launcher.LauncherController(index, new Launcher.FileSearchService());
-        _launcher.Launched += name => Log.Info($"launched \"{name}\""); // Plan 3: the notch shows "Opening ‹name›…"
+        // Notch (spec §6.4): resting time/battery, "Opening ‹name›…" after a launch; hidden in full screen.
+        try
+        {
+            _notch = new Notch.NotchController(_tray!);
+            _notch.SetFullscreen(_fullscreen!.IsFullscreen);
+            _fullscreen.Changed += fs => _notch?.SetFullscreen(fs);
+            _launcher.Launched += name => _notch?.Opening(name);
+        }
+        catch (Exception e) { Log.Error("notch failed to start", e); }
         if (_dock is not null)
         {
             _dock.StartClicked += _launcher.Toggle;
@@ -216,6 +225,7 @@ public partial class App : Application
             _appBar?.Dispose();
             _winKeys?.Dispose();
             _launcher?.Dispose();
+            _notch?.Dispose();
             _controller?.Dispose();
             _tray?.Dispose();
             _mouse?.Dispose();
