@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Runtime.InteropServices;
 using System.Windows.Interop;
+using System.Windows.Threading;
 using NothingShell.Core;
 using NothingShell.Native;
 
@@ -27,6 +28,10 @@ public sealed class TaskbarController : IDisposable
     private uint _taskbarCreated;
     private bool _started;
     private bool _restored;
+    private Dispatcher? _dispatcher;
+    private TaskbarShowHook? _showHook;
+    private bool _rehideQueued;
+    private int _rehideCount;
 
     public TaskbarController(string? stateDir = null)
     {
@@ -94,6 +99,37 @@ public sealed class TaskbarController : IDisposable
             // A uiAccess process filters registered messages from the (lower-level) Explorer under UIPI: let TaskbarCreated in.
             var ok = AppBarNative.AllowMessage(_source.Handle, _taskbarCreated, out var err);
             Log.Info(ok ? "taskbar watcher: TaskbarCreated allowed through UIPI" : $"taskbar watcher: ChangeWindowMessageFilterEx failed (error {err})");
+
+            // Explorer shows its taskbar again by itself when a full-screen window closes: hide it again.
+            _dispatcher = Dispatcher.CurrentDispatcher;
+            _showHook = new TaskbarShowHook(OnTaskbarShown);
+            if (!_showHook.Installed) Log.Error("taskbar show hook failed to install", null);
+        }
+    }
+
+    // Runs inside the WinEvent callback: only queue the work (ShowWindow on Explorer's window could block here).
+    private void OnTaskbarShown()
+    {
+        if (_rehideQueued) return;
+        _rehideQueued = true;
+        _dispatcher?.BeginInvoke(DispatcherPriority.Background, ReHideAfterShow);
+    }
+
+    private void ReHideAfterShow()
+    {
+        _rehideQueued = false;
+        lock (_gate)
+        {
+            if (_showHook is null || _restored) return; // shutting down / taskbar given back on purpose
+            try
+            {
+                if (!TaskbarNative.IsPrimaryVisible()) return;
+                TaskbarNative.HideAll();
+                _rehideCount++;
+                if (_rehideCount <= 5 || _rehideCount % 50 == 0)
+                    Log.Info($"taskbar shown again by Explorer -> hidden again (count {_rehideCount})");
+            }
+            catch (Exception e) { Log.Error("re-hide after show failed", e); }
         }
     }
 
@@ -120,6 +156,10 @@ public sealed class TaskbarController : IDisposable
         lock (_gate)
         {
             if (!_started || _restored) return;
+
+            // Unhook first: the Restore below shows the taskbar, which must not be hidden again.
+            try { _showHook?.Dispose(); } catch (Exception e) { Log.Error("taskbar show hook dispose failed", e); }
+            _showHook = null;
 
             try
             {
