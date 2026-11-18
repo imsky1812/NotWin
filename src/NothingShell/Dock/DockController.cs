@@ -37,7 +37,8 @@ public sealed class DockController : IDisposable
         _dock.ItemClicked += OnItemClicked;
         _dock.ItemContext += OnItemContext;
         _dock.TrayClicked += OnTrayClicked;
-        _dock.OverflowClicked += OverflowOpener.Open;
+        // A dock popup left open would sit on top of Windows' overflow flyout: close it first.
+        _dock.OverflowClicked += () => { ClosePopup(); OverflowOpener.Open(); };
         _dock.StartContext += OnStartContext;
         _dock.PlacementChanged += _appBar.Refresh;
         _appBar.GrantedChanged += g =>
@@ -216,6 +217,9 @@ public sealed class DockController : IDisposable
     }
 
     private void ClosePopup() => _popup?.CloseIfOpen();
+
+    /// <summary>Closes any open dock popup (e.g. when a full-screen app comes to the front).</summary>
+    public void ClosePopups() => ClosePopup();
 
     private static void Activate(AppWindow w)
     {

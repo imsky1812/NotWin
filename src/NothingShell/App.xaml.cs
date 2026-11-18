@@ -84,6 +84,10 @@ public partial class App : Application
 #if DEBUG
         Theme.FontCheck.Run(Resources);
 #endif
+        // Low-level hooks (mouse edge, Win key) run on their own message-loop thread so a busy UI thread can't
+        // make Windows drop them.
+        _hooks = new HookThread("NothingShell.Hooks");
+
         // 4. Dock, then 5. StartWithWindows (only from settings that were actually read).
         var (settings, loadedOk) = StartDock();
         ApplyStartWithWindows(settings, loadedOk);
@@ -108,8 +112,7 @@ public partial class App : Application
 
         try
         {
-            _hooks = new HookThread("NothingShell.Hooks");
-            _winKeys = new Launcher.WinKeyListener(_hooks, Dispatcher);
+            _winKeys = new Launcher.WinKeyListener(_hooks!, Dispatcher);
             _winKeys.LauncherRequested += _launcher.Toggle;
         }
         catch (Exception e)
@@ -175,7 +178,7 @@ public partial class App : Application
 #endif
         if (!selfTest)
         {
-            _mouse = new MouseEdgeHook(startPaused: _fullscreen.IsFullscreen);
+            _mouse = new MouseEdgeHook(_hooks!, startPaused: _fullscreen.IsFullscreen);
             _mouse.Moved += _reveal.OnCursorMoved;
         }
 
@@ -183,6 +186,7 @@ public partial class App : Application
         {
             Log.Info($"fullscreen={fullscreen}");
             if (_mouse is not null) _mouse.Paused = fullscreen; // no hook cost while a game/video is in front
+            if (fullscreen) _controller?.ClosePopups();          // a menu left open would sit over the game/video
             _reveal?.SetFullscreen(fullscreen, fullscreen ? null : DockWindowNative.GetCursorPos());
         };
 

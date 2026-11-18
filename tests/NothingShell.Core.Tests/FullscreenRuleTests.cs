@@ -6,6 +6,15 @@ public sealed class FullscreenRuleTests
 {
     private static readonly RectI Mon = new(0, 0, 1920, 1080);
 
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void NullForeground_KeepsPreviousState(bool previous) => Assert.Equal(previous, FullscreenRule.Decide(null, previous));
+
+    [Fact]
+    public void Decide_WithProbe_UsesRule() =>
+        Assert.True(FullscreenRule.Decide(new FullscreenProbe(Mon, Mon, "UnityWndClass", false, false), previous: false));
+
     [Fact]
     public void BorderlessGameCoveringMonitor_IsFullscreen() =>
         Assert.True(FullscreenRule.IsFullscreen(new FullscreenProbe(Mon, Mon, "UnityWndClass", false, false)));

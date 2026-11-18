@@ -17,6 +17,9 @@ public sealed class FullscreenMonitor : IDisposable
     private nint _foreground;
     private readonly SynchronizationContext? _ui = SynchronizationContext.Current;
     private System.Threading.Timer? _recheck;
+    private System.Threading.Timer? _trailing;
+    private bool _trailingPending;
+    private readonly FullscreenProbeThrottle _throttle = new(TimeSpan.FromMilliseconds(250));
     private bool _disposed;
 
     public bool IsFullscreen { get; private set; }
@@ -43,11 +46,36 @@ public sealed class FullscreenMonitor : IDisposable
         }
         else if (eventId == FullscreenNative.LocationChangeEvent)
         {
-            // Very chatty: only the foreground window's own frame matters.
+            // Very chatty: only the foreground window's own frame matters, and at most one probe per 250 ms
+            // (a trailing probe catches the final position of a drag or a resize animation).
             if (idObject != FullscreenNative.WindowObjectId || hwnd != _foreground) return;
+            var now = DateTimeOffset.UtcNow;
+            if (!_throttle.ShouldProbe(now))
+            {
+                ScheduleTrailing(_throttle.TrailingDelay(now));
+                return;
+            }
         }
         else return;
         Evaluate();
+    }
+
+    private void ScheduleTrailing(TimeSpan delay)
+    {
+        if (_trailingPending) return;
+        _trailingPending = true;
+        _trailing?.Dispose();
+        _trailing = new System.Threading.Timer(_ =>
+        {
+            if (_disposed || _ui is null) return;
+            _ui.Post(__ =>
+            {
+                _trailingPending = false;
+                if (_disposed) return;
+                _throttle.ShouldProbe(DateTimeOffset.UtcNow); // record this probe; the trailing one always runs
+                Evaluate();
+            }, null);
+        }, null, (int)Math.Ceiling(delay.TotalMilliseconds) + 1, Timeout.Infinite);
     }
 
     private void ScheduleRecheck()
@@ -62,8 +90,7 @@ public sealed class FullscreenMonitor : IDisposable
 
     private void Evaluate()
     {
-        var probe = FullscreenNative.Probe();
-        var now = probe is { } p && FullscreenRule.IsFullscreen(p);
+        var now = FullscreenRule.Decide(FullscreenNative.Probe(), IsFullscreen);
         if (now == IsFullscreen) return;
         IsFullscreen = now;
         Changed?.Invoke(now);
@@ -75,5 +102,6 @@ public sealed class FullscreenMonitor : IDisposable
         _disposed = true;
         _hook.Dispose();
         _recheck?.Dispose();
+        _trailing?.Dispose();
     }
 }

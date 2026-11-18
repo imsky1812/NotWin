@@ -16,4 +16,10 @@ public static class FullscreenRule
         if (p.ClassName is "Progman" or "WorkerW" or "Shell_TrayWnd") return false;
         return p.Foreground == p.Monitor;
     }
+
+    /// <summary>
+    /// The new state for a probe. A null probe (no foreground window for a moment, e.g. while a game switches
+    /// windows) keeps the previous state instead of reporting "not full screen" and flashing the dock over it.
+    /// </summary>
+    public static bool Decide(FullscreenProbe? probe, bool previous) => probe is { } p ? IsFullscreen(p) : previous;
 }
