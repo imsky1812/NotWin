@@ -1,6 +1,7 @@
 using System.ComponentModel;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using System.Windows.Interop;
 using System.Windows.Media;
@@ -34,6 +35,12 @@ public partial class LauncherWindow : Window
         _vm = vm;
         _vm.PropertyChanged += OnVmChanged;
         PreviewKeyDown += OnPreviewKeyDown;
+        // Power menu: right edge lined up with the power button, 8 DIP above it (sizes here are device pixels).
+        PowerMenu.CustomPopupPlacementCallback = (popup, target, _) =>
+        {
+            var gap = 8 * VisualTreeHelper.GetDpi(PowerButton).DpiScaleY;
+            return [new CustomPopupPlacement(new Point(target.Width - popup.Width, -popup.Height - gap), PopupPrimaryAxis.Vertical)];
+        };
         // WPF also raises MouseMove when a window appears under a still cursor: only a real change of position counts.
         PreviewMouseMove += (_, e) =>
         {
