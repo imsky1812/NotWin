@@ -563,3 +563,9 @@ tests/NothingShell.Core.Tests/{Notch,Panel,Shell}/*Tests.cs
   - Measurements doc: Phase 3 numbers.
 - [ ] **Step 4: Run all tests.** Run `dotnet test NotWin.sln`. Expected: all pass.
 - [ ] **Step 5: Commit.** Message: `docs: phase 3 measurements + README`. Ask the user before pushing `plan3-panel-notch` and opening a PR.
+
+## User decisions (2026-11-18, at plan review)
+
+1. Execution: native (main session), one whole-branch review on the most capable model at the end.
+2. Windows notification pop-ups: one-time guided tip only (Task 12); Nothing Shell never changes the setting.
+3. Notch hover dashboard and timer stay in Plan 4.
