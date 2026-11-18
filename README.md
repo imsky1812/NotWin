@@ -36,6 +36,13 @@ that entry. Use `-NoTimestamp` to skip the signing timestamp when offline.
 
 - Push the mouse to the bottom edge to show the dock. It hides again shortly after you leave it.
   It stays hidden while a full-screen app (video, game) is in front.
+- **Launcher (start menu):** tap **Win** alone, or click the dock's start or search button. Type to search
+  apps, settings and files on this PC (no web results), ranked apps → settings → files. Use ↑/↓ to move,
+  **Enter** to open and **Esc** to close. A click outside the panel or another Win tap also closes it.
+  With nothing typed it shows **Most used** (your launches from Nothing Shell; at first, the apps Windows
+  saw you use most recently), **All apps ›** (A–Z) and the power button (Sleep / Restart / Shut down, which
+  act immediately). Win+A and Win+N still open Windows' own panels until Plan 3.
+- Quit from a script: `& 'C:\Program Files\NothingShell\NothingShell.exe' --quit` (the same clean exit as the menu).
 - Right-click the start button (left-most) for **Keep taskbar visible**, **Start with Windows** and
   **Quit Nothing Shell**. Quitting always gives the Windows taskbar back.
 - Right-click an app for pin/unpin and its windows.
@@ -57,6 +64,7 @@ This stops the shell and the watchdog, restores the Windows taskbar, removes the
 | File | What it is |
 |---|---|
 | `settings.json` | Pinned apps, keep-visible, start-with-Windows |
+| `launcher-usage.json` | How often and when you launched each item from the launcher (for Most used; max 500 entries) |
 | `log.txt` | Startup, taskbar hide/restore, appbar and full-screen events |
 | `taskbar-restore.json` | Present only while the shell runs: the taskbar's original auto-hide setting |
 
