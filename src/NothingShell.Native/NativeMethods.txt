@@ -74,3 +74,6 @@ AUDIO_VOLUME_NOTIFICATION_DATA
 EDataFlow
 ERole
 IsWindow
+
+ChangeWindowMessageFilterEx
+GetAsyncKeyState

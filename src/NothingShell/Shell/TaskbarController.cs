@@ -38,6 +38,9 @@ public sealed class TaskbarController : IDisposable
     /// <summary>Raised on the UI thread after Explorer restarted and the taskbar was hidden again.</summary>
     public event Action? TaskbarRecreated;
 
+    /// <summary>Set by the TaskbarRecreated handler: whether the appbar was registered again (false when keep-visible is off).</summary>
+    public bool AppBarReRegistered { get; set; }
+
     public void Start()
     {
         lock (_gate)
@@ -88,6 +91,9 @@ public sealed class TaskbarController : IDisposable
             };
             _source = new HwndSource(p);
             _source.AddHook(WndProc);
+            // A uiAccess process filters registered messages from the (lower-level) Explorer under UIPI: let TaskbarCreated in.
+            var ok = AppBarNative.AllowMessage(_source.Handle, _taskbarCreated, out var err);
+            Log.Info(ok ? "taskbar watcher: TaskbarCreated allowed through UIPI" : $"taskbar watcher: ChangeWindowMessageFilterEx failed (error {err})");
         }
     }
 
@@ -95,9 +101,10 @@ public sealed class TaskbarController : IDisposable
     {
         if (_taskbarCreated != 0 && (uint)msg == _taskbarCreated)
         {
-            Log.Info("TaskbarCreated: re-hiding taskbar");
-            try { ApplyHidden(); } catch (Exception e) { Log.Error("re-hide failed", e); }
+            var hidden = false;
+            try { ApplyHidden(); hidden = true; } catch (Exception e) { Log.Error("re-hide failed", e); }
             try { TaskbarRecreated?.Invoke(); } catch (Exception e) { Log.Error("TaskbarRecreated handler failed", e); }
+            Log.Info($"TaskbarCreated received -> re-hid taskbar={hidden}; appbar re-registered={AppBarReRegistered}");
         }
         return IntPtr.Zero;
     }

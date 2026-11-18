@@ -20,6 +20,7 @@ public sealed class DockAppBar : IDisposable
     private Window? _dock;
     private HwndSource? _source;
     private nint _hwnd;
+    private nint _filteredHwnd;
     private bool _registered;
     private bool _inPosChanged;
     private RectI _granted;
@@ -42,6 +43,12 @@ public sealed class DockAppBar : IDisposable
                 var hwnd = new WindowInteropHelper(dock).EnsureHandle();
                 if (hwnd == 0) { Log.Error("appbar: dock has no HWND"); return; }
 
+                if (hwnd != _filteredHwnd)
+                {
+                    _filteredHwnd = hwnd;
+                    var ok = AppBarNative.AllowMessage(hwnd, _message, out var err);
+                    Log.Info(ok ? "appbar: callback message allowed through UIPI" : $"appbar: ChangeWindowMessageFilterEx failed (error {err})");
+                }
                 if (_registered && hwnd != _hwnd) UnregisterCore();
                 if (!_registered)
                 {
@@ -71,12 +78,12 @@ public sealed class DockAppBar : IDisposable
     }
 
     /// <summary>Explorer restarted and forgot our registration: register again from scratch.</summary>
-    public void ReRegister()
+    public bool ReRegister()
     {
         Window? dock;
         lock (_gate)
         {
-            if (!_registered) return;
+            if (!_registered) return false;
             dock = _dock;
             _registered = false; // Explorer already lost it; skip ABM_REMOVE and send ABM_NEW again
             _granted = default;  // the old grant died with Explorer; without this SETPOS is skipped as "unchanged" and nothing is reserved
@@ -85,6 +92,7 @@ public sealed class DockAppBar : IDisposable
         }
         if (dock is not null) Register(dock, DockWindowNative.GetPrimaryMonitor().Bounds);
         Log.Info($"appbar re-registered after TaskbarCreated granted={_granted}");
+        return _registered;
     }
 
     public void Unregister()

@@ -21,6 +21,19 @@ public static class AppBarNative
     /// <summary>A window message id private to this process for appbar notifications.</summary>
     public static uint RegisterCallbackMessage() => RegisterWindowMessage("NothingShellAppBar");
 
+    public static uint RegisterTaskbarCreatedMessage() => RegisterWindowMessage("TaskbarCreated");
+
+    /// <summary>
+    /// Lets a registered message from a lower-integrity sender (Explorer) reach <paramref name="hwnd"/>; a uiAccess
+    /// process otherwise has these filtered by UIPI. Returns false (and the Win32 error) on failure.
+    /// </summary>
+    public static unsafe bool AllowMessage(nint hwnd, uint message, out int error)
+    {
+        var ok = PInvoke.ChangeWindowMessageFilterEx((HWND)hwnd, message, Windows.Win32.UI.WindowsAndMessaging.WINDOW_MESSAGE_FILTER_ACTION.MSGFLT_ALLOW, null);
+        error = ok ? 0 : Marshal.GetLastWin32Error();
+        return ok;
+    }
+
     public static bool New(nint hwnd, uint callbackMessage)
     {
         var d = Data(hwnd);

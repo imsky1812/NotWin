@@ -67,7 +67,7 @@ public partial class App : Application
         _taskbar.Start();
         _appBar = new DockAppBar();
         // Explorer restarted: the taskbar was just hidden again; now re-claim the reserved strip.
-        _taskbar.TaskbarRecreated += () => _appBar.ReRegister();
+        _taskbar.TaskbarRecreated += () => _taskbar.AppBarReRegistered = _appBar.ReRegister();
 
 #if DEBUG
         Theme.FontCheck.Run(Resources);
