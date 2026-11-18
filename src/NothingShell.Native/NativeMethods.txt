@@ -103,3 +103,12 @@ SetFocus
 IUnknown
 PROPERTYKEY
 PROPVARIANT
+WlanOpenHandle
+WlanCloseHandle
+WlanEnumInterfaces
+WlanScan
+WlanGetAvailableNetworkList
+WlanConnect
+WlanFreeMemory
+WlanSetProfile
+WLAN_CONNECTION_PARAMETERS
