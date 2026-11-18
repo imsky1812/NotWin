@@ -105,6 +105,16 @@ public sealed unsafe class AudioVolumeWatcher : IDisposable
         }
     }
 
+    /// <summary>Sets the default device's master volume (0..1). UI thread. False when no device is bound.</summary>
+    public bool SetMasterScalar(float level)
+    {
+        if (_disposed || _volume is null) return false;
+        var v = Math.Clamp(level, 0f, 1f);
+        // IAudioEndpointVolume 7: SetMasterVolumeLevelScalar(float, LPCGUID eventContext)
+        var hr = ((delegate* unmanaged[Stdcall]<IAudioEndpointVolume*, float, Guid*, HRESULT>)(*(void***)_volume)[7])(_volume, v, null);
+        return hr.Succeeded;
+    }
+
     // The generated HRESULT-returning overloads are private and the public ones throw, so the checked calls go through
     // the vtable slots directly (IMMDeviceEnumerator: 4 GetDefaultAudioEndpoint, 6 RegisterEndpointNotificationCallback;
     // IMMDevice: 3 Activate; IAudioEndpointVolume: 3 RegisterControlChangeNotify, 9 GetMasterVolumeLevelScalar, 15 GetMute).

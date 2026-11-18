@@ -151,6 +151,8 @@ public partial class App : Application
         // Quick-settings panel (spec §6.3): Win+A / Win+N (below) and the dock tray.
         _panel = new Panel.QuickPanelController(_reveal);
         if (_dock is not null) _dock.TrayClicked += _panel.Toggle;
+        var sliders = new Panel.SlidersSection(_panel.Window.SlidersHost, _tray!, new Panel.BrightnessService());
+        _panel.Opening += sliders.Refresh;
 
         try
         {

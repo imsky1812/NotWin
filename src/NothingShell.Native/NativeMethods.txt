@@ -100,3 +100,6 @@ SHUTDOWN_REASON
 AttachThreadInput
 BringWindowToTop
 SetFocus
+IUnknown
+PROPERTYKEY
+PROPVARIANT

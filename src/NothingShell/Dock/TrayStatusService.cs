@@ -236,6 +236,13 @@ public sealed class TrayStatusService : INotifyPropertyChanged, IDisposable
         Muted = muted;
     }
 
+    /// <summary>Sets the system volume (panel slider). UI thread. The watcher's callback then updates VolumePercent.</summary>
+    public bool SetVolume(int percent)
+    {
+        if (_disposed || _audio is null) return false;
+        return _audio.SetMasterScalar(Math.Clamp(percent, 0, 100) / 100f);
+    }
+
     // ---- plumbing ----
 
     private bool Set<T>(ref T field, T value, [CallerMemberName] string? name = null)
