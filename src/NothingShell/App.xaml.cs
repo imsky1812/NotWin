@@ -24,6 +24,7 @@ public partial class App : Application
     private Launcher.LauncherController? _launcher;
     private Launcher.AppIndex? _index;
     private Notch.NotchController? _notch;
+    private Media.MediaSessionService? _media;
     private bool _secondInstance;
 
     protected override void OnStartup(StartupEventArgs e)
@@ -123,6 +124,11 @@ public partial class App : Application
             _notch.SetFullscreen(_fullscreen!.IsFullscreen);
             _fullscreen.Changed += fs => _notch?.SetFullscreen(fs);
             _launcher.Launched += name => _notch?.Opening(name);
+
+            // Music state: the system media session (Changed arrives on this UI thread).
+            _media = new Media.MediaSessionService();
+            _media.Changed += snap => _notch?.SetMusic(snap.Playing, snap.Art);
+            _ = _media.StartAsync();
         }
         catch (Exception e) { Log.Error("notch failed to start", e); }
         if (_dock is not null)
@@ -225,6 +231,7 @@ public partial class App : Application
             _appBar?.Dispose();
             _winKeys?.Dispose();
             _launcher?.Dispose();
+            _media?.Dispose();
             _notch?.Dispose();
             _controller?.Dispose();
             _tray?.Dispose();
