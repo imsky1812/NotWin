@@ -13,9 +13,13 @@ namespace NothingShell.Panel;
 public sealed class TilesSection
 {
     private const string WifiGlyph = "M2,9 A15,15 0 0 1 22,9 M5.5,12.5 A10,10 0 0 1 18.5,12.5 M9,16 A5,5 0 0 1 15,16 M12,19.5 L12,19.6";
+    private const string BtGlyph = "M7,7 L17,17 L12,22 L12,2 L17,7 L7,17";
     private readonly Tile _wifi = new("Wi-Fi", WifiGlyph);
     private readonly TileList _wifiList = new();
+    private readonly Tile _bt = new("Bluetooth", BtGlyph);
+    private readonly TileList _btList = new();
     private bool? _wifiOn;
+    private bool? _btOn;
 
     public TilesSection(StackPanel host)
     {
@@ -24,13 +28,63 @@ public sealed class TilesSection
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(8) });
         grid.ColumnDefinitions.Add(new ColumnDefinition());
         grid.Children.Add(_wifi);
-        Grid = grid;
+        Grid.SetColumn(_bt, 2);
+        grid.Children.Add(_bt);
+        this.Grid = grid;
         host.Children.Add(grid);
         host.Children.Add(_wifiList);
+        host.Children.Add(_btList);
         Host = host;
 
         _wifi.Toggled += () => _ = ToggleWifiAsync();
         _wifi.Expanded += () => _ = ExpandWifiAsync();
+        _bt.Toggled += () => _ = ToggleBtAsync();
+        _bt.Expanded += () => _ = ExpandBtAsync();
+    }
+
+    // ---- Bluetooth ----
+
+    private async Task RefreshBtAsync()
+    {
+        _btOn = await BluetoothService.RadioOnAsync();
+        var connected = _btOn == true ? (await BluetoothService.PairedAsync()).FirstOrDefault(d => d.Connected) : null;
+        _bt.SetOn(_btOn == true, _btOn switch
+        {
+            null => "Unavailable",
+            false => "Off",
+            _ => connected?.Name ?? "On",
+        });
+    }
+
+    private async Task ToggleBtAsync()
+    {
+        if (_btOn is null) { OpenSettings("ms-settings:bluetooth"); return; }
+        await BluetoothService.SetRadioAsync(_btOn != true);
+        await Task.Delay(400);
+        await RefreshBtAsync();
+    }
+
+    private async Task ExpandBtAsync()
+    {
+        if (_btList.Visibility == Visibility.Visible) { _btList.Visibility = Visibility.Collapsed; return; }
+        _wifiList.Visibility = Visibility.Collapsed; // one list at a time
+        _btList.Clear();
+        _btList.AddRow("Loading…", null, null, dim: true);
+        _btList.Visibility = Visibility.Visible;
+        var devices = _btOn == true ? await BluetoothService.PairedAsync() : [];
+        _btList.Clear();
+        if (_btOn != true) _btList.AddRow("Bluetooth is off", null, null, dim: true);
+        foreach (var d in devices)
+            _btList.AddRow(d.Name, d.Connected ? "Connected" : "Connect", () => _ = ConnectAsync(d));
+        _btList.AddRow("Bluetooth settings", "›", () => OpenSettings("ms-settings:bluetooth"), dim: true);
+    }
+
+    private async Task ConnectAsync(BtDevice d)
+    {
+        await BluetoothService.ToggleConnectionAsync(d);
+        await Task.Delay(2000); // the stack needs a moment to (dis)connect
+        await RefreshBtAsync();
+        _btList.Visibility = Visibility.Collapsed;
     }
 
     /// <summary>The 2-column tile row (Bluetooth adds itself into column 2, Task 11).</summary>
@@ -42,7 +96,9 @@ public sealed class TilesSection
     public void Refresh()
     {
         _wifiList.Visibility = Visibility.Collapsed;
+        _btList.Visibility = Visibility.Collapsed;
         _ = RefreshWifiAsync();
+        _ = RefreshBtAsync();
     }
 
     /// <summary>Collapses the Wi-Fi list (another tile's list opened).</summary>
@@ -73,6 +129,7 @@ public sealed class TilesSection
     private async Task ExpandWifiAsync()
     {
         if (_wifiList.Visibility == Visibility.Visible) { _wifiList.Visibility = Visibility.Collapsed; return; }
+        _btList.Visibility = Visibility.Collapsed; // one list at a time
         WifiListOpened?.Invoke();
         _wifiList.Clear();
         _wifiList.AddRow("Searching…", null, null, dim: true);
