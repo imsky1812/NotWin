@@ -91,4 +91,23 @@ public sealed class SettingsStoreTests : IDisposable
         using (new FileStream(bad, FileMode.Open, FileAccess.Read, FileShare.None))
             Assert.True(new SettingsStore(_dir).Load().StartWithWindows);
     }
+
+    [Fact]
+    public void LastLoadSucceeded_ReflectsLoadOutcome()
+    {
+        var path = Path.Combine(_dir, "settings.json");
+        var store = new SettingsStore(_dir);
+        store.Load();
+        Assert.True(store.LastLoadSucceeded); // missing file is a normal first run
+
+        File.WriteAllText(path, "{\"keepDockVisible\":true}");
+        using (new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.None))
+        {
+            store.Load();
+            Assert.False(store.LastLoadSucceeded);
+        }
+
+        store.Load();
+        Assert.True(store.LastLoadSucceeded);
+    }
 }

@@ -5,6 +5,7 @@ using NothingShell.Dock;
 using NothingShell.Interop;
 using NothingShell.Native;
 using NothingShell.Shell;
+using NothingShell.Startup;
 
 namespace NothingShell;
 
@@ -18,10 +19,18 @@ public partial class App : Application
     private DockController? _controller;
     private TrayStatusService? _tray;
     private DockAppBar? _appBar;
+    private bool _secondInstance;
 
     protected override void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
+        // 1. Single instance: a second copy exits silently, before any UI.
+        if (!SingleInstance.TryAcquire())
+        {
+            _secondInstance = true;
+            Shutdown(0);
+            return;
+        }
         // Software rendering: the shell's surfaces are small, flat and mostly idle. Measured on the dev PC (Release,
         // ~60 s idle): working set 96 -> 68 MB, private 50 -> 25 MB, same idle CPU (0) and the same reveal frame
         // pacing (~19 ms average frame gap) as hardware rendering. Must be set before any window is created.
@@ -45,6 +54,15 @@ public partial class App : Application
         var uiAccess = TokenInfo.GetUiAccess() ? 1 : 0;
         Log.Info($"startup uiAccess={uiAccess} pid={Environment.ProcessId}");
 
+        // 2. Conflict gate: nothing touches the taskbar while Fenn is running.
+        if (!ConflictGate.CheckOrWait())
+        {
+            Log.Info("conflict gate: user quit");
+            Shutdown(0);
+            return;
+        }
+
+        // 3. Taskbar.
         _taskbar = new TaskbarController();
         _taskbar.Start();
         _appBar = new DockAppBar();
@@ -54,7 +72,22 @@ public partial class App : Application
 #if DEBUG
         Theme.FontCheck.Run(Resources);
 #endif
-        StartDock();
+        // 4. Dock, then 5. StartWithWindows (only from settings that were actually read).
+        var (settings, loadedOk) = StartDock();
+        ApplyStartWithWindows(settings, loadedOk);
+    }
+
+    private static void ApplyStartWithWindows(ShellSettings settings, bool loadedOk)
+    {
+        if (!loadedOk) { Log.Info("start-with-windows: settings load failed, leaving the Run entry alone"); return; }
+        var exe = Environment.ProcessPath;
+        if (string.IsNullOrEmpty(exe)) return;
+        try
+        {
+            StartupRegistration.SetEnabled(settings.StartWithWindows, exe);
+            Log.Info($"start-with-windows={settings.StartWithWindows}");
+        }
+        catch (Exception ex) { Log.Error("applying start-with-windows failed", ex); }
     }
 
     private void RestoreShell()
@@ -63,12 +96,14 @@ public partial class App : Application
         finally { _taskbar?.Dispose(); }
     }
 
-    private void StartDock()
+    private (ShellSettings Settings, bool LoadedOk) StartDock()
     {
         var settingsDir = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "NothingShell");
         var store = new SettingsStore(settingsDir);
-        var settings = PinnedAppsImporter.ApplyFirstRun(store.Load(), store);
+        var loaded = store.Load();
+        var loadedOk = store.LastLoadSucceeded;
+        var settings = PinnedAppsImporter.ApplyFirstRun(loaded, store);
 
         var vm = new DockViewModel();
         _tray = vm.Tray;
@@ -109,10 +144,12 @@ public partial class App : Application
         };
 
         Log.Info($"dock ready keepVisible={settings.KeepDockVisible} fullscreen={_fullscreen.IsFullscreen} selfTest={selfTest}");
+        return (settings, loadedOk);
     }
 
     protected override void OnExit(ExitEventArgs e)
     {
+        if (_secondInstance) { base.OnExit(e); return; }
         try
         {
             _appBar?.Dispose();
@@ -125,6 +162,7 @@ public partial class App : Application
         catch (Exception ex) { Log.Error("dock shutdown failed", ex); }
         _taskbar?.Dispose();
         Log.Info("exit");
+        SingleInstance.Release();
         base.OnExit(e);
     }
 }

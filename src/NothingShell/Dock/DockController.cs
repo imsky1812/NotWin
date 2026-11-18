@@ -177,9 +177,11 @@ public sealed class DockController : IDisposable
     {
         ClosePopup();
         var keep = _settings.KeepDockVisible;
+        var start = _settings.StartWithWindows;
         ShowPopup(anchor,
         [
             new PopupRow("Keep taskbar visible", () => SetKeepVisible(!keep), keep),
+            new PopupRow("Start with Windows", () => SetStartWithWindows(!start), start),
             new PopupRow("Quit Nothing Shell", _quit),
         ]);
     }
@@ -190,6 +192,19 @@ public sealed class DockController : IDisposable
         try { _store.Save(_settings); }
         catch (Exception e) { Log.Error("saving keep-visible failed", e); }
         ApplyKeepVisible(on);
+    }
+
+    private void SetStartWithWindows(bool on)
+    {
+        _settings = _settings with { StartWithWindows = on };
+        try { _store.Save(_settings); }
+        catch (Exception e) { Log.Error("saving start-with-windows failed", e); }
+        try
+        {
+            var exe = Environment.ProcessPath;
+            if (!string.IsNullOrEmpty(exe)) Startup.StartupRegistration.SetEnabled(on, exe);
+        }
+        catch (Exception e) { Log.Error("start-with-windows registry update failed", e); }
     }
 
     /// <summary>Keep-visible: the dock stays up and reserves its strip as an appbar; off: it floats and nothing is reserved.</summary>

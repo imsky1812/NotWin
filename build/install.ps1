@@ -6,7 +6,7 @@
 .PARAMETER NoTimestamp
   Skip the RFC3161 timestamp (offline runs).
 .PARAMETER SkipAdminSteps
-  Dev/test only: skip Root/TrustedPublisher import, process stop and the Program Files copy.
+  Dev/test only: skip Root/TrustedPublisher import, process stop, the Program Files copy and the final launch.
   Everything else (cert in CurrentUser\My, publish, signing into out/app) still runs without elevation.
 #>
 [CmdletBinding()]
@@ -110,4 +110,7 @@ robocopy $outApp $install /MIR /NFL /NDL /NJH /NJS /NP | Out-Null
 if ($LASTEXITCODE -ge 8) { throw "robocopy failed (exit $LASTEXITCODE)" }
 $global:LASTEXITCODE = 0
 Write-Host "Installed to $install"
-Write-Host "Start $install\NothingShell.exe and check %AppData%\NothingShell\log.txt for uiAccess=1."
+
+# 7. Launch once WITHOUT elevation (explorer.exe de-elevates) so the user process writes the HKCU Run value.
+Start-Process explorer.exe -ArgumentList "`"$install\NothingShell.exe`""
+Write-Host "Launched NothingShell unelevated. Check %AppData%\NothingShell\log.txt for uiAccess=1."

@@ -11,6 +11,9 @@ public sealed class SettingsStore(string directory)
     // Defaults were returned, so Save must not clobber the user's real settings.
     private bool _loadFailed;
 
+    /// <summary>False when the last Load could not read an existing file (defaults were returned and Save is a no-op).</summary>
+    public bool LastLoadSucceeded => !_loadFailed;
+
     public ShellSettings Load()
     {
         var path = Path.Combine(directory, FileName);
