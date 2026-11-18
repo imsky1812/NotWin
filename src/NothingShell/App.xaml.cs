@@ -125,6 +125,7 @@ public partial class App : Application
         {
             _winKeys = new Launcher.WinKeyListener(_hooks!, Dispatcher);
             _winKeys.LauncherRequested += _launcher.Toggle;
+            _winKeys.PanelRequested += () => Log.Info("panel requested (panel arrives in Plan 3 Task 7)");
         }
         catch (Exception e)
         {
