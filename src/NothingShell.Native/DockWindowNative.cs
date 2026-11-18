@@ -69,6 +69,10 @@ public static unsafe class DockWindowNative
         PInvoke.SetWindowPos((HWND)hwnd, HwndTopmost, r.Left, r.Top, r.Right - r.Left, r.Bottom - r.Top,
             SET_WINDOW_POS_FLAGS.SWP_NOACTIVATE | SET_WINDOW_POS_FLAGS.SWP_NOOWNERZORDER);
 
+    /// <summary>Current cursor position (physical pixels), or null if it can't be read (e.g. secure desktop).</summary>
+    public static PointI? GetCursorPos() =>
+        PInvoke.GetCursorPos(out var p) ? new PointI(p.X, p.Y) : null;
+
     public static RectI GetWindowRect(nint hwnd) =>
         PInvoke.GetWindowRect((HWND)hwnd, out var r) ? new RectI(r.left, r.top, r.right, r.bottom) : default;
 }

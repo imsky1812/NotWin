@@ -28,3 +28,4 @@ GetWindowLongPtr
 SetWindowLongPtr
 DwmSetWindowAttribute
 DWM_WINDOW_CORNER_PREFERENCE
+GetCursorPos

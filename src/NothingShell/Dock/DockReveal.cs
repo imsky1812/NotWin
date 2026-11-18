@@ -53,10 +53,16 @@ public sealed class DockReveal : IDisposable
         Evaluate(over ? "enter" : "leave");
     }
 
-    public void SetFullscreen(bool on)
+    /// <summary>
+    /// The hook is uninstalled while full-screen, so the last known point goes stale. Entering full-screen forgets it;
+    /// leaving full-screen takes <paramref name="cursorNow"/> (the real position from GetCursorPos) so a point left
+    /// on the bottom edge before the game/video started can't pop the dock up.
+    /// </summary>
+    public void SetFullscreen(bool on, PointI? cursorNow = null)
     {
         if (_fullscreen == on) return;
         _fullscreen = on;
+        _cursor = on ? null : cursorNow;
         Evaluate(on ? "fullscreen-on" : "fullscreen-off");
     }
 

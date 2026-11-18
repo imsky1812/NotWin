@@ -3,6 +3,7 @@ using System.Windows;
 using NothingShell.Core;
 using NothingShell.Dock;
 using NothingShell.Interop;
+using NothingShell.Native;
 using NothingShell.Shell;
 
 namespace NothingShell;
@@ -18,6 +19,10 @@ public partial class App : Application
     protected override void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
+        // Software rendering: the shell's surfaces are small, flat and mostly idle. Measured on the dev PC (Release,
+        // ~60 s idle): working set 96 -> 68 MB, private 50 -> 25 MB, same idle CPU (0) and the same reveal frame
+        // pacing (~19 ms average frame gap) as hardware rendering. Must be set before any window is created.
+        System.Windows.Media.RenderOptions.ProcessRenderMode = System.Windows.Interop.RenderMode.SoftwareOnly;
 
         // Register crash/exit restore paths before the taskbar is touched.
         AppDomain.CurrentDomain.UnhandledException += (_, args) =>
@@ -81,7 +86,7 @@ public partial class App : Application
         {
             Log.Info($"fullscreen={fullscreen}");
             if (_mouse is not null) _mouse.Paused = fullscreen; // no hook cost while a game/video is in front
-            _reveal?.SetFullscreen(fullscreen);
+            _reveal?.SetFullscreen(fullscreen, fullscreen ? null : DockWindowNative.GetCursorPos());
         };
 
         Log.Info($"dock ready keepVisible={settings.KeepDockVisible} fullscreen={_fullscreen.IsFullscreen} selfTest={selfTest}");
