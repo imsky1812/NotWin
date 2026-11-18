@@ -43,6 +43,8 @@ public partial class DockWindow : Window
         _vm = vm;
         DataContext = vm;
         vm.PropertyChanged += OnViewModelChanged;
+        vm.Items.CollectionChanged += (_, _) => OnItemsChanged();
+        Pill.Width = ContentWidth;
         Pill.MouseEnter += (_, _) => HoverChanged?.Invoke(true);
         Pill.MouseLeave += (_, _) => HoverChanged?.Invoke(false);
         SourceInitialized += OnSourceInitialized;
@@ -50,8 +52,34 @@ public partial class DockWindow : Window
         Closed += (_, _) => SystemEvents.DisplaySettingsChanged -= OnDisplaySettingsChanged;
     }
 
-    /// <summary>Temporary fixed width (DIP) until the items (Task 12) and tray (Task 14) size the dock.</summary>
-    public double ContentWidth { get; } = 360;
+    // Item slot 44 + 2x2 margin, pill padding 2x10 and border 2x1 (mockup: 44 px items, 4 px gap, 10 px padding).
+    private const double SlotWidth = 48;
+    private const double PillChrome = 22;
+
+    /// <summary>Pill width (DIP): follows the item count (at least one slot wide). The tray (Task 14) will add to it.</summary>
+    public double ContentWidth => PillChrome + SlotWidth * Math.Max(_vm.Items.Count, 1);
+
+    /// <summary>A dock item was left-clicked / right-clicked; the element anchors the popup.</summary>
+    public event Action<DockItemViewModel, FrameworkElement>? ItemClicked;
+    public event Action<DockItemViewModel, FrameworkElement>? ItemContext;
+
+    private void OnItemLeftUp(object sender, System.Windows.Input.MouseButtonEventArgs e)
+    {
+        if (sender is FrameworkElement { DataContext: DockItemViewModel item } el) ItemClicked?.Invoke(item, el);
+    }
+
+    private void OnItemRightUp(object sender, System.Windows.Input.MouseButtonEventArgs e)
+    {
+        if (sender is FrameworkElement { DataContext: DockItemViewModel item } el) ItemContext?.Invoke(item, el);
+    }
+
+    private void OnItemsChanged()
+    {
+        Pill.Width = ContentWidth;
+        var before = _placement.Window;
+        Reposition();
+        if (_placement.Window != before) PlacementChanged?.Invoke();
+    }
 
     public DockPlacement Placement => _placement;
 

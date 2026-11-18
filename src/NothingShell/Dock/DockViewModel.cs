@@ -22,8 +22,8 @@ public sealed class DockViewModel : INotifyPropertyChanged
         }
     }
 
-    /// <summary>Pinned and running apps; filled in Task 12.</summary>
-    public ObservableCollection<object> Items { get; } = [];
+    /// <summary>Pinned and running apps (see <see cref="DockController"/>).</summary>
+    public ObservableCollection<DockItemViewModel> Items { get; } = [];
 
     /// <summary>Tray glyphs (Wi-Fi, volume, battery, clock); filled in Task 14.</summary>
     public ObservableCollection<object> Tray { get; } = [];

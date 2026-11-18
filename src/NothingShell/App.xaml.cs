@@ -15,6 +15,7 @@ public partial class App : Application
     private DockReveal? _reveal;
     private MouseEdgeHook? _mouse;
     private FullscreenMonitor? _fullscreen;
+    private DockController? _controller;
 
     protected override void OnStartup(StartupEventArgs e)
     {
@@ -54,7 +55,8 @@ public partial class App : Application
     {
         var settingsDir = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "NothingShell");
-        var settings = new SettingsStore(settingsDir).Load();
+        var store = new SettingsStore(settingsDir);
+        var settings = store.Load();
 
         var vm = new DockViewModel();
         _dock = new DockWindow(vm);
@@ -65,6 +67,9 @@ public partial class App : Application
         _reveal = new DockReveal(vm, () => dock.Placement);
         _dock.HoverChanged += _reveal.SetHoverDock;
         _dock.PlacementChanged += _reveal.Refresh;
+
+        _controller = new DockController(_dock, vm, _reveal, store, settings);
+        _controller.Start();
 
         _fullscreen = new FullscreenMonitor();
         _reveal.SetFullscreen(_fullscreen.IsFullscreen);
@@ -96,6 +101,7 @@ public partial class App : Application
     {
         try
         {
+            _controller?.Dispose();
             _mouse?.Dispose();
             _fullscreen?.Dispose();
             _reveal?.Dispose();
