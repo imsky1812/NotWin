@@ -1,0 +1,91 @@
+# Nothing Shell (NotWin)
+
+A personal Windows 11 shell layer styled after Nothing OS. Phase 1 replaces the Windows taskbar with a
+floating dock: start and search buttons, pinned and running apps, and a tray with Wi-Fi, volume, battery
+and the clock. It hides until the mouse touches the bottom edge, or stays visible with its space reserved.
+Later phases add the launcher, quick settings and notifications, the notch, and desktop widgets
+(see `docs/superpowers/specs/2026-11-17-nothing-shell-design.md`).
+
+Personal use only.
+
+## Requirements
+
+- Windows 11 (developed on 26300), 1920×1080 at 125% tested
+- .NET SDK 10 (`net10.0-windows10.0.22621.0`)
+- PowerShell 7 (`pwsh`)
+
+## Install
+
+The dock needs `uiAccess` so it can sit above other windows, including elevated ones. Windows only allows
+that for a signed exe under Program Files, so installing needs admin once.
+
+```powershell
+# from an elevated PowerShell 7 (Run as administrator)
+D:\NothingLauncher\build\install.ps1
+```
+
+`install.ps1` does the following:
+1. Creates a self-signed code-signing cert `CN=NothingShell Dev` (non-exportable) and trusts it on this PC.
+2. Publishes the app and the watchdog, signs them, and stops any running copy.
+3. Copies them to `C:\Program Files\NothingShell`, then starts the shell once as you (not as admin).
+
+The shell then adds itself to `HKCU\...\Run`, so it starts at sign-in. Only the installed copy writes
+that entry. Use `-NoTimestamp` to skip the signing timestamp when offline.
+
+## Using it
+
+- Push the mouse to the bottom edge to show the dock. It hides again shortly after you leave it.
+  It stays hidden while a full-screen app (video, game) is in front.
+- Right-click the start button (left-most) for **Keep taskbar visible**, **Start with Windows** and
+  **Quit Nothing Shell**. Quitting always gives the Windows taskbar back.
+- Right-click an app for pin/unpin and its windows.
+
+If Fenn (another taskbar app) is running, Nothing Shell asks before taking over.
+
+## Uninstall
+
+```powershell
+# elevated PowerShell 7
+D:\NothingLauncher\build\uninstall.ps1
+```
+
+This stops the shell and the watchdog, restores the Windows taskbar, removes the Run entry, and deletes
+`C:\Program Files\NothingShell`. The dev cert and your data folder are left in place.
+
+## Data folder: `%AppData%\NothingShell`
+
+| File | What it is |
+|---|---|
+| `settings.json` | Pinned apps, keep-visible, start-with-Windows |
+| `log.txt` | Startup, taskbar hide/restore, appbar and full-screen events |
+| `taskbar-restore.json` | Present only while the shell runs: the taskbar's original auto-hide setting |
+
+If the shell is killed, the watchdog (`NothingShell.Watchdog.exe`) restores the Windows taskbar from
+`taskbar-restore.json`. If the taskbar is ever left hidden, run this to restore it by hand:
+
+```powershell
+& 'C:\Program Files\NothingShell\NothingShell.Watchdog.exe' --restore-now --state "$env:APPDATA\NothingShell"
+```
+
+## Development
+
+```powershell
+dotnet build NotWin.sln
+dotnet test tests\NothingShell.Core.Tests
+dotnet run --project src\NothingShell        # Debug, no uiAccess
+```
+
+- Only one copy runs at a time (`Local\NothingShell.Instance`). Quit the installed copy from the start
+  button menu before running a dev build.
+- A Debug build runs without uiAccess, so z-order over elevated windows and messages from Explorer
+  behave differently there. Test those on the installed copy.
+- A Release build refuses to hide the taskbar unless the watchdog is running next to it.
+- Hands-on checks: `build\verify\plan1-handson.ps1` (elevated; use `-Only <sections>` and `-Reinstall`).
+
+| Project | Role |
+|---|---|
+| `src/NothingShell` | WPF app: dock, tray, popups, startup |
+| `src/NothingShell.Core` | Pure logic (settings, reveal state machine, rules); unit-tested |
+| `src/NothingShell.Native` | Win32 interop (CsWin32): taskbar, appbar, hooks, icons |
+| `src/NothingShell.Watchdog` | Restores the taskbar if the shell dies |
+| `spikes/` | Phase 0 feasibility spikes (results in `docs/superpowers/spikes/`) |
