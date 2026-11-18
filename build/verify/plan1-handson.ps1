@@ -474,7 +474,13 @@ function Invoke-Cleanup {
 
 # ---------- app / window helpers ----------
 function Start-App {
-    if ((Get-AppProcess).Count -gt 0) { throw 'NothingShell is already running before a test step; aborting.' }
+    # install.ps1 now launches the app once at the end (to register the Run entry), and a copy may also be left
+    # from an earlier step: quit any running copy gracefully (WM_CLOSE, never kill) before starting a fresh one.
+    foreach ($old in @(Get-AppProcess)) {
+        Write-Info ("  A Nothing Shell copy is already running (pid {0}); closing it first." -f $old.Id)
+        [void](Quit-App $old)
+    }
+    if ((Get-AppProcess).Count -gt 0) { throw 'NothingShell is still running after asking it to close; aborting.' }
     $p = Start-LimitedProcess 'NothingShell' ('"{0}"' -f $AppExe) '' $AppDir
     if (-not $p) {
         [void](Complete-Check -Id 'LAUNCH.app' -Description 'Start NothingShell.exe as the normal (non-elevated) user' -Measured @{ error = $script:LastLaunchError } -MeasuredPass $false -Notes $script:LastLaunchError)
