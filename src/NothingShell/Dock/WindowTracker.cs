@@ -47,6 +47,7 @@ public sealed class WindowTracker : IDisposable
     {
         Refresh();
         _hook = new WindowEventsHook(Schedule);
+        _hook.SetTracked(Current.Select(w => w.Handle));
         if (_hook.FailedHooks > 0) Log.Error($"{_hook.FailedHooks} WinEvent hook range(s) failed to install (handle 0)");
     }
 
@@ -63,6 +64,7 @@ public sealed class WindowTracker : IDisposable
         try
         {
             var next = Build();
+            _hook?.SetTracked(next.Select(w => w.Handle));
             if (next.SequenceEqual(Current)) return;
             Current = next;
             Changed?.Invoke();

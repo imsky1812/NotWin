@@ -15,7 +15,13 @@ public sealed unsafe class WindowEventsHook : IDisposable
 {
     // Function pointers cannot capture, so the managed callback lives in a static slot (one instance at a time).
     private static Action? s_callback;
+    // Handles of the windows the tracker currently lists. Published as an immutable-by-convention set
+    // reference (never mutated after publishing), so the callback can read it without a lock.
+    private static volatile HashSet<nint> s_tracked = [];
     private readonly HWINEVENTHOOK[] _hooks;
+
+    /// <summary>Publishes the set of listed top-level windows; their HIDE/DESTROY events always get through.</summary>
+    public void SetTracked(IEnumerable<nint> handles) => s_tracked = new HashSet<nint>(handles);
 
     /// <summary>How many of the hook ranges failed to install (0 when healthy).</summary>
     public int FailedHooks { get; }
@@ -41,7 +47,15 @@ public sealed unsafe class WindowEventsHook : IDisposable
         if (idObject != 0 /* OBJID_WINDOW */ || idChild != 0 || hwnd == HWND.Null) return;
         // Object events fire for every child control too (terminal titles, tooltips, menus): only top-level
         // windows matter. Foreground (0x0003) and cloak (0x8017/8) events are already top-level.
-        if (ev is >= 0x8000 and <= 0x800C && PInvoke.GetAncestor(hwnd, GET_ANCESTOR_FLAGS.GA_PARENT) != PInvoke.GetDesktopWindow()) return;
+        if (ev is >= 0x8000 and <= 0x800C)
+        {
+            // The callback is out-of-context, so a closing window is usually already gone and GetAncestor
+            // can no longer say it was top-level. HIDE/DESTROY therefore pass for any window we list
+            // (only those matter for removal); CREATE/SHOW/NAMECHANGE need a live top-level window.
+            var removal = ev is 0x8001 or 0x8003;
+            if (removal ? !s_tracked.Contains(hwnd)
+                        : PInvoke.GetAncestor(hwnd, GET_ANCESTOR_FLAGS.GA_PARENT) != PInvoke.GetDesktopWindow()) return;
+        }
         try { s_callback?.Invoke(); } catch { /* never throw across the native boundary */ }
     }
 
@@ -50,5 +64,6 @@ public sealed unsafe class WindowEventsHook : IDisposable
         foreach (var h in _hooks)
             if (h != default) PInvoke.UnhookWinEvent(h);
         s_callback = null;
+        s_tracked = [];
     }
 }
