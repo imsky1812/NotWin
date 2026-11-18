@@ -6,7 +6,7 @@ using NothingShell.Native;
 namespace NothingShell.Dock;
 
 /// <summary>
-/// Greyscale (luminance only, alpha kept) app icons, frozen and cached by key. Bounded LRU so memory cannot
+/// Full-colour app icons, frozen and cached by key. Bounded LRU so memory cannot
 /// grow with the number of distinct apps seen. UI thread only.
 /// </summary>
 public sealed class AppIconCache
@@ -55,20 +55,14 @@ public sealed class AppIconCache
         if (rooted && !File.Exists(exePathOrAumid)) return null;
         var parsing = rooted ? exePathOrAumid : @"shell:AppsFolder\" + exePathOrAumid;
         var icon = IconNative.GetIcon(parsing, sizePx);
-        return icon is { } i ? Greyscale(i.Bgra, i.Size) : null;
+        return icon is { } i ? ToBitmap(i.Bgra, i.Size) : null;
     }
 
-    private static BitmapSource Greyscale(byte[] bgra, int size)
+    private static BitmapSource ToBitmap(byte[] bgra, int size)
     {
-        var px = (byte[])bgra.Clone();
-        for (var o = 0; o + 3 < px.Length; o += 4)
-        {
-            // Rec. 709 luminance, alpha untouched. Measured on this machine: IShellItemImageFactory returns STRAIGHT
-            // alpha for these icons (soft-edge pixels routinely have colour > alpha, impossible if premultiplied).
-            var lum = (byte)(0.0722 * px[o] + 0.7152 * px[o + 1] + 0.2126 * px[o + 2] + 0.5);
-            px[o] = px[o + 1] = px[o + 2] = lum;
-        }
-        var bmp = BitmapSource.Create(size, size, 96, 96, PixelFormats.Bgra32, null, px, size * 4);
+        // Original colours. IShellItemImageFactory returns STRAIGHT alpha for these icons (measured: soft-edge
+        // pixels routinely have colour > alpha, impossible if premultiplied), hence Bgra32.
+        var bmp = BitmapSource.Create(size, size, 96, 96, PixelFormats.Bgra32, null, bgra, size * 4);
         bmp.Freeze();
         return bmp;
     }
