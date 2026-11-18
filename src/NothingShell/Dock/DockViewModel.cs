@@ -25,8 +25,8 @@ public sealed class DockViewModel : INotifyPropertyChanged
     /// <summary>Pinned and running apps (see <see cref="DockController"/>).</summary>
     public ObservableCollection<DockItemViewModel> Items { get; } = [];
 
-    /// <summary>Tray glyphs (Wi-Fi, volume, battery, clock); filled in Task 14.</summary>
-    public ObservableCollection<object> Tray { get; } = [];
+    /// <summary>Tray values (clock, Wi-Fi, volume, battery). Created on the UI thread; started by App.</summary>
+    public TrayStatusService Tray { get; } = new();
 
     private void OnPropertyChanged([CallerMemberName] string? name = null) =>
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));

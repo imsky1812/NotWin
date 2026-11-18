@@ -16,6 +16,7 @@ public partial class App : Application
     private MouseEdgeHook? _mouse;
     private FullscreenMonitor? _fullscreen;
     private DockController? _controller;
+    private TrayStatusService? _tray;
 
     protected override void OnStartup(StartupEventArgs e)
     {
@@ -59,6 +60,8 @@ public partial class App : Application
         var settings = PinnedAppsImporter.ApplyFirstRun(store.Load(), store);
 
         var vm = new DockViewModel();
+        _tray = vm.Tray;
+        _tray.Start();
         _dock = new DockWindow(vm);
         _dock.Initialize();
         _dock.Closed += (_, _) => Shutdown(); // WM_CLOSE to the (usually hidden) dock window quits the shell
@@ -102,6 +105,7 @@ public partial class App : Application
         try
         {
             _controller?.Dispose();
+            _tray?.Dispose();
             _mouse?.Dispose();
             _fullscreen?.Dispose();
             _reveal?.Dispose();

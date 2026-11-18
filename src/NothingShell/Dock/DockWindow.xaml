@@ -16,6 +16,95 @@
         FontFamily="{StaticResource Font.Geist}"
         Foreground="{StaticResource Brush.Text}">
 
+    <Window.Resources>
+        <!-- Monochrome 24x24 line glyphs, drawn at 16 px (Viewbox). -->
+        <Style x:Key="Glyph" TargetType="Path">
+            <Setter Property="Stroke" Value="{StaticResource Brush.Text}" />
+            <Setter Property="StrokeThickness" Value="1.9" />
+            <Setter Property="StrokeLineJoin" Value="Round" />
+            <Setter Property="StrokeStartLineCap" Value="Round" />
+            <Setter Property="StrokeEndLineCap" Value="Round" />
+        </Style>
+        <Style x:Key="WifiGlyph" TargetType="Viewbox">
+            <Setter Property="Width" Value="16" />
+            <Setter Property="Height" Value="16" />
+            <Setter Property="Margin" Value="0,0,10,0" />
+            <Style.Triggers>
+                <!-- connected = full; radio on but not connected = dim; radio off = slashed (see the slash path). -->
+                <DataTrigger Binding="{Binding Tray.WifiConnected}" Value="False">
+                    <Setter Property="Opacity" Value="0.4" />
+                </DataTrigger>
+                <DataTrigger Binding="{Binding Tray.WifiEnabled}" Value="False">
+                    <Setter Property="Opacity" Value="0.75" />
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+        <Style x:Key="WifiSlash" TargetType="Path" BasedOn="{StaticResource Glyph}">
+            <Setter Property="Visibility" Value="Collapsed" />
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding Tray.WifiEnabled}" Value="False">
+                    <Setter Property="Visibility" Value="Visible" />
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+        <Style x:Key="VolWave1" TargetType="Path" BasedOn="{StaticResource Glyph}">
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding Tray.VolumeLevel}" Value="0">
+                    <Setter Property="Visibility" Value="Collapsed" />
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+        <Style x:Key="VolWave2" TargetType="Path" BasedOn="{StaticResource Glyph}">
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding Tray.VolumeLevel}" Value="0">
+                    <Setter Property="Visibility" Value="Collapsed" />
+                </DataTrigger>
+                <DataTrigger Binding="{Binding Tray.VolumeLevel}" Value="1">
+                    <Setter Property="Visibility" Value="Collapsed" />
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+        <Style x:Key="VolMuteX" TargetType="Path" BasedOn="{StaticResource Glyph}">
+            <Setter Property="Visibility" Value="Collapsed" />
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding Tray.VolumeLevel}" Value="0">
+                    <Setter Property="Visibility" Value="Visible" />
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+        <Style x:Key="BatteryFill" TargetType="Rectangle">
+            <Setter Property="Fill" Value="{StaticResource Brush.Text}" />
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding Tray.BatteryLow}" Value="True">
+                    <Setter Property="Fill" Value="{StaticResource Brush.Red}" />
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+        <Style x:Key="BatteryBolt" TargetType="Path">
+            <Setter Property="Visibility" Value="Collapsed" />
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding Tray.Charging}" Value="True">
+                    <Setter Property="Visibility" Value="Visible" />
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+        <Style x:Key="BatteryBox" TargetType="Canvas">
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding Tray.HasBattery}" Value="False">
+                    <Setter Property="Visibility" Value="Hidden" />
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+        <Style x:Key="TrayHost" TargetType="Border">
+            <Setter Property="Background" Value="Transparent" />
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Background" Value="#14FFFFFF" />
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+    </Window.Resources>
+
     <!-- The window spans from the pill's top down to the screen bottom (pill + 12 DIP gap), so the pill can
          slide in from below the screen edge; the window clips it. Fully transparent pixels are click-through. -->
     <Grid ClipToBounds="True">
@@ -31,6 +120,7 @@
             <Border.RenderTransform>
                 <TranslateTransform x:Name="Slide" Y="90" />
             </Border.RenderTransform>
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center">
             <ItemsControl x:Name="ItemsHost" ItemsSource="{Binding Items}" VerticalAlignment="Center"
                           HorizontalAlignment="Center" Focusable="False">
                 <ItemsControl.ItemsPanel>
@@ -66,6 +156,63 @@
                     </DataTemplate>
                 </ItemsControl.ItemTemplate>
             </ItemsControl>
+
+            <Rectangle Width="1" Height="26" Margin="6,0" Fill="{StaticResource Brush.Line}" VerticalAlignment="Center" />
+
+            <!-- Tray: one 44 px hover area (mockup .tray): chevron, Wi-Fi, volume, battery, time; 10 px gaps. Fixed width. -->
+            <Border x:Name="TrayHost" Width="162" Height="44" CornerRadius="14" Style="{StaticResource TrayHost}"
+                    MouseLeftButtonUp="OnTrayUp">
+                <StackPanel Orientation="Horizontal" Margin="10,0" VerticalAlignment="Center">
+                    <!-- Overflow chevron: 20 px wide hit area in a 16 px slot (-2 / +8 margins keep the 10 px gap). -->
+                    <Border Width="20" Height="44" Margin="-2,0,8,0" Background="Transparent" ToolTip="Hidden icons"
+                            MouseLeftButtonUp="OnOverflowUp">
+                        <Viewbox Width="16" Height="16">
+                            <Canvas Width="24" Height="24">
+                                <Path Style="{StaticResource Glyph}" Data="M6,15 L12,9 L18,15" />
+                            </Canvas>
+                        </Viewbox>
+                    </Border>
+
+                    <Viewbox Style="{StaticResource WifiGlyph}">
+                        <Canvas Width="24" Height="24">
+                            <Path Style="{StaticResource Glyph}" Data="M2,9 A15,15 0 0 1 22,9 M5,12.5 A10,10 0 0 1 19,12.5 M8.5,16 A5,5 0 0 1 15.5,16 M12,19 L12,19.01" />
+                            <Path Style="{StaticResource WifiSlash}" Data="M3,3 L21,21" />
+                        </Canvas>
+                    </Viewbox>
+
+                    <Viewbox Width="16" Height="16" Margin="0,0,10,0">
+                        <Canvas Width="24" Height="24">
+                            <Path Style="{StaticResource Glyph}" Data="M4,9 H8 L13,5 V19 L8,15 H4 Z" />
+                            <Path Style="{StaticResource VolWave1}" Data="M16,9 A4,4 0 0 1 16,15" />
+                            <Path Style="{StaticResource VolWave2}" Data="M18.5,6.5 A8,8 0 0 1 18.5,17.5" />
+                            <Path Style="{StaticResource VolMuteX}" Data="M17,9 L22,15 M22,9 L17,15" />
+                        </Canvas>
+                    </Viewbox>
+
+                    <!-- Battery 16x9: 14x9 body outline, nub, fill 0-10 px proportional to the charge. -->
+                    <Canvas Width="16" Height="9" Margin="0,0,10,0" VerticalAlignment="Center"
+                            Style="{StaticResource BatteryBox}">
+                        <Rectangle Canvas.Left="0.5" Canvas.Top="0.5" Width="13" Height="8" RadiusX="2" RadiusY="2"
+                                   Stroke="{StaticResource Brush.Text}" StrokeThickness="1" />
+                        <Rectangle Canvas.Left="14.5" Canvas.Top="2.5" Width="1.5" Height="4" RadiusX="0.5" RadiusY="0.5"
+                                   Fill="{StaticResource Brush.Text}" />
+                        <Rectangle Canvas.Left="2" Canvas.Top="2" Height="5" RadiusX="1" RadiusY="1"
+                                   Width="{Binding Tray.BatteryFillWidth}" Style="{StaticResource BatteryFill}" />
+                        <Path Style="{StaticResource BatteryBolt}" Data="M8,1 L4.5,5 H7 L6,8 L9.5,4 H7 Z"
+                              Fill="#FF101010" Stroke="#FFF2F2F2" StrokeThickness="0.6" StrokeLineJoin="Round" />
+                    </Canvas>
+
+                    <!-- Time 12 px Space Mono, day 10 px dim underneath, right aligned (mockup .tm, line-height 1.15). -->
+                    <StackPanel Width="38" VerticalAlignment="Center">
+                        <TextBlock Text="{Binding Tray.Time}" FontFamily="{StaticResource Font.Mono}" FontSize="12"
+                                   LineStackingStrategy="BlockLineHeight" LineHeight="14" TextAlignment="Right" />
+                        <TextBlock Text="{Binding Tray.Day}" FontFamily="{StaticResource Font.Mono}" FontSize="10"
+                                   Foreground="{StaticResource Brush.Dim}" LineStackingStrategy="BlockLineHeight"
+                                   LineHeight="12" TextAlignment="Right" />
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+            </StackPanel>
         </Border>
     </Grid>
 </Window>

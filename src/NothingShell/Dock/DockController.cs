@@ -32,6 +32,15 @@ public sealed class DockController : IDisposable
         _tracker.Changed += Rebuild;
         _dock.ItemClicked += OnItemClicked;
         _dock.ItemContext += OnItemContext;
+        _dock.TrayClicked += OnTrayClicked;
+        _dock.OverflowClicked += OverflowOpener.Open;
+    }
+
+    // Until the Plan 3 quick-settings panel exists, the tray opens Windows' own (Win+A).
+    private void OnTrayClicked()
+    {
+        ClosePopup();
+        if (!TrayInputNative.SendQuickSettings()) Log.Info("tray: Win+A injection failed");
     }
 
     public void Start()

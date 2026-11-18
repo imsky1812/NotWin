@@ -55,13 +55,28 @@ public partial class DockWindow : Window
     // Item slot 44 + 2x2 margin, pill padding 2x10 and border 2x1 (mockup: 44 px items, 4 px gap, 10 px padding).
     private const double SlotWidth = 48;
     private const double PillChrome = 22;
+    // Divider (1 + 2x6 margin) and the tray (2x10 padding + four 16 px glyphs + four 10 px gaps + 38 px time).
+    private const double DividerWidth = 13;
+    private const double TrayWidth = 162;
 
-    /// <summary>Pill width (DIP): follows the item count (at least one slot wide). The tray (Task 14) will add to it.</summary>
-    public double ContentWidth => PillChrome + SlotWidth * Math.Max(_vm.Items.Count, 1);
+    /// <summary>Pill width (DIP): the item slots (at least one wide), the divider and the fixed-width tray.</summary>
+    public double ContentWidth => PillChrome + SlotWidth * Math.Max(_vm.Items.Count, 1) + DividerWidth + TrayWidth;
 
     /// <summary>A dock item was left-clicked / right-clicked; the element anchors the popup.</summary>
     public event Action<DockItemViewModel, FrameworkElement>? ItemClicked;
     public event Action<DockItemViewModel, FrameworkElement>? ItemContext;
+
+    /// <summary>The tray (not the overflow chevron) was clicked / the overflow chevron was clicked.</summary>
+    public event Action? TrayClicked;
+    public event Action? OverflowClicked;
+
+    private void OnTrayUp(object sender, System.Windows.Input.MouseButtonEventArgs e) => TrayClicked?.Invoke();
+
+    private void OnOverflowUp(object sender, System.Windows.Input.MouseButtonEventArgs e)
+    {
+        e.Handled = true; // the chevron is part of the tray: do not also open quick settings
+        OverflowClicked?.Invoke();
+    }
 
     private void OnItemLeftUp(object sender, System.Windows.Input.MouseButtonEventArgs e)
     {

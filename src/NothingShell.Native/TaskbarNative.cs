@@ -58,6 +58,15 @@ public static class TaskbarNative
         return true;
     }
 
+    /// <summary>True when <paramref name="hwnd"/> is an explorer-owned Shell_TrayWnd (not a third-party decoy such as Fenn's).</summary>
+    public static bool IsExplorerTrayWindow(nint hwnd)
+    {
+        if (hwnd == 0) return false;
+        Span<char> cls = stackalloc char[64];
+        var n = PInvoke.GetClassName(new HWND(hwnd), cls);
+        return n > 0 && cls[..n].SequenceEqual(PrimaryClass) && IsExplorerOwned(new HWND(hwnd));
+    }
+
     private static APPBARDATA NewAppBarData(HWND hwnd) => new()
     {
         cbSize = (uint)Marshal.SizeOf<APPBARDATA>(),
