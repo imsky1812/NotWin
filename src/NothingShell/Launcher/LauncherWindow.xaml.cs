@@ -58,7 +58,7 @@ public partial class LauncherWindow : Window
         _openPointer = null;
         LauncherIcons.BeginSession();
         _vm.Reset();
-        PowerChoices.Visibility = Visibility.Collapsed;
+        PowerMenu.IsOpen = false;
         SearchBox.Text = "";
         // Cover the primary monitor (DIPs).
         Left = 0;
@@ -117,7 +117,7 @@ public partial class LauncherWindow : Window
             case Key.Enter: _vm.ActivateSelected(); e.Handled = true; break;
             case Key.Tab: e.Handled = true; break;
             case Key.Escape:
-                if (PowerChoices.Visibility == Visibility.Visible) PowerChoices.Visibility = Visibility.Collapsed;
+                if (PowerMenu.IsOpen) PowerMenu.IsOpen = false;
                 else if (!_vm.Back()) Dismissed?.Invoke();
                 e.Handled = true;
                 break;
@@ -213,7 +213,7 @@ public partial class LauncherWindow : Window
         stack.Children.Add(Circle(item, 48, 28, 48));
         stack.Children.Add(new TextBlock
         {
-            Text = item.Name, FontSize = 11, Foreground = (Brush)FindResource("Brush.SoftText"),
+            Text = item.Name, FontSize = 11.5, FontWeight = FontWeights.Medium, Foreground = (Brush)FindResource("Brush.SoftText"),
             Margin = new Thickness(4, 7, 4, 0), TextTrimming = TextTrimming.CharacterEllipsis,
             HorizontalAlignment = HorizontalAlignment.Center, MaxWidth = 92,
         });
@@ -226,7 +226,7 @@ public partial class LauncherWindow : Window
         text.Children.Add(new TextBlock { Text = item.Name, FontSize = 19, FontWeight = FontWeights.SemiBold, TextTrimming = TextTrimming.CharacterEllipsis });
         text.Children.Add(new TextBlock { Text = $"{KindLabel(item.Kind)} · ENTER TO OPEN", Style = (Style)FindResource("Label"), Margin = new Thickness(0, 4, 0, 0) });
         var row = new DockPanel();
-        var circle = Circle(item, 58, 36, 48);
+        var circle = Circle(item, 50, 28, 48); // user feedback: the first icon read too large
         circle.Margin = new Thickness(0, 0, 16, 0);
         row.Children.Add(circle);
         row.Children.Add(text);
@@ -247,7 +247,7 @@ public partial class LauncherWindow : Window
         var circle = Circle(item, 32, 20, 32);
         circle.Margin = new Thickness(0, 0, 12, 0);
         dock.Children.Add(circle);
-        dock.Children.Add(new TextBlock { Text = item.Name, FontSize = 14, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis });
+        dock.Children.Add(new TextBlock { Text = item.Name, FontSize = 14, FontWeight = FontWeights.Medium, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis });
         return Interactive(new Border { CornerRadius = new CornerRadius(12), Padding = new Thickness(10, 9, 10, 9), Margin = new Thickness(0, 1, 0, 1), Child = dock }, item);
     }
 
@@ -283,9 +283,9 @@ public partial class LauncherWindow : Window
     }
 
     private void OnPowerClick(object sender, MouseButtonEventArgs e)
-        => PowerChoices.Visibility = PowerChoices.Visibility == Visibility.Visible ? Visibility.Collapsed : Visibility.Visible;
+        => PowerMenu.IsOpen = !PowerMenu.IsOpen;
 
-    private void OnSleep(object sender, MouseButtonEventArgs e) => PowerRequested?.Invoke("sleep");
-    private void OnRestart(object sender, MouseButtonEventArgs e) => PowerRequested?.Invoke("restart");
-    private void OnShutDown(object sender, MouseButtonEventArgs e) => PowerRequested?.Invoke("shutdown");
+    private void OnSleep(object sender, MouseButtonEventArgs e) { PowerMenu.IsOpen = false; PowerRequested?.Invoke("sleep"); }
+    private void OnRestart(object sender, MouseButtonEventArgs e) { PowerMenu.IsOpen = false; PowerRequested?.Invoke("restart"); }
+    private void OnShutDown(object sender, MouseButtonEventArgs e) { PowerMenu.IsOpen = false; PowerRequested?.Invoke("shutdown"); }
 }

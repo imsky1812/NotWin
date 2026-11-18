@@ -19,7 +19,8 @@
         <!-- Small uppercase labels (.lbl2 / .sec in the mockup): Geist Mono, dim. -->
         <Style x:Key="Label" TargetType="TextBlock">
             <Setter Property="FontFamily" Value="{StaticResource Font.GeistMono}" />
-            <Setter Property="FontSize" Value="9" />
+            <Setter Property="FontWeight" Value="Medium" />
+            <Setter Property="FontSize" Value="9.5" />
             <Setter Property="Foreground" Value="{StaticResource Brush.Dim}" />
             <Setter Property="VerticalAlignment" Value="Center" />
         </Style>
@@ -27,12 +28,17 @@
             <Setter Property="FontSize" Value="10" />
             <Setter Property="Margin" Value="0,0,0,10" />
         </Style>
-        <Style x:Key="PowerChoice" TargetType="Border">
+        <!-- Power menu rows: same look as the dock's right-click menu (DockPopup). -->
+        <Style x:Key="PowerRow" TargetType="Border">
             <Setter Property="CornerRadius" Value="12" />
-            <Setter Property="Padding" Value="10,6" />
-            <Setter Property="Margin" Value="0,0,6,0" />
-            <Setter Property="Background" Value="{StaticResource Brush.Circle}" />
+            <Setter Property="Padding" Value="12,8" />
+            <Setter Property="Background" Value="Transparent" />
             <Setter Property="Cursor" Value="Hand" />
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Background" Value="{StaticResource Brush.RowSel}" />
+                </Trigger>
+            </Style.Triggers>
         </Style>
     </Window.Resources>
 
@@ -42,7 +48,7 @@
 
         <Border x:Name="Panel" Width="620" HorizontalAlignment="Center" VerticalAlignment="Top" Margin="0,150,0,0"
                 Padding="16" CornerRadius="{StaticResource Radius.Panel}"
-                Background="{StaticResource Brush.Glass}" BorderBrush="{StaticResource Brush.Line}" BorderThickness="1">
+                Background="{StaticResource Brush.GlassDense}" BorderBrush="{StaticResource Brush.Line}" BorderThickness="1">
             <Border.RenderTransform>
                 <TranslateTransform x:Name="PanelShift" Y="0" />
             </Border.RenderTransform>
@@ -60,7 +66,7 @@
                         <Grid>
                             <TextBlock x:Name="Placeholder" Text="Search apps, settings, files" FontSize="18"
                                        Foreground="{StaticResource Brush.Placeholder}" IsHitTestVisible="False" VerticalAlignment="Center" />
-                            <TextBox x:Name="SearchBox" FontSize="18" Background="Transparent" BorderThickness="0" Padding="0"
+                            <TextBox x:Name="SearchBox" FontSize="18" Background="Transparent" BorderThickness="0" Padding="0" MaxLength="256"
                                      Foreground="{StaticResource Brush.Text}" CaretBrush="{StaticResource Brush.Text}"
                                      FontFamily="{StaticResource Font.Geist}" VerticalAlignment="Center"
                                      TextChanged="OnSearchTextChanged" />
@@ -85,6 +91,7 @@
                 <StackPanel x:Name="AllAppsView" Visibility="Collapsed">
                     <TextBlock Text="ALL APPS" Style="{StaticResource Section}" />
                     <ListBox x:Name="AllAppsList" Height="360" Background="Transparent" BorderThickness="0"
+                             Foreground="{StaticResource Brush.Text}" FontWeight="Medium"
                              ScrollViewer.HorizontalScrollBarVisibility="Disabled"
                              VirtualizingPanel.IsVirtualizing="True" VirtualizingPanel.VirtualizationMode="Recycling"
                              Focusable="False" SelectionChanged="OnAllAppsSelectionChanged">
@@ -126,11 +133,19 @@
                 <Border BorderBrush="{StaticResource Brush.Line}" BorderThickness="0,1,0,0" Padding="0,12,0,0" Margin="0,12,0,0">
                     <DockPanel>
                         <StackPanel Orientation="Horizontal" DockPanel.Dock="Right" VerticalAlignment="Center">
-                            <StackPanel x:Name="PowerChoices" Orientation="Horizontal" Visibility="Collapsed" Margin="0,0,8,0">
-                                <Border Style="{StaticResource PowerChoice}" MouseLeftButtonUp="OnSleep"><TextBlock Text="SLEEP" Style="{StaticResource Label}" Foreground="{StaticResource Brush.Text}" /></Border>
-                                <Border Style="{StaticResource PowerChoice}" MouseLeftButtonUp="OnRestart"><TextBlock Text="RESTART" Style="{StaticResource Label}" Foreground="{StaticResource Brush.Text}" /></Border>
-                                <Border Style="{StaticResource PowerChoice}" MouseLeftButtonUp="OnShutDown"><TextBlock Text="SHUT DOWN" Style="{StaticResource Label}" Foreground="{StaticResource Brush.Text}" /></Border>
-                            </StackPanel>
+                            <!-- Power menu: a small glass box above the power button, like the dock's menus. -->
+                            <Popup x:Name="PowerMenu" PlacementTarget="{Binding ElementName=PowerButton}" Placement="Top"
+                                   HorizontalOffset="-118" VerticalOffset="-8" AllowsTransparency="True" StaysOpen="False"
+                                   PopupAnimation="Fade">
+                                <Border CornerRadius="18" Background="{StaticResource Brush.GlassDense}" BorderBrush="{StaticResource Brush.Line}"
+                                        BorderThickness="1" Padding="6" Width="152">
+                                    <StackPanel>
+                                        <Border Style="{StaticResource PowerRow}" MouseLeftButtonUp="OnSleep"><TextBlock Text="Sleep" FontSize="13" FontWeight="Medium" Foreground="{StaticResource Brush.Text}" /></Border>
+                                        <Border Style="{StaticResource PowerRow}" MouseLeftButtonUp="OnRestart"><TextBlock Text="Restart" FontSize="13" FontWeight="Medium" Foreground="{StaticResource Brush.Text}" /></Border>
+                                        <Border Style="{StaticResource PowerRow}" MouseLeftButtonUp="OnShutDown"><TextBlock Text="Shut down" FontSize="13" FontWeight="Medium" Foreground="{StaticResource Brush.Text}" /></Border>
+                                    </StackPanel>
+                                </Border>
+                            </Popup>
                             <TextBlock x:Name="AllAppsLink" Text="ALL APPS ›" Style="{StaticResource Label}" Cursor="Hand" Margin="0,0,8,0"
                                        MouseLeftButtonUp="OnAllAppsClick" />
                             <Border x:Name="PowerButton" Width="34" Height="34" CornerRadius="17" Background="{StaticResource Brush.Circle}"

@@ -84,8 +84,7 @@ No blue, purple, green or yellow anywhere. Notifications and the media widget us
 
 ### Type
 - **Dot matrix:** numbers only (clocks, timer, percentages, scores, temperatures). Use the **5×7 dot renderer from the mockups** as the default so it matches what was approved; NDot can be offered as an option **(builder's call)**. Never use dots for sentences.
-- **Launcher + quick-settings panel:** **Geist** (text) and **Geist Mono** (small uppercase labels), as the user asked.
-- **Notch + widgets:** Space Grotesk (text) + Space Mono (small uppercase labels), as in the mockups.
+- **All UI (dock, menus, launcher, quick-settings panel, notch, widgets):** **Geist** (text) and **Geist Mono** (small uppercase labels, clock digits in the dock), latest release (v1.9.2), bundled as static weights so Medium/SemiBold render as real weights. *User decision 2026-11-18, replacing the earlier Space Grotesk / Space Mono for the notch and widgets.*
 - **Date numerals:** DM Serif Display (date widget and calendar header).
 - Fonts are bundled with the app (no network font loading).
 

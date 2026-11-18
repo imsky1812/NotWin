@@ -73,7 +73,7 @@ public static class ConflictGate
             var panel = new StackPanel();
             panel.Children.Add(new TextBlock
             {
-                Text = "NOTHING SHELL", FontFamily = (FontFamily)res["Font.Grotesk"], FontSize = 11,
+                Text = "NOTHING SHELL", FontFamily = (FontFamily)res["Font.GeistMono"], FontWeight = FontWeights.Medium, FontSize = 11,
                 Foreground = (Brush)res["Brush.Dim"], Margin = new Thickness(0, 0, 0, 10),
             });
             panel.Children.Add(new TextBlock
