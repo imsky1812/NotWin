@@ -91,6 +91,21 @@ public sealed class LoneWinDetectorTests
     }
 
     [Fact]
+    public void StaleWinDown_AfterMissedWinUp_NextTapOpens()
+    {
+        // Win+L: both the L and the Win keyups happen on the lock screen; the hook sees neither.
+        var physicallyDown = new HashSet<uint>();
+        var d = new LoneWinDetector(vk => physicallyDown.Contains(vk));
+        physicallyDown.Add(LWin); d.OnKey(LWin, true, false);
+        physicallyDown.Add(0x4C); d.OnKey(0x4C, true, false);
+        physicallyDown.Clear(); // unlocked later: nothing is held any more
+
+        // In an LL hook the async key state updates after the hook returns: a fresh press still reads "up".
+        Assert.Equal(Nothing, d.OnKey(LWin, true, false));
+        Assert.Equal(Open, d.OnKey(LWin, false, false));
+    }
+
+    [Fact]
     public void InjectedOwnKeys_AreIgnored()
     {
         var d = new LoneWinDetector();

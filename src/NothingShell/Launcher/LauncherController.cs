@@ -19,6 +19,7 @@ public sealed class LauncherController : IDisposable
     private readonly DispatcherTimer _trim;
     private LauncherViewModel? _vm;
     private LauncherWindow? _window;
+    private bool _windowClosed;
     private bool _disposed;
 
     /// <summary>Raised after a launch with the item's display name (Plan 3's notch shows "Opening ‹name›…").</summary>
@@ -70,7 +71,9 @@ public sealed class LauncherController : IDisposable
 
     private LauncherWindow EnsureWindow()
     {
-        if (_window is not null) return _window;
+        // Belt and braces for I2: if the window was ever destroyed anyway, build a new one instead of failing forever.
+        if (_window is not null && !_windowClosed) return _window;
+        _windowClosed = false;
         _vm = new LauncherViewModel(new LauncherSources(
             Searchable: () => _index.All,
             MostUsed: _index.MostUsed,
@@ -79,6 +82,7 @@ public sealed class LauncherController : IDisposable
             FileSearch: _files.SearchAsync), TimeSpan.FromMilliseconds(150));
         _vm.LaunchRequested += OnLaunchRequested;
         _window = new LauncherWindow(_vm);
+        _window.Closed += (_, _) => _windowClosed = true;
         _window.Dismissed += Close;
         _window.PowerRequested += OnPower;
         return _window;
@@ -112,6 +116,6 @@ public sealed class LauncherController : IDisposable
         if (_disposed) return;
         _disposed = true;
         _trim.Stop();
-        try { _window?.Close(); } catch { }
+        try { _window?.CloseForGood(); } catch { }
     }
 }

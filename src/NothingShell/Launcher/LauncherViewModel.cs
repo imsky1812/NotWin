@@ -31,6 +31,7 @@ public sealed class LauncherViewModel : INotifyPropertyChanged
     private IReadOnlyList<LaunchItem> _files = [];
     private int _selected = -1;
     private int _version;
+    private bool _pointerMoved;
     private CancellationTokenSource? _fileCts;
 
     public LauncherViewModel(LauncherSources sources, TimeSpan fileDebounce)
@@ -99,12 +100,24 @@ public sealed class LauncherViewModel : INotifyPropertyChanged
         Selected = Math.Clamp(start + delta, 0, count - 1);
     }
 
-    /// <summary>Selects <paramref name="item"/> in the current list (mouse hover/click).</summary>
+    /// <summary>Selects <paramref name="item"/> in the current list.</summary>
     public void Select(LaunchItem item)
     {
         var i = IndexOf(CurrentList, item.Id);
         if (i >= 0) Selected = i;
     }
+
+    /// <summary>
+    /// Mouse hover selection: ignored until the pointer has actually moved since the launcher opened, so a cursor
+    /// that happens to rest over a tile does not pick an app the user never chose (Enter would launch it).
+    /// </summary>
+    public void HoverSelect(LaunchItem item)
+    {
+        if (_pointerMoved) Select(item);
+    }
+
+    /// <summary>The mouse moved since the launcher opened (the window reports it).</summary>
+    public void PointerMoved() => _pointerMoved = true;
 
     public void ActivateSelected()
     {
@@ -135,6 +148,7 @@ public sealed class LauncherViewModel : INotifyPropertyChanged
     {
         CancelFiles();
         _version++;
+        _pointerMoved = false;
         _query = "";
         OnChanged(nameof(Query));
         _files = [];

@@ -20,6 +20,16 @@ public static unsafe class FullscreenNative
 
     public static nint GetForeground() => PInvoke.GetForegroundWindow();
 
+    /// <summary>True when the foreground window belongs to this process (e.g. the launcher).</summary>
+    public static unsafe bool IsForegroundOwnProcess()
+    {
+        var hwnd = PInvoke.GetForegroundWindow();
+        if (hwnd == HWND.Null) return false;
+        uint pid = 0;
+        PInvoke.GetWindowThreadProcessId(hwnd, &pid);
+        return pid == (uint)Environment.ProcessId;
+    }
+
     /// <summary>Probes the foreground window against the monitor it is on; null if there is no usable foreground window.</summary>
     public static unsafe FullscreenProbe? Probe()
     {

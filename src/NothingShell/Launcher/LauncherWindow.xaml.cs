@@ -19,6 +19,8 @@ public partial class LauncherWindow : Window
     private static readonly Duration OpenDuration = new(TimeSpan.FromMilliseconds(200));
     private readonly LauncherViewModel _vm;
     private bool _hiding;
+    private bool _allowClose;
+    private Point? _openPointer;
 
     /// <summary>The launcher should close: Esc, a click on the scrim, or focus moved elsewhere.</summary>
     public event Action? Dismissed;
@@ -32,12 +34,28 @@ public partial class LauncherWindow : Window
         _vm = vm;
         _vm.PropertyChanged += OnVmChanged;
         PreviewKeyDown += OnPreviewKeyDown;
+        // WPF also raises MouseMove when a window appears under a still cursor: only a real change of position counts.
+        PreviewMouseMove += (_, e) =>
+        {
+            var p = e.GetPosition(Root);
+            if (_openPointer is null) { _openPointer = p; return; }
+            if ((p - _openPointer.Value).Length > 2) _vm.PointerMoved();
+        };
         Deactivated += (_, _) => { if (IsVisible && !_hiding) Dismissed?.Invoke(); };
+        // Alt+F4 would really close (destroy) the window, and the launcher (and the Win key, which still masks
+        // Start) would be dead until the shell restarts. Turn it into an ordinary dismiss instead.
+        Closing += (_, e) =>
+        {
+            if (_allowClose) return;
+            e.Cancel = true;
+            Dismissed?.Invoke();
+        };
     }
 
     public void ShowAndFocus()
     {
         _hiding = false;
+        _openPointer = null;
         LauncherIcons.BeginSession();
         _vm.Reset();
         PowerChoices.Visibility = Visibility.Collapsed;
@@ -67,6 +85,13 @@ public partial class LauncherWindow : Window
         {
             KeyFrames = { new SplineDoubleKeyFrame(0, KeyTime.FromTimeSpan(OpenDuration.TimeSpan), ease) },
         });
+    }
+
+    /// <summary>Really closes the window (shell exit only).</summary>
+    public void CloseForGood()
+    {
+        _allowClose = true;
+        Close();
     }
 
     /// <summary>Hides at once (no exit animation) and drops per-open state.</summary>
@@ -231,7 +256,7 @@ public partial class LauncherWindow : Window
         b.Tag = item;
         b.Cursor = Cursors.Hand;
         if (b.Background is null) b.Background = Brushes.Transparent; // hit-testable
-        b.MouseEnter += (_, _) => _vm.Select(item);
+        b.MouseEnter += (_, _) => _vm.HoverSelect(item);
         b.MouseLeftButtonUp += (_, _) => _vm.Activate(item);
         return b;
     }

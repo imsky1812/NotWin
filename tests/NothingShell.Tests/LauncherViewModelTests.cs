@@ -120,6 +120,27 @@ public sealed class LauncherViewModelTests
     }
 
     [Fact]
+    public void Hover_BeforePointerMoves_DoesNotSelect()
+    {
+        // The launcher can open under a resting cursor; Enter must not launch an app the user never chose.
+        var vm = Vm();
+        vm.HoverSelect(vm.MostUsed[0]);
+        Assert.Equal(-1, vm.Selected);
+    }
+
+    [Fact]
+    public void Hover_AfterPointerMoves_Selects()
+    {
+        var vm = Vm();
+        vm.PointerMoved();
+        vm.HoverSelect(vm.MostUsed[1]);
+        Assert.Equal(1, vm.Selected);
+        vm.Reset();
+        vm.HoverSelect(vm.MostUsed[0]);
+        Assert.Equal(-1, vm.Selected); // a fresh open needs a fresh move
+    }
+
+    [Fact]
     public void Reset_ClearsQueryAndSelection()
     {
         var vm = Vm();

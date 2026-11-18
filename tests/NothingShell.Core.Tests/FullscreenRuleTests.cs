@@ -11,6 +11,13 @@ public sealed class FullscreenRuleTests
     [InlineData(false)]
     public void NullForeground_KeepsPreviousState(bool previous) => Assert.Equal(previous, FullscreenRule.Decide(null, previous));
 
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void OwnProcessForeground_KeepsPreviousState(bool previous) =>
+        // The launcher covers the monitor and is the foreground window: it must not count as a full-screen app.
+        Assert.Equal(previous, FullscreenRule.Decide(new FullscreenProbe(Mon, Mon, "HwndWrapper[NothingShell]", false, true), previous, foregroundIsOwnProcess: true));
+
     [Fact]
     public void Decide_WithProbe_UsesRule() =>
         Assert.True(FullscreenRule.Decide(new FullscreenProbe(Mon, Mon, "UnityWndClass", false, false), previous: false));

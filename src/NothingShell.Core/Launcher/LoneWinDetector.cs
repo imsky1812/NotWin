@@ -35,6 +35,10 @@ public sealed class LoneWinDetector
         {
             if (down)
             {
+                // "Win already down" but Win is not physically down: its keyup was missed (released on the lock
+                // screen after Win+L, Ctrl+Alt+Del or a UAC prompt). In an LL hook the async state updates after
+                // the hook returns, so a real auto-repeat reads "down" and a fresh press reads "up".
+                if (_winDown && _isPhysicallyDown is not null && !_isPhysicallyDown(vk)) _winDown = false;
                 if (!_winDown)
                 {
                     if (_isPhysicallyDown is not null) _held.RemoveWhere(k => !_isPhysicallyDown(k));

@@ -1483,6 +1483,10 @@ try {
         [void](Ask-Check 'LA.8' 'Dock start and search buttons' 'Show the dock and click the start button (dots), close the launcher, then click the search button.' 'Did both open the launcher?')
         [void](Ask-Check 'LA.9' 'All apps A-Z' 'Open the launcher and click "ALL APPS ›". Scroll, use the arrow keys, then press Esc.' 'Was there an A-Z list of your apps, and did Esc go back to the start view?')
         [void](Ask-Check 'LA.10' 'Power menu shows (do NOT click a choice)' 'Click the round power button at the bottom right of the launcher. Do NOT click any choice; press Esc.' 'Did SLEEP, RESTART and SHUT DOWN appear?')
+        [void](Ask-Check 'LA.2b' 'Typing after Win over an elevated window' 'Open Task Manager as administrator (Ctrl+Shift+Esc), click into it, then tap Win and type  note  without clicking.' 'Did "note" appear in the launcher search box?')
+        [void](Ask-Check 'LA.14' 'Quick re-open stays open' 'Tap Win, press Esc, and IMMEDIATELY tap Win again. Do this 3 times.' 'Did the launcher stay open every time (not vanish by itself)?')
+        [void](Ask-Check 'LA.15' 'Alt+F4 only closes it' 'Open the launcher, press Alt+F4, then tap Win.' 'Did the launcher open again normally after Alt+F4?')
+        [void](Ask-Check 'LA.16' 'Win after locking' 'Press Win+L to lock, sign back in, then tap Win ONCE.' 'Did the launcher open (and NOT Windows Start)?')
         [void](Ask-Check 'LA.11' 'Most used follows launches' 'Launch two different apps from the launcher (e.g. Notepad and Paint), close them, then open the launcher with nothing typed.' 'Are those apps now at the start of MOST USED?')
         Write-Do 'FULL SCREEN: open a YouTube video in your browser (not full screen yet).'
         Write-Do 'After you press Enter you get 15 seconds: click the video and press f (full screen). Do NOT click this window. A beep ends it.'

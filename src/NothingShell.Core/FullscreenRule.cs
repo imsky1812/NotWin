@@ -21,5 +21,8 @@ public static class FullscreenRule
     /// The new state for a probe. A null probe (no foreground window for a moment, e.g. while a game switches
     /// windows) keeps the previous state instead of reporting "not full screen" and flashing the dock over it.
     /// </summary>
-    public static bool Decide(FullscreenProbe? probe, bool previous) => probe is { } p ? IsFullscreen(p) : previous;
+    /// Our own windows in front (the launcher covers the whole monitor) keep the previous state too: they are not
+    /// a game or a video, and treating them as one would close the launcher and hide the dock.
+    public static bool Decide(FullscreenProbe? probe, bool previous, bool foregroundIsOwnProcess = false)
+        => foregroundIsOwnProcess ? previous : probe is { } p ? IsFullscreen(p) : previous;
 }

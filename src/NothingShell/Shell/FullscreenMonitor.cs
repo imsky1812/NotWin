@@ -90,7 +90,7 @@ public sealed class FullscreenMonitor : IDisposable
 
     private void Evaluate()
     {
-        var now = FullscreenRule.Decide(FullscreenNative.Probe(), IsFullscreen);
+        var now = FullscreenRule.Decide(FullscreenNative.Probe(), IsFullscreen, FullscreenNative.IsForegroundOwnProcess());
         if (now == IsFullscreen) return;
         IsFullscreen = now;
         Changed?.Invoke(now);

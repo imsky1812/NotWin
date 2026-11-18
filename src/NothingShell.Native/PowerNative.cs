@@ -9,7 +9,8 @@ namespace NothingShell.Native;
 /// <summary>The launcher's power menu: sleep, restart, shut down. Restart/shut down act immediately (user decision).</summary>
 public static unsafe class PowerNative
 {
-    public static bool Sleep() => PInvoke.SetSuspendState(false, false, false);
+    // SetSuspendState is documented to need SeShutdownPrivilege, like restart/shut down.
+    public static bool Sleep() => EnableShutdownPrivilege() && PInvoke.SetSuspendState(false, false, false);
 
     public static bool Restart() => Exit(EXIT_WINDOWS_FLAGS.EWX_REBOOT);
 
