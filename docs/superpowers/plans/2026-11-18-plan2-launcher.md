@@ -503,8 +503,9 @@ README.md                   (modify) launcher usage
 
 ---
 
-## Open questions for the user (ask before Task 1)
+## User decisions (2026-11-18, at plan review)
 
-1. **Fenn at sign-in.** Does Fenn still start with Windows? Plan 1 only checks for Fenn when Nothing Shell starts. If both start at sign-in, which one wins is a race.
-2. **Power menu.** Restart and Shut down act immediately, with no confirmation, matching Windows' Start menu. OK?
-3. **Ranking.** The spec says apps → settings → files strictly. So typing "sound" shows an app called "SoundHound" above the "Sound" setting. Keep it strict?
+1. **Fenn at sign-in:** Fenn no longer starts with Windows, so no Fenn-after-start check is needed.
+2. **Power menu:** Restart and Shut down act immediately, with no confirmation, the same as Windows' Start menu.
+3. **Ranking:** keep the strict apps → settings → files order from the spec.
+4. **Execution:** native. Tasks are implemented in the main session, followed by one whole-branch review on the most capable model.
