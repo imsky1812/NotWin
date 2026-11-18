@@ -39,7 +39,8 @@ public sealed class SettingsStore(string directory)
             var loaded = JsonSerializer.Deserialize<ShellSettings>(text, JsonFile.Options)
                          ?? throw new JsonException("null settings");
             _loadFailed = false;
-            return loaded;
+            // A hand-edited or older file may say "pinnedApps": null; callers rely on a list.
+            return loaded.PinnedApps is null ? loaded with { PinnedApps = [] } : loaded;
         }
         catch (JsonException)
         {

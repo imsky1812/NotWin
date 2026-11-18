@@ -28,6 +28,14 @@ public sealed class TaskbarController : IDisposable
     private uint _taskbarCreated;
     private bool _started;
     private bool _restored;
+    private uint _quitMessage;
+    private bool _watchdogRelaunched;
+
+    /// <summary>Registered window message name broadcast by <c>NothingShell.exe --quit</c>.</summary>
+    public const string QuitMessageName = "NothingShell.Quit";
+
+    /// <summary>Raised on the UI thread when another process asked the shell to quit (<c>--quit</c>).</summary>
+    public event Action? QuitRequested;
     private Dispatcher? _dispatcher;
     private TaskbarShowHook? _showHook;
     private bool _rehideQueued;
@@ -107,6 +115,15 @@ public sealed class TaskbarController : IDisposable
             // A uiAccess process filters registered messages from the (lower-level) Explorer under UIPI: let TaskbarCreated in.
             var ok = AppBarNative.AllowMessage(_source.Handle, _taskbarCreated, out var err);
             Log.Info(ok ? "taskbar watcher: TaskbarCreated allowed through UIPI" : $"taskbar watcher: ChangeWindowMessageFilterEx failed (error {err})");
+            // The same hidden top-level window receives `NothingShell.exe --quit` (a broadcast registered message).
+            _quitMessage = RegisterWindowMessage(QuitMessageName);
+            AppBarNative.AllowMessage(_source.Handle, _quitMessage, out _);
+
+            if (_watchdog is not null)
+            {
+                _watchdog.EnableRaisingEvents = true;
+                _watchdog.Exited += OnWatchdogExited;
+            }
 
             // Explorer shows its taskbar again by itself when a full-screen window closes: hide it again.
             _dispatcher = Dispatcher.CurrentDispatcher;
@@ -198,8 +215,41 @@ public sealed class TaskbarController : IDisposable
         });
     }
 
+    // Thread-pool thread. The watchdog is the safety net for hard kills; if it dies while we run (killed in Task
+    // Manager, crashed), start it once more. If that fails the shell keeps running: the taskbar stays hidden by
+    // design and the user can still quit from the menu, which restores it.
+    private void OnWatchdogExited(object? sender, EventArgs e)
+    {
+        lock (_gate)
+        {
+            if (_stopping || _restored || !ReferenceEquals(sender, _watchdog)) return;
+            int code;
+            try { code = _watchdog!.ExitCode; } catch { code = int.MinValue; }
+            Log.Info($"watchdog exited (code {code})");
+            if (_watchdogRelaunched)
+            {
+                Log.Error("watchdog exited again; not relaunching (quit from the menu restores the taskbar)");
+                return;
+            }
+            _watchdogRelaunched = true;
+            try { _watchdog?.Dispose(); } catch { }
+            _watchdog = WatchdogLauncher.Start(Environment.ProcessId, _stateDir);
+            if (_watchdog is null) { Log.Error("watchdog relaunch failed"); return; }
+            _watchdog.EnableRaisingEvents = true;
+            _watchdog.Exited += OnWatchdogExited;
+            Log.Info($"watchdog relaunched (pid {_watchdog.Id})");
+        }
+    }
+
     private IntPtr WndProc(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
     {
+        if (_quitMessage != 0 && (uint)msg == _quitMessage)
+        {
+            Log.Info("quit requested (--quit)");
+            try { QuitRequested?.Invoke(); } catch (Exception e) { Log.Error("QuitRequested handler failed", e); }
+            handled = true;
+            return IntPtr.Zero;
+        }
         if (_taskbarCreated != 0 && (uint)msg == _taskbarCreated)
         {
             var hidden = false;

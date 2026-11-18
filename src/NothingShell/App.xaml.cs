@@ -22,11 +22,19 @@ public partial class App : Application
     private HookThread? _hooks;
     private Launcher.WinKeyListener? _winKeys;
     private Launcher.LauncherController? _launcher;
+    private Launcher.AppIndex? _index;
     private bool _secondInstance;
 
     protected override void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
+        // `--quit`: ask the running shell to quit cleanly, then exit (never becomes a shell itself).
+        if (QuitCommand.IsRequested(e.Args))
+        {
+            _secondInstance = true;
+            Shutdown(QuitCommand.Run());
+            return;
+        }
         // 1. Single instance: a second copy exits silently, before any UI.
         if (!SingleInstance.TryAcquire())
         {
@@ -80,6 +88,7 @@ public partial class App : Application
             _mouse?.Reinstall();
         };
         _taskbar.TaskbarReHidden += () => _mouse?.Reinstall();
+        _taskbar.QuitRequested += () => Shutdown(); // `NothingShell.exe --quit`: same exit path as the menu's Quit
 
 #if DEBUG
         Theme.FontCheck.Run(Resources);
@@ -87,6 +96,10 @@ public partial class App : Application
         // Low-level hooks (mouse edge, Win key) run on their own message-loop thread so a busy UI thread can't
         // make Windows drop them.
         _hooks = new HookThread("NothingShell.Hooks");
+
+        // App index (launcher search, pin names): first build in the background; nothing waits for it.
+        _index = new Launcher.AppIndex(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "NothingShell"));
+        _ = _index.RefreshIfStaleAsync(TimeSpan.Zero);
 
         // 4. Dock, then 5. StartWithWindows (only from settings that were actually read).
         var (settings, loadedOk) = StartDock();
@@ -98,9 +111,7 @@ public partial class App : Application
 
     private void StartLauncher()
     {
-        var dataDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "NothingShell");
-        var index = new Launcher.AppIndex(dataDir);
-        _ = index.RefreshIfStaleAsync(TimeSpan.Zero); // first index in the background; the launcher never waits for it
+        var index = _index!;
         _launcher = new Launcher.LauncherController(index, new Launcher.FileSearchService());
         _launcher.Launched += name => Log.Info($"launched \"{name}\""); // Plan 3: the notch shows "Opening ‹name›…"
         if (_dock is not null)
@@ -164,7 +175,7 @@ public partial class App : Application
         _dock.HoverChanged += _reveal.SetHoverDock;
         _dock.PlacementChanged += _reveal.Refresh;
 
-        _controller = new DockController(_dock, vm, _reveal, store, settings, _appBar!, Shutdown);
+        _controller = new DockController(_dock, vm, _reveal, store, settings, _appBar!, Shutdown, id => _index?.FindApp(id)?.Name);
         _controller.Start();
 
         _fullscreen = new FullscreenMonitor();

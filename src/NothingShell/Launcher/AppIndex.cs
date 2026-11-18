@@ -57,7 +57,7 @@ public sealed class AppIndex
         try { _usage.Record(item.Id, DateTimeOffset.Now); }
         catch (Exception e) { Log.Error("launcher usage save failed", e); }
         var ok = ShellLinkNative.Open(item.Target);
-        Log.Info($"launch {item.Kind} \"{item.Name}\" ok={ok}");
+        Log.Info(ok ? $"launch {item.Kind} \"{item.Name}\" ok=True" : $"launch {item.Kind} \"{item.Name}\" ok=False error={ShellLinkNative.LastError}");
         return ok;
     }
 

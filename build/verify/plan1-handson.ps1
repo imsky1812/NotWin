@@ -492,16 +492,28 @@ function Start-App {
     return $p
 }
 
-# Quits the app by posting WM_CLOSE to EVERY top-level window of its process (the dock window is hidden, so a
-# title lookup or MainWindow does not work). Never kills. Then asserts the work area equals the starting value
-# (a leaked appbar reservation would leave a dead strip). -NoWait: only post the messages (for timing tests).
+# Quits the app cleanly: first `NothingShell.exe --quit` (the app's own exit path, Plan 2), and only if that is
+# unavailable or does not work, WM_CLOSE to EVERY top-level window of its process (the dock window is hidden, so
+# a title lookup or MainWindow does not work). Never kills. Then asserts the work area equals the starting value
+# (a leaked appbar reservation would leave a dead strip). -NoWait: only post WM_CLOSE (for timing tests).
 function Quit-App($p, [switch]$NoWait) {
     $closed = 0
-    try { $closed = [NsWin]::CloseAllWindows([uint32]$p.Id) } catch { }
-    if ($NoWait) { return @{ windowsClosed = $closed } }
     $sw = [System.Diagnostics.Stopwatch]::StartNew()
     $exited = $false
-    try { $exited = $p.WaitForExit(5000) } catch { $exited = $true }
+    $via = 'wm_close'
+    if (-not $NoWait -and (Test-Path -LiteralPath $AppExe)) {
+        try {
+            $q = Start-Process -FilePath $AppExe -ArgumentList '--quit' -PassThru -WindowStyle Hidden
+            [void]$q.WaitForExit(15000)
+            $exited = $p.WaitForExit(500)
+            if ($exited) { $via = 'quit_command' }
+        } catch { }
+    }
+    if (-not $exited) {
+        try { $closed = [NsWin]::CloseAllWindows([uint32]$p.Id) } catch { }
+        if ($NoWait) { return @{ windowsClosed = $closed } }
+        try { $exited = $p.WaitForExit(5000) } catch { $exited = $true }
+    }
     $exitMs = [int]$sw.ElapsedMilliseconds
     if (-not $exited) { Write-Bad "  The app did not exit within 5 s after WM_CLOSE (not killing it)." }
     $trayMs = Wait-Until { [NsWin]::TrayState() -eq 1 } 4000 100
@@ -513,7 +525,7 @@ function Quit-App($p, [switch]$NoWait) {
         $waOk = (($wa -join ',') -eq ($script:OrigWorkArea -join ','))
         if (-not $waOk) { Write-Bad ("  WORK AREA LEAK: now {0}, expected {1}" -f ($wa -join ','), ($script:OrigWorkArea -join ',')) }
     }
-    return @{ windowsClosed = $closed; exited = $exited; exitMs = $exitMs; trayVisible = ($trayMs -ge 0); trayBackMs = $trayMs
+    return @{ windowsClosed = $closed; exited = $exited; exitMs = $exitMs; via = $via; trayVisible = ($trayMs -ge 0); trayBackMs = $trayMs
               workAreaOk = $waOk; workArea = ($wa -join ','); startWorkArea = ($script:OrigWorkArea -join ',') }
 }
 

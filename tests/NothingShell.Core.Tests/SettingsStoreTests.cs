@@ -66,6 +66,17 @@ public sealed class SettingsStoreTests : IDisposable
     }
 
     [Fact]
+    public void Load_NullPinnedApps_BecomesEmpty()
+    {
+        Directory.CreateDirectory(_dir);
+        File.WriteAllText(Path.Combine(_dir, "settings.json"), "{\"pinnedApps\":null,\"pinsImported\":true}");
+        var s = new SettingsStore(_dir).Load();
+        Assert.NotNull(s.PinnedApps);
+        Assert.Empty(s.PinnedApps);
+        Assert.True(s.PinsImported);
+    }
+
+    [Fact]
     public void Save_AfterFailedLoad_DoesNotOverwrite()
     {
         var path = Path.Combine(_dir, "settings.json");
@@ -76,7 +87,7 @@ public sealed class SettingsStoreTests : IDisposable
 
         store.Save(new ShellSettings());
 
-        Assert.Contains("true", File.ReadAllText(path));
+        Assert.Equal("{\"keepDockVisible\":true}", File.ReadAllText(path)); // byte-for-byte untouched
         Assert.True(store.Load().KeepDockVisible); // lock released: load succeeds, saves allowed again
         store.Save(new ShellSettings { WidgetScale = "L" });
         Assert.Equal("L", store.Load().WidgetScale);

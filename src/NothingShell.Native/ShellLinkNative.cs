@@ -90,10 +90,15 @@ public static unsafe class ShellLinkNative
     /// </summary>
     public static bool Open(string path)
     {
+        LastError = 0;
         try
         {
+            // Files and exes start in their own folder (apps that load files relative to the working directory
+            // break otherwise); shell: and ms-settings: items have no folder.
+            var dir = System.IO.Path.IsPathRooted(path) ? System.IO.Path.GetDirectoryName(path) : null;
             fixed (char* file = path)
             fixed (char* verb = "open")
+            fixed (char* folder = dir)
             {
                 var info = new SHELLEXECUTEINFOW
                 {
@@ -102,11 +107,18 @@ public static unsafe class ShellLinkNative
                     fMask = 0x100000 | 0x400,
                     lpVerb = verb,
                     lpFile = file,
+                    lpDirectory = folder,
                     nShow = 1, // SW_SHOWNORMAL
                 };
-                return PInvoke.ShellExecuteEx(&info);
+                var ok = PInvoke.ShellExecuteEx(&info);
+                if (!ok) LastError = System.Runtime.InteropServices.Marshal.GetLastWin32Error();
+                return ok;
             }
         }
-        catch { return false; }
+        catch (Exception) { LastError = -1; return false; }
     }
+
+    /// <summary>Win32 error of the last failed <see cref="Open"/> on this thread (0 after a success; -1 for an exception).</summary>
+    [ThreadStatic] private static int t_lastError;
+    public static int LastError { get => t_lastError; private set => t_lastError = value; }
 }
