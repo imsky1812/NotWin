@@ -35,6 +35,9 @@ public sealed class TaskbarController : IDisposable
         _store = new TaskbarRestoreStore(_stateDir);
     }
 
+    /// <summary>Raised on the UI thread after Explorer restarted and the taskbar was hidden again.</summary>
+    public event Action? TaskbarRecreated;
+
     public void Start()
     {
         lock (_gate)
@@ -94,6 +97,7 @@ public sealed class TaskbarController : IDisposable
         {
             Log.Info("TaskbarCreated: re-hiding taskbar");
             try { ApplyHidden(); } catch (Exception e) { Log.Error("re-hide failed", e); }
+            try { TaskbarRecreated?.Invoke(); } catch (Exception e) { Log.Error("TaskbarRecreated handler failed", e); }
         }
         return IntPtr.Zero;
     }

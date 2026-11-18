@@ -22,18 +22,24 @@ public sealed class DockController : IDisposable
     private readonly AppIconCache _icons = new();
     private readonly bool _trace = Environment.GetEnvironmentVariable("NOTHINGSHELL_DOCK_TRACE") == "1";
     private ShellSettings _settings;
+    private readonly DockAppBar _appBar;
+    private readonly Action _quit;
     private DockPopup? _popup;
     private string _lastLog = "";
 
-    public DockController(DockWindow dock, DockViewModel vm, DockReveal reveal, SettingsStore store, ShellSettings settings)
+    public DockController(DockWindow dock, DockViewModel vm, DockReveal reveal, SettingsStore store, ShellSettings settings,
+        DockAppBar appBar, Action quit)
     {
         _dock = dock; _vm = vm; _reveal = reveal; _store = store; _settings = settings;
+        _appBar = appBar; _quit = quit;
         _tracker = new WindowTracker();
         _tracker.Changed += Rebuild;
         _dock.ItemClicked += OnItemClicked;
         _dock.ItemContext += OnItemContext;
         _dock.TrayClicked += OnTrayClicked;
         _dock.OverflowClicked += OverflowOpener.Open;
+        _dock.StartContext += OnStartContext;
+        _dock.PlacementChanged += _appBar.Refresh;
     }
 
     // Until the Plan 3 quick-settings panel exists, the tray opens Windows' own (Win+A).
@@ -45,6 +51,7 @@ public sealed class DockController : IDisposable
 
     public void Start()
     {
+        ApplyKeepVisible(_settings.KeepDockVisible);
         _tracker.Start();
         Rebuild();
     }
@@ -157,6 +164,34 @@ public sealed class DockController : IDisposable
         var p = _dock.Placement;
         var top = anchor.PointToScreen(new Point(anchor.ActualWidth / 2, 0));
         popup.ShowAbove(top.X, p.Pill.Top - 8 * (p.Dpi / 96.0), p.Monitor, p.Dpi);
+    }
+
+    // Interim settings menu (right-click on the start button) until the Plan 3 notch provides Settings.
+    private void OnStartContext(FrameworkElement anchor)
+    {
+        ClosePopup();
+        var keep = _settings.KeepDockVisible;
+        ShowPopup(anchor,
+        [
+            new PopupRow("Keep taskbar visible", () => SetKeepVisible(!keep), keep),
+            new PopupRow("Quit Nothing Shell", _quit),
+        ]);
+    }
+
+    private void SetKeepVisible(bool on)
+    {
+        _settings = _settings with { KeepDockVisible = on };
+        try { _store.Save(_settings); }
+        catch (Exception e) { Log.Error("saving keep-visible failed", e); }
+        ApplyKeepVisible(on);
+    }
+
+    /// <summary>Keep-visible: the dock stays up and reserves its strip as an appbar; off: it floats and nothing is reserved.</summary>
+    private void ApplyKeepVisible(bool on)
+    {
+        _reveal.SetKeepVisible(on);
+        if (on) _appBar.Register(_dock, DockWindowNative.GetPrimaryMonitor().Bounds);
+        else _appBar.Unregister();
     }
 
     private void ClosePopup() => _popup?.CloseIfOpen();

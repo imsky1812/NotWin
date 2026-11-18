@@ -95,6 +95,18 @@
                 </DataTrigger>
             </Style.Triggers>
         </Style>
+        <Style x:Key="Slot" TargetType="Border">
+            <Setter Property="Width" Value="44" />
+            <Setter Property="Height" Value="44" />
+            <Setter Property="Margin" Value="2,0" />
+            <Setter Property="CornerRadius" Value="14" />
+            <Setter Property="Background" Value="Transparent" />
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Background" Value="{StaticResource Brush.Hover}" />
+                </Trigger>
+            </Style.Triggers>
+        </Style>
         <Style x:Key="TrayHost" TargetType="Border">
             <Setter Property="Background" Value="Transparent" />
             <Style.Triggers>
@@ -121,6 +133,30 @@
                 <TranslateTransform x:Name="Slide" Y="90" />
             </Border.RenderTransform>
             <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center">
+            <!-- Start (3x3 dots, 4 px on a 6 px pitch, last dot red) and search (22 px magnifier). No left-click
+                 handler: Plan 2 binds both to the launcher. Right-click on start opens the interim menu. -->
+            <Border x:Name="StartButton" Style="{StaticResource Slot}" ToolTip="Start" MouseRightButtonUp="OnStartRightUp">
+                <Canvas Width="16" Height="16" HorizontalAlignment="Center" VerticalAlignment="Center">
+                    <Ellipse Canvas.Left="0" Canvas.Top="0" Width="4" Height="4" Fill="{StaticResource Brush.Text}" />
+                    <Ellipse Canvas.Left="6" Canvas.Top="0" Width="4" Height="4" Fill="{StaticResource Brush.Text}" />
+                    <Ellipse Canvas.Left="12" Canvas.Top="0" Width="4" Height="4" Fill="{StaticResource Brush.Text}" />
+                    <Ellipse Canvas.Left="0" Canvas.Top="6" Width="4" Height="4" Fill="{StaticResource Brush.Text}" />
+                    <Ellipse Canvas.Left="6" Canvas.Top="6" Width="4" Height="4" Fill="{StaticResource Brush.Text}" />
+                    <Ellipse Canvas.Left="12" Canvas.Top="6" Width="4" Height="4" Fill="{StaticResource Brush.Text}" />
+                    <Ellipse Canvas.Left="0" Canvas.Top="12" Width="4" Height="4" Fill="{StaticResource Brush.Text}" />
+                    <Ellipse Canvas.Left="6" Canvas.Top="12" Width="4" Height="4" Fill="{StaticResource Brush.Text}" />
+                    <Ellipse Canvas.Left="12" Canvas.Top="12" Width="4" Height="4" Fill="{StaticResource Brush.Red}" />
+                </Canvas>
+            </Border>
+            <Border x:Name="SearchButton" Style="{StaticResource Slot}" ToolTip="Search">
+                <Viewbox Width="22" Height="22">
+                    <Canvas Width="24" Height="24">
+                        <Path Style="{StaticResource Glyph}" Data="M18,11 A7,7 0 1 1 4,11 A7,7 0 1 1 18,11 M20,20 L16,16" />
+                    </Canvas>
+                </Viewbox>
+            </Border>
+            <Rectangle Width="1" Height="26" Margin="6,0" Fill="{StaticResource Brush.Line}" VerticalAlignment="Center" />
+
             <ItemsControl x:Name="ItemsHost" ItemsSource="{Binding Items}" VerticalAlignment="Center"
                           HorizontalAlignment="Center" Focusable="False">
                 <ItemsControl.ItemsPanel>

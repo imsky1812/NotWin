@@ -17,6 +17,7 @@ public partial class App : Application
     private FullscreenMonitor? _fullscreen;
     private DockController? _controller;
     private TrayStatusService? _tray;
+    private DockAppBar? _appBar;
 
     protected override void OnStartup(StartupEventArgs e)
     {
@@ -26,30 +27,40 @@ public partial class App : Application
         // pacing (~19 ms average frame gap) as hardware rendering. Must be set before any window is created.
         System.Windows.Media.RenderOptions.ProcessRenderMode = System.Windows.Interop.RenderMode.SoftwareOnly;
 
-        // Register crash/exit restore paths before the taskbar is touched.
+        // Register crash/exit restore paths before the taskbar is touched. The appbar goes first: a leaked
+        // reservation leaves a dead strip at the bottom of the screen until Explorer restarts.
         AppDomain.CurrentDomain.UnhandledException += (_, args) =>
         {
-            try { _taskbar?.Dispose(); }
+            try { RestoreShell(); }
             finally { Log.Error("unhandled exception", args.ExceptionObject as Exception); }
         };
         DispatcherUnhandledException += (_, args) =>
         {
-            try { _taskbar?.Dispose(); }
+            try { RestoreShell(); }
             finally { Log.Error("dispatcher unhandled exception", args.Exception); }
             // Not marked handled: the crash continues.
         };
-        SessionEnding += (_, _) => _taskbar?.Dispose();
+        SessionEnding += (_, _) => RestoreShell();
 
         var uiAccess = TokenInfo.GetUiAccess() ? 1 : 0;
         Log.Info($"startup uiAccess={uiAccess} pid={Environment.ProcessId}");
 
         _taskbar = new TaskbarController();
         _taskbar.Start();
+        _appBar = new DockAppBar();
+        // Explorer restarted: the taskbar was just hidden again; now re-claim the reserved strip.
+        _taskbar.TaskbarRecreated += () => _appBar.ReRegister();
 
 #if DEBUG
         Theme.FontCheck.Run(Resources);
 #endif
         StartDock();
+    }
+
+    private void RestoreShell()
+    {
+        try { _appBar?.Dispose(); }
+        finally { _taskbar?.Dispose(); }
     }
 
     private void StartDock()
@@ -64,6 +75,7 @@ public partial class App : Application
         _tray.Start();
         _dock = new DockWindow(vm);
         _dock.Initialize();
+        _dock.Closing += (_, _) => _appBar?.Dispose(); // every close path (WM_CLOSE, Shutdown) gives the strip back first
         _dock.Closed += (_, _) => Shutdown(); // WM_CLOSE to the (usually hidden) dock window quits the shell
 
         var dock = _dock;
@@ -71,12 +83,11 @@ public partial class App : Application
         _dock.HoverChanged += _reveal.SetHoverDock;
         _dock.PlacementChanged += _reveal.Refresh;
 
-        _controller = new DockController(_dock, vm, _reveal, store, settings);
+        _controller = new DockController(_dock, vm, _reveal, store, settings, _appBar!, Shutdown);
         _controller.Start();
 
         _fullscreen = new FullscreenMonitor();
         _reveal.SetFullscreen(_fullscreen.IsFullscreen);
-        _reveal.SetKeepVisible(settings.KeepDockVisible);
 
         var selfTest = false;
 #if DEBUG
@@ -104,6 +115,7 @@ public partial class App : Application
     {
         try
         {
+            _appBar?.Dispose();
             _controller?.Dispose();
             _tray?.Dispose();
             _mouse?.Dispose();

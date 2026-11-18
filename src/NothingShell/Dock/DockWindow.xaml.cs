@@ -58,9 +58,11 @@ public partial class DockWindow : Window
     // Divider (1 + 2x6 margin) and the tray (2x10 padding + four 16 px glyphs + four 10 px gaps + 38 px time).
     private const double DividerWidth = 13;
     private const double TrayWidth = 162;
+    // Start + search slots (2 x 48); their divider is one more DividerWidth.
+    private const double StartSearchWidth = 2 * SlotWidth;
 
     /// <summary>Pill width (DIP): the item slots (at least one wide), the divider and the fixed-width tray.</summary>
-    public double ContentWidth => PillChrome + SlotWidth * Math.Max(_vm.Items.Count, 1) + DividerWidth + TrayWidth;
+    public double ContentWidth => PillChrome + StartSearchWidth + DividerWidth + SlotWidth * Math.Max(_vm.Items.Count, 1) + DividerWidth + TrayWidth;
 
     /// <summary>A dock item was left-clicked / right-clicked; the element anchors the popup.</summary>
     public event Action<DockItemViewModel, FrameworkElement>? ItemClicked;
@@ -69,6 +71,14 @@ public partial class DockWindow : Window
     /// <summary>The tray (not the overflow chevron) was clicked / the overflow chevron was clicked.</summary>
     public event Action? TrayClicked;
     public event Action? OverflowClicked;
+
+    /// <summary>The start button was right-clicked; the element anchors the menu.</summary>
+    public event Action<FrameworkElement>? StartContext;
+
+    private void OnStartRightUp(object sender, System.Windows.Input.MouseButtonEventArgs e)
+    {
+        if (sender is FrameworkElement el) StartContext?.Invoke(el);
+    }
 
     private void OnTrayUp(object sender, System.Windows.Input.MouseButtonEventArgs e) => TrayClicked?.Invoke();
 

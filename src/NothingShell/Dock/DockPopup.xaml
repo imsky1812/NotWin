@@ -28,9 +28,23 @@
                 <DataTemplate>
                     <Border x:Name="Row" CornerRadius="12" Padding="10,7" Background="Transparent"
                             MouseLeftButtonUp="OnRowUp">
-                        <TextBlock Text="{Binding Text}" TextTrimming="CharacterEllipsis" />
+                        <StackPanel Orientation="Horizontal">
+                            <!-- Tick column only on checkable rows (Checked is not null). -->
+                            <Path x:Name="Tick" Width="12" Height="12" Margin="0,0,8,0" Visibility="Collapsed"
+                                  Stretch="Uniform" Data="M2,6.5 L5,9.5 L10,3" Stroke="{StaticResource Brush.Text}"
+                                  StrokeThickness="1.6" StrokeStartLineCap="Round" StrokeEndLineCap="Round"
+                                  StrokeLineJoin="Round" Opacity="0" VerticalAlignment="Center" />
+                            <TextBlock Text="{Binding Text}" TextTrimming="CharacterEllipsis" />
+                        </StackPanel>
                     </Border>
                     <DataTemplate.Triggers>
+                        <DataTrigger Binding="{Binding Checked}" Value="False">
+                            <Setter TargetName="Tick" Property="Visibility" Value="Visible" />
+                        </DataTrigger>
+                        <DataTrigger Binding="{Binding Checked}" Value="True">
+                            <Setter TargetName="Tick" Property="Visibility" Value="Visible" />
+                            <Setter TargetName="Tick" Property="Opacity" Value="1" />
+                        </DataTrigger>
                         <Trigger SourceName="Row" Property="IsMouseOver" Value="True">
                             <Setter TargetName="Row" Property="Background" Value="{StaticResource Brush.Hover}" />
                         </Trigger>

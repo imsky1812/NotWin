@@ -6,7 +6,8 @@ using NothingShell.Native;
 
 namespace NothingShell.Dock;
 
-public sealed record PopupRow(string Text, Action Invoke);
+/// <param name="Checked">null = plain row; true/false = checkable row showing a tick when true.</param>
+public sealed record PopupRow(string Text, Action Invoke, bool? Checked = null);
 
 /// <summary>
 /// A tiny non-activating glass popup (window list / context menu). It closes itself when the pointer has left
