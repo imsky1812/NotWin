@@ -21,7 +21,8 @@
     <!-- Launcher (mockup final-v2 .scrim/.search/.best/.ri/.app/.round). -->
     <!-- User feedback 2026-11-18: the launcher glass read too see-through; denser panel and scrim. -->
     <SolidColorBrush x:Key="Brush.Scrim" Color="#73000000" po:Freeze="True" />
-    <SolidColorBrush x:Key="Brush.GlassDense" Color="#F7121212" po:Freeze="True" />
+    <!-- Solid (no see-through): without a real blur a translucent panel only looks muddy (user feedback, twice). -->
+    <SolidColorBrush x:Key="Brush.GlassDense" Color="#FF141414" po:Freeze="True" />
     <SolidColorBrush x:Key="Brush.Field" Color="#0FFFFFFF" po:Freeze="True" />
     <SolidColorBrush x:Key="Brush.BestCard" Color="#12FFFFFF" po:Freeze="True" />
     <SolidColorBrush x:Key="Brush.RowSel" Color="#17FFFFFF" po:Freeze="True" />

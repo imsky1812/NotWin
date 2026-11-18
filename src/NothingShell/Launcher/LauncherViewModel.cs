@@ -130,7 +130,7 @@ public sealed class LauncherViewModel : INotifyPropertyChanged
     {
         AllApps = _src.AllApps().OrderBy(a => a.Name, StringComparer.OrdinalIgnoreCase).ToList();
         View = LauncherView.AllApps;
-        Selected = AllApps.Count > 0 ? 0 : -1;
+        Selected = -1; // nothing highlighted until ↑/↓ or hover, like Home
     }
 
     /// <summary>All apps → Home. False when there is nothing to go back from (Esc then closes the launcher).</summary>

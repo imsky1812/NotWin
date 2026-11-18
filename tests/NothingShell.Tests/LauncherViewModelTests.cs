@@ -112,6 +112,9 @@ public sealed class LauncherViewModelTests
         vm.ShowAllApps();
         Assert.Equal(LauncherView.AllApps, vm.View);
         Assert.Equal(["Calculator", "Chrome", "Notepad", "Notion"], vm.AllApps.Select(i => i.Name));
+        Assert.Equal(-1, vm.Selected); // nothing highlighted until the user moves (like Home)
+        vm.MoveSelection(1);
+        Assert.Equal("Calculator", vm.SelectedItem?.Name);
         vm.MoveSelection(2);
         Assert.Equal("Notepad", vm.SelectedItem?.Name);
         Assert.True(vm.Back());

@@ -2,6 +2,7 @@ using System.ComponentModel;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
+using System.Windows.Data;
 using System.Windows.Input;
 using System.Windows.Interop;
 using System.Windows.Media;
@@ -21,6 +22,7 @@ public partial class LauncherWindow : Window
     private readonly LauncherViewModel _vm;
     private bool _hiding;
     private bool _allowClose;
+    private IReadOnlyList<LaunchItem>? _allAppsShown;
     private Point? _openPointer;
 
     /// <summary>The launcher should close: Esc, a click on the scrim, or focus moved elsewhere.</summary>
@@ -112,6 +114,7 @@ public partial class LauncherWindow : Window
         MostGrid.Children.Clear();
         ResultRows.Children.Clear();
         AllAppsList.ItemsSource = null;
+        _allAppsShown = null;
         LauncherIcons.EndSession();
     }
 
@@ -172,9 +175,10 @@ public partial class LauncherWindow : Window
                 ResultRows.Children.Add(i == 0 ? BestCard(_vm.Results[i]) : Row(_vm.Results[i]));
             NoResults.Visibility = _vm.Results.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
         }
-        else if (!ReferenceEquals(AllAppsList.ItemsSource, _vm.AllApps))
+        else if (!ReferenceEquals(_allAppsShown, _vm.AllApps))
         {
-            AllAppsList.ItemsSource = _vm.AllApps;
+            _allAppsShown = _vm.AllApps;
+            AllAppsList.ItemsSource = LetterGroups(_vm.AllApps);
         }
         RenderSelection();
     }
@@ -282,7 +286,29 @@ public partial class LauncherWindow : Window
 
     private void OnAllAppsClick(object sender, MouseButtonEventArgs e) => _vm.ShowAllApps();
 
-    private void OnAllAppsSelectionChanged(object sender, SelectionChangedEventArgs e) { }
+    private void OnBackClick(object sender, MouseButtonEventArgs e) => _vm.Back();
+
+    // A-Z sections ("#" for names starting with a digit or symbol). The view keeps the list's order, so the view
+    // model's selection index and the ListBox index stay the same.
+    private static ListCollectionView LetterGroups(IReadOnlyList<LaunchItem> apps)
+    {
+        var view = new ListCollectionView(apps.ToList());
+        view.GroupDescriptions.Add(new PropertyGroupDescription(nameof(LaunchItem.Name), new FirstLetter()));
+        return view;
+    }
+
+    private sealed class FirstLetter : System.Windows.Data.IValueConverter
+    {
+        public object Convert(object value, Type targetType, object parameter, System.Globalization.CultureInfo culture)
+        {
+            var s = (value as string)?.TrimStart() ?? "";
+            var ch = s.Length > 0 ? char.ToUpperInvariant(s[0]) : '#';
+            return ch is >= 'A' and <= 'Z' ? ch.ToString() : "#";
+        }
+
+        public object ConvertBack(object value, Type targetType, object parameter, System.Globalization.CultureInfo culture)
+            => throw new NotSupportedException();
+    }
 
     private void OnAllAppsItemUp(object sender, MouseButtonEventArgs e)
     {
