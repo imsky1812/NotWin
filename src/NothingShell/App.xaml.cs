@@ -25,6 +25,7 @@ public partial class App : Application
     private Launcher.AppIndex? _index;
     private Notch.NotchController? _notch;
     private Media.MediaSessionService? _media;
+    private Notifications.NotificationService? _notifications;
     private bool _secondInstance;
 
     protected override void OnStartup(StartupEventArgs e)
@@ -129,6 +130,14 @@ public partial class App : Application
             _media = new Media.MediaSessionService();
             _media.Changed += snap => _notch?.SetMusic(snap.Playing, snap.Art);
             _ = _media.StartAsync();
+
+            // Notifications: shown in the notch for 3.6 s (and listed in the panel, Task 12).
+            _notifications = new Notifications.NotificationService();
+            var notchIcons = new Dock.AppIconCache();
+            _notifications.Added += item => _notch?.Notify(
+                new Core.Notch.NotchNotification(item.AppId, item.AppName, item.Text),
+                string.IsNullOrEmpty(item.AppId) ? null : notchIcons.Get(item.AppId, 40));
+            _ = _notifications.StartAsync();
         }
         catch (Exception e) { Log.Error("notch failed to start", e); }
         if (_dock is not null)
@@ -232,6 +241,7 @@ public partial class App : Application
             _winKeys?.Dispose();
             _launcher?.Dispose();
             _media?.Dispose();
+            _notifications?.Dispose();
             _notch?.Dispose();
             _controller?.Dispose();
             _tray?.Dispose();
