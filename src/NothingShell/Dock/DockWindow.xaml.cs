@@ -76,6 +76,16 @@ public partial class DockWindow : Window
     /// <summary>The start button was right-clicked; the element anchors the menu.</summary>
     public event Action<FrameworkElement>? StartContext;
 
+    /// <summary>The start button was left-clicked (opens the launcher).</summary>
+    public event Action? StartClicked;
+
+    /// <summary>The search button was left-clicked (opens the launcher).</summary>
+    public event Action? SearchClicked;
+
+    private void OnStartLeftUp(object sender, System.Windows.Input.MouseButtonEventArgs e) => StartClicked?.Invoke();
+
+    private void OnSearchLeftUp(object sender, System.Windows.Input.MouseButtonEventArgs e) => SearchClicked?.Invoke();
+
     private void OnStartRightUp(object sender, System.Windows.Input.MouseButtonEventArgs e)
     {
         if (sender is FrameworkElement el) StartContext?.Invoke(el);

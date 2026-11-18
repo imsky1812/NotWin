@@ -43,6 +43,8 @@ public sealed class AppIndex
         }
     }
 
+    public IReadOnlyDictionary<string, LaunchUsage> Usage() => _usage.Load();
+
     public IReadOnlyList<LaunchItem> MostUsed()
     {
         var s = _snap;

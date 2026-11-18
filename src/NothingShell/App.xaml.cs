@@ -21,6 +21,7 @@ public partial class App : Application
     private DockAppBar? _appBar;
     private HookThread? _hooks;
     private Launcher.WinKeyListener? _winKeys;
+    private Launcher.LauncherController? _launcher;
     private bool _secondInstance;
 
     protected override void OnStartup(StartupEventArgs e)
@@ -93,11 +94,23 @@ public partial class App : Application
 
     private void StartLauncher()
     {
+        var dataDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "NothingShell");
+        var index = new Launcher.AppIndex(dataDir);
+        _ = index.RefreshIfStaleAsync(TimeSpan.Zero); // first index in the background; the launcher never waits for it
+        _launcher = new Launcher.LauncherController(index, new Launcher.FileSearchService());
+        _launcher.Launched += name => Log.Info($"launched \"{name}\""); // Plan 3: the notch shows "Opening ‹name›…"
+        if (_dock is not null)
+        {
+            _dock.StartClicked += _launcher.Toggle;
+            _dock.SearchClicked += _launcher.Toggle;
+        }
+        _fullscreen!.Changed += fs => { if (fs) _launcher?.Close(); };
+
         try
         {
             _hooks = new HookThread("NothingShell.Hooks");
             _winKeys = new Launcher.WinKeyListener(_hooks, Dispatcher);
-            _winKeys.LauncherRequested += () => Log.Info("launcher requested (launcher UI arrives in Task 7)");
+            _winKeys.LauncherRequested += _launcher.Toggle;
         }
         catch (Exception e)
         {
@@ -184,6 +197,7 @@ public partial class App : Application
         {
             _appBar?.Dispose();
             _winKeys?.Dispose();
+            _launcher?.Dispose();
             _controller?.Dispose();
             _tray?.Dispose();
             _mouse?.Dispose();
