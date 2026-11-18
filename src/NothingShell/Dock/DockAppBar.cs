@@ -79,6 +79,7 @@ public sealed class DockAppBar : IDisposable
             if (!_registered) return;
             dock = _dock;
             _registered = false; // Explorer already lost it; skip ABM_REMOVE and send ABM_NEW again
+            _granted = default;  // the old grant died with Explorer; without this SETPOS is skipped as "unchanged" and nothing is reserved
             try { _source?.RemoveHook(WndProc); } catch (Exception) { }
             _source = null;
         }
