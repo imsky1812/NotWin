@@ -93,6 +93,20 @@ public partial class DockPopup : Window
         Close();
     }
 
+    // Closed from outside (WM_CLOSE, owner destroyed): CloseIfOpen never ran, so without this the timers keep ticking
+    // and Dismissed never fires, which leaves the dock's PanelOpen stuck on (dock pinned visible).
+    protected override void OnClosed(EventArgs e)
+    {
+        _autoClose.Stop();
+        _outsideClick.Stop();
+        if (!_closed)
+        {
+            _closed = true;
+            Dismissed?.Invoke();
+        }
+        base.OnClosed(e);
+    }
+
     private void OnRowUp(object sender, MouseButtonEventArgs e)
     {
         if (e.ChangedButton != MouseButton.Left) return;
