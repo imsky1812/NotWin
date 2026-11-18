@@ -19,6 +19,8 @@ public partial class App : Application
     private DockController? _controller;
     private TrayStatusService? _tray;
     private DockAppBar? _appBar;
+    private HookThread? _hooks;
+    private Launcher.WinKeyListener? _winKeys;
     private bool _secondInstance;
 
     protected override void OnStartup(StartupEventArgs e)
@@ -84,6 +86,24 @@ public partial class App : Application
         // 4. Dock, then 5. StartWithWindows (only from settings that were actually read).
         var (settings, loadedOk) = StartDock();
         ApplyStartWithWindows(settings, loadedOk);
+
+        // 6. Lone Win key -> launcher. LL hooks live on their own thread so a busy UI thread can't lose them.
+        StartLauncher();
+    }
+
+    private void StartLauncher()
+    {
+        try
+        {
+            _hooks = new HookThread("NothingShell.Hooks");
+            _winKeys = new Launcher.WinKeyListener(_hooks, Dispatcher);
+            _winKeys.LauncherRequested += () => Log.Info("launcher requested (launcher UI arrives in Task 7)");
+        }
+        catch (Exception e)
+        {
+            // Without the hook Win simply opens Windows' Start, which is a safe fallback.
+            Log.Error("win key hook failed; Win opens Windows' Start", e);
+        }
     }
 
     private static void ApplyStartWithWindows(ShellSettings settings, bool loadedOk)
@@ -163,11 +183,13 @@ public partial class App : Application
         try
         {
             _appBar?.Dispose();
+            _winKeys?.Dispose();
             _controller?.Dispose();
             _tray?.Dispose();
             _mouse?.Dispose();
             _fullscreen?.Dispose();
             _reveal?.Dispose();
+            _hooks?.Dispose();
         }
         catch (Exception ex) { Log.Error("dock shutdown failed", ex); }
         _taskbar?.Dispose();
