@@ -185,6 +185,17 @@ public sealed class DockController : IDisposable
         ]);
     }
 
+    /// <summary>The current settings (this controller owns settings.json; other parts update through <see cref="UpdateSettings"/>).</summary>
+    public ShellSettings Settings => _settings;
+
+    /// <summary>Applies <paramref name="change"/> and saves, so there is only one writer of settings.json.</summary>
+    public void UpdateSettings(Func<ShellSettings, ShellSettings> change)
+    {
+        _settings = change(_settings);
+        try { _store.Save(_settings); }
+        catch (Exception e) { Log.Error("saving settings failed", e); }
+    }
+
     private void SetKeepVisible(bool on)
     {
         _settings = _settings with { KeepDockVisible = on };

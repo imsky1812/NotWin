@@ -66,6 +66,15 @@ public sealed class SettingsStoreTests : IDisposable
     }
 
     [Fact]
+    public void SaveThenLoad_RoundTripsBannerTipDismissed()
+    {
+        var store = new SettingsStore(_dir);
+        Assert.False(store.Load().BannerTipDismissed);
+        store.Save(new ShellSettings { BannerTipDismissed = true });
+        Assert.True(store.Load().BannerTipDismissed);
+    }
+
+    [Fact]
     public void Load_NullPinnedApps_BecomesEmpty()
     {
         Directory.CreateDirectory(_dir);

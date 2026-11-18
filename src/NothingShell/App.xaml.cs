@@ -155,6 +155,14 @@ public partial class App : Application
         _panel.Opening += tiles.Refresh;
         var sliders = new Panel.SlidersSection(_panel.Window.SlidersHost, _tray!, new Panel.BrightnessService());
         _panel.Opening += sliders.Refresh;
+        if (_notifications is not null && _controller is not null)
+        {
+            var controller = _controller;
+            var panel = _panel;
+            var notes = new Panel.NotificationsSection(panel.Window.NotificationsHost, _notifications,
+                () => controller.Settings, controller.UpdateSettings, panel.Close, () => panel.IsOpen);
+            panel.Opening += () => _ = notes.RefreshAsync();
+        }
 
         try
         {
