@@ -64,10 +64,14 @@ public static unsafe class FullscreenNative
                 or QUERY_USER_NOTIFICATION_STATE.QUNS_BUSY
                 or QUERY_USER_NOTIFICATION_STATE.QUNS_PRESENTATION_MODE;
 
+        // Title bar (WS_CAPTION = 0x00C00000, both bits) or resize border (WS_THICKFRAME = 0x00040000).
+        var style = (long)(nint)PInvoke.GetWindowLongPtr(hwnd, Windows.Win32.UI.WindowsAndMessaging.WINDOW_LONG_PTR_INDEX.GWL_STYLE);
+        var hasFrame = (style & 0x00C00000) == 0x00C00000 || (style & 0x00040000) != 0;
+
         return new FullscreenProbe(
             new RectI(frame.left, frame.top, frame.right, frame.bottom),
             new RectI(mi.rcMonitor.left, mi.rcMonitor.top, mi.rcMonitor.right, mi.rcMonitor.bottom),
-            cls, PInvoke.IsZoomed(hwnd), quns);
+            cls, PInvoke.IsZoomed(hwnd), quns, hasFrame);
     }
 
     /// <summary>

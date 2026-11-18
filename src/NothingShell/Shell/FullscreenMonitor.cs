@@ -90,7 +90,12 @@ public sealed class FullscreenMonitor : IDisposable
 
     private void Evaluate()
     {
-        var now = FullscreenRule.Decide(FullscreenNative.Probe(), IsFullscreen, FullscreenNative.IsForegroundOwnProcess());
+        var probe = FullscreenNative.Probe();
+        var now = FullscreenRule.Decide(probe, IsFullscreen, FullscreenNative.IsForegroundOwnProcess());
+        // What decided it (for the next time detection looks wrong): class, maximized, frame, QUNS, geometry.
+        if (now != IsFullscreen && probe is { } p)
+            Log.Info($"fullscreen probe: class={p.ClassName} maximized={p.IsMaximized} hasFrame={p.HasFrame} quns={p.QunsSaysFullscreen} " +
+                     $"frame={p.Foreground} monitor={p.Monitor}");
         if (now == IsFullscreen) return;
         IsFullscreen = now;
         Changed?.Invoke(now);
