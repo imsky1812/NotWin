@@ -1196,15 +1196,18 @@ try {
             'Did the dock appear during the flicks? (a single flash is OK, answer n)' -Expect 'n')
         [void](Ask-Check 'DK.6' 'Dock looks centered with a small gap under it' 'Show the dock and look at it.' 'Is it centered, with a small gap between it and the screen bottom?')
         $fsOff = Get-LogLength $AppLog
-        Write-Do 'FULL SCREEN: open a YouTube video in your browser and make it full screen (or press F11 on any page). Stay in full screen.'
-        Wait-Enter 'Press Enter when you are in full screen'
-        Write-Do 'Now push the mouse to the bottom edge and hold it for 2 seconds.'
+        Write-Do 'FULL SCREEN: open a YouTube video in your browser (do not make it full screen yet).'
+        Write-Do 'After you press Enter you get 20 seconds. In that time: click the browser, make the video full screen (or press F11), then push the mouse to the bottom edge 3 or 4 times and hold it there. Do NOT click this window during the 20 seconds.'
+        Write-Do 'You will hear a beep when the 20 seconds are up. Then leave full screen and come back here.'
+        Wait-Enter 'Press Enter to start the 20 seconds'
+        Start-Sleep -Seconds 20
+        try { [console]::Beep(880, 300) } catch { }
         $fsLog = Get-LogSince $AppLog $fsOff
-        $a = Ask-YN 'Did the dock stay hidden?'
+        $a = Ask-YN 'While in full screen, did the dock stay hidden every time?'
         $fsLog = Get-LogSince $AppLog $fsOff
         [void](Complete-Check -Id 'DK.7' -Description 'Full screen: the bottom edge does nothing' `
             -Measured @{ fullscreenTrueLogged = ($fsLog -match 'fullscreen=True') } -MeasuredPass ($fsLog -match 'fullscreen=True') -Answer $a -Expect 'y' -AnswerRequired $true)
-        Write-Do 'Leave full screen (Esc or F11), then push the mouse to the bottom edge again.'
+        Write-Do 'Make sure you are out of full screen, then push the mouse to the bottom edge again.'
         $a = Ask-YN 'Does the dock work again?'
         $fsLog2 = Get-LogSince $AppLog $fsOff
         [void](Complete-Check -Id 'DK.8' -Description 'After leaving full screen the edge works again' `
@@ -1368,9 +1371,12 @@ try {
             -Measured $npM -MeasuredPass $fills -AnswerRequired $false)
         Close-Hwnds $np
         $fsOff = Get-LogLength $AppLog
-        Write-Do 'FULL SCREEN again: open a YouTube video full screen (or press F11 on a page).'
-        Wait-Enter 'Press Enter when you are in full screen'
-        $a = Ask-YN 'With "Keep taskbar visible" ON, is the dock hidden while in full screen?'
+        Write-Do 'FULL SCREEN again. After you press Enter you get 15 seconds: click the browser, make the video full screen (or press F11) and watch the bottom of the screen. Do NOT click this window during the 15 seconds.'
+        Write-Do 'After the beep, stay in full screen for a moment and remember whether the dock was hidden, then come back here (leave full screen afterwards).'
+        Wait-Enter 'Press Enter to start the 15 seconds'
+        Start-Sleep -Seconds 15
+        try { [console]::Beep(880, 300) } catch { }
+        $a = Ask-YN 'With "Keep taskbar visible" ON, was the dock hidden while you were in full screen?'
         $fsLog = Get-LogSince $AppLog $fsOff
         [void](Complete-Check -Id 'RS.4' -Description 'Full screen hides the dock even in keep-visible mode' -Measured @{ fullscreenTrueLogged = ($fsLog -match 'fullscreen=True') } `
             -MeasuredPass ($fsLog -match 'fullscreen=True') -Answer $a -Expect 'y')
