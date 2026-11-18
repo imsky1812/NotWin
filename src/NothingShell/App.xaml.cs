@@ -67,6 +67,8 @@ public partial class App : Application
 
         var uiAccess = TokenInfo.GetUiAccess() ? 1 : 0;
         Log.Info($"startup uiAccess={uiAccess} pid={Environment.ProcessId}");
+        var hasIdentity = PackageIdentity.HasIdentity(out var packageName);
+        Log.Info($"package identity={hasIdentity} name={packageName ?? "(none)"}");
 
         // 2. Conflict gate: nothing touches the taskbar while Fenn is running.
         if (!ConflictGate.CheckOrWait())
