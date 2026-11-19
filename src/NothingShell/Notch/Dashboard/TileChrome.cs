@@ -23,8 +23,9 @@ public static class TileChrome
         Source = new Uri("pack://application:,,,/NothingShell;component/Notch/Dashboard/NotchIcons.xaml"),
     };
 
-    public static FontFamily Font => (FontFamily)Application.Current.FindResource("Font.Geist");
-    public static FontFamily Mono => (FontFamily)Application.Current.FindResource("Font.GeistMono");
+    // Fallbacks keep the chrome usable without the app's resources (tests, a failed theme load).
+    public static FontFamily Font => Application.Current?.TryFindResource("Font.Geist") as FontFamily ?? new FontFamily("Segoe UI");
+    public static FontFamily Mono => Application.Current?.TryFindResource("Font.GeistMono") as FontFamily ?? new FontFamily("Consolas");
 
     /// <summary>A tile surface. <paramref name="center"/> centres its content (mockup <c>.t.center</c>).</summary>
     public static Border Tile(UIElement content, bool center = false, Brush? background = null)

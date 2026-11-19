@@ -95,7 +95,8 @@ public sealed class WeatherService : IDisposable
         {
             if (!File.Exists(_cachePath)) return null;
             var c = JsonSerializer.Deserialize<Cache>(File.ReadAllText(_cachePath), Json);
-            return c is not null && Equals(c.Place, place) ? c.Report : null;
+            // A hand-edited or partial cache ("days": null) is ignored, never drawn (final review #5).
+            return c?.Report is { Days: not null } r && Equals(c.Place, place) ? r : null;
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException or JsonException or NotSupportedException)
         {

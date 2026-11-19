@@ -4,7 +4,7 @@ namespace NothingShell.Core.Notch;
 /// When the notch dashboard opens and closes (spec §6.4: opens on hover, closes when the mouse leaves unless editing).
 /// Opens after the pointer rests on the pill for <see cref="OpenDwell"/>, so sweeping across it to a browser tab does
 /// nothing; closes <see cref="CloseDelay"/> after the pointer leaves the open area. Holds ("edit", "text", "expand")
-/// keep it open. Full screen closes it and blocks opening. After <see cref="Close"/> (Esc, a tool starting) it reopens
+/// "edit" and "text" keep it open. Full screen closes it and blocks opening. After <see cref="Close"/> (Esc, a tool starting) it reopens
 /// only once the pointer has left the pill and come back. Pure: the caller passes a monotonic clock.
 /// </summary>
 public sealed class NotchHover
@@ -28,8 +28,13 @@ public sealed class NotchHover
         if (IsOpen) _outsideSince = _inside ? null : _outsideSince ?? now;
     }
 
+    /// <summary>
+    /// Keeps the dashboard open while held. Only "edit" (spec §6.4: open until Done) and "text" (typing in Notes) hold;
+    /// anything else is ignored — an expanded list closes on leave like the grid (final review #2).
+    /// </summary>
     public void Hold(string reason, bool on, TimeSpan now)
     {
+        if (reason is not ("edit" or "text")) return;
         if (on) { _holds.Add(reason); return; }
         if (_holds.Remove(reason) && _holds.Count == 0 && IsOpen && !_inside) _outsideSince = now;
     }

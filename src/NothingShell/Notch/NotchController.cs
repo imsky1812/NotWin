@@ -177,17 +177,10 @@ public sealed class NotchController : IDisposable, IDashboardHost
         Hold("text", false);
     }
 
-    public void ShowOverlay(FrameworkElement content, int rows = 2)
-    {
-        Hold("expand", true);
-        _dash.ShowOverlay(content, rows);
-    }
+    // An overlay (clipboard list, notes editor) is not a hold: the notch still closes on leave (spec §6.4, review #2).
+    public void ShowOverlay(FrameworkElement content, int rows = 2) => _dash.ShowOverlay(content, rows);
 
-    public void CloseOverlay()
-    {
-        _dash.CloseOverlay();
-        Hold("expand", false);
-    }
+    public void CloseOverlay() => _dash.CloseOverlay();
 
     public void ShowPageOf(TileKind kind)
     {

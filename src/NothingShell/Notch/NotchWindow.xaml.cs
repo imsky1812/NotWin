@@ -42,6 +42,7 @@ public partial class NotchWindow : Window
     private double _pillW = 196, _pillH = 34;
     private double _openHeight = 232;
     private bool _typing;
+    private nint _typingFrom; // the window that had the keyboard before Notes took it (final review #1)
     private readonly Dashboard.GridTimerView _timerGrid = new(22, 5);
 
     /// <summary>Right-click on the open notch (spec §6.7: Settings).</summary>
@@ -169,6 +170,7 @@ public partial class NotchWindow : Window
     {
         if (_hwnd == 0 || _typing) return;
         _typing = true;
+        _typingFrom = ForegroundNative.Current();
         DockWindowNative.RemoveExStyle(_hwnd, DockWindowNative.WsExNoActivate);
         Focusable = true;
         ForegroundNative.Activate(_hwnd);
@@ -183,6 +185,10 @@ public partial class NotchWindow : Window
         System.Windows.Input.Keyboard.ClearFocus();
         Focusable = false;
         DockWindowNative.AddExStyle(_hwnd, DockWindowNative.WsExNoActivate);
+        // Esc / closing must not leave the keyboard on the notch: give it back to the app the user was in.
+        if (Core.Shell.ForegroundHandBack.Target(_typingFrom, ForegroundNative.Current(), _hwnd, ForegroundNative.Exists) is { } back)
+            ForegroundNative.Activate(back);
+        _typingFrom = 0;
     }
 
     // ---- content ----

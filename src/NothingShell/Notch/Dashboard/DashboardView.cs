@@ -85,10 +85,37 @@ public sealed class DashboardView : IDisposable
         }
     }
 
+    /// <summary>
+    /// The cached view for <paramref name="kind"/>. A tile that fails to construct becomes a placeholder: one broken tile
+    /// (e.g. bad cached data) must never take the shell down on hover (final review #5).
+    /// </summary>
     public ITileView View(TileKind kind)
     {
-        if (!_views.TryGetValue(kind, out var v)) _views[kind] = v = _factory(kind);
+        if (_views.TryGetValue(kind, out var v)) return v;
+        try { v = _factory(kind); }
+        catch (Exception e)
+        {
+            Log.Error($"notch tile {kind} failed to start", e);
+            v = new PlaceholderTile(kind);
+        }
+        _views[kind] = v;
         return v;
+    }
+
+    private FrameworkElement BuildSafe(TileSpec spec)
+    {
+        try { return View(spec.Kind).Build(spec.Size); }
+        catch (Exception e)
+        {
+            Log.Error($"notch tile {spec.Kind} failed to draw", e);
+            return new PlaceholderTile(spec.Kind).Build(spec.Size);
+        }
+    }
+
+    private void Safe(TileKind kind, Action<ITileView> act)
+    {
+        try { act(View(kind)); }
+        catch (Exception e) { Log.Error($"notch tile {kind} failed", e); }
     }
 
     public int PageOf(TileKind kind)
@@ -114,11 +141,7 @@ public sealed class DashboardView : IDisposable
     {
         if (open == _open) return;
         _open = open;
-        foreach (var k in Visible())
-        {
-            if (open) View(k).Opened();
-            else View(k).Closed();
-        }
+        foreach (var k in Visible()) Safe(k, v => { if (open) v.Opened(); else v.Closed(); });
         if (!open) CloseOverlay();
     }
 
@@ -153,8 +176,8 @@ public sealed class DashboardView : IDisposable
 
     private void Switch(HashSet<TileKind> before, HashSet<TileKind> after)
     {
-        foreach (var k in before.Except(after)) View(k).Closed();
-        foreach (var k in after.Except(before)) View(k).Opened();
+        foreach (var k in before.Except(after)) Safe(k, v => v.Closed());
+        foreach (var k in after.Except(before)) Safe(k, v => v.Opened());
     }
 
     private void Render()
@@ -170,7 +193,7 @@ public sealed class DashboardView : IDisposable
             FrameworkElement el;
             if (i < tiles.Count)
             {
-                el = View(tiles[i].Kind).Build(tiles[i].Size);
+                el = BuildSafe(tiles[i]);
                 if (_editing) el = Decorate(el, i, tiles[i]);
             }
             else el = AddTile();
@@ -257,8 +280,7 @@ public sealed class DashboardView : IDisposable
     {
         var tiles = _layout.Pages[_page];
         var sizes = tiles.Select(t => t.Size).ToList();
-        if (_editing && _layout.Removed.Count > 0 && DashboardLayout.Fits([.. tiles, new(TileKind.Timer, TileSize.One)]))
-            sizes.Add(TileSize.One);
+        if (_editing && _layout.CanAddBack(_page)) sizes.Add(TileSize.One); // only when a click would bring one back
         return sizes;
     }
 

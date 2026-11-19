@@ -83,15 +83,28 @@ public sealed record DashboardLayout(IReadOnlyList<IReadOnlyList<TileSpec>> Page
         return WithPage(page, tiles) with { Removed = [.. Removed, tile] };
     }
 
-    /// <summary>The first removed tile goes back on <paramref name="page"/> at its default size, if it fits.</summary>
+    /// <summary>
+    /// Brings back the first removed tile that fits on <paramref name="page"/>: at its default size, or else the next
+    /// allowed size that fits (final review #3: a 2x2 default must not make "＋ Add" a dead button). Unchanged if none fits.
+    /// </summary>
     public DashboardLayout AddBack(int page)
     {
-        if (Removed.Count == 0) return this;
-        var tile = Removed[0] with { Size = TileRules.Sizes(Removed[0].Kind)[0] };
-        var tiles = Pages[page].Append(tile).ToList();
-        if (!Fits(tiles)) return this;
-        return WithPage(page, tiles) with { Removed = Removed.Skip(1).ToList() };
+        for (var i = 0; i < Removed.Count; i++)
+        {
+            foreach (var size in TileRules.Sizes(Removed[i].Kind))
+            {
+                var tiles = Pages[page].Append(Removed[i] with { Size = size }).ToList();
+                if (!Fits(tiles)) continue;
+                var removed = Removed.ToList();
+                removed.RemoveAt(i);
+                return WithPage(page, tiles) with { Removed = removed };
+            }
+        }
+        return this;
     }
+
+    /// <summary>True when <see cref="AddBack"/> would bring a tile back (the dashboard shows "＋ Add" only then).</summary>
+    public bool CanAddBack(int page) => !ReferenceEquals(AddBack(page), this);
 
     /// <summary>
     /// Makes any loaded layout valid: unknown kinds and duplicates are dropped, disallowed sizes become the default,

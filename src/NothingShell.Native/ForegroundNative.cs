@@ -11,6 +11,12 @@ public static unsafe class ForegroundNative
     /// if another window still owns the foreground, briefly attaches to that window's input thread (the standard
     /// workaround) and tries again. Returns whether <paramref name="hwnd"/> ended up in front.
     /// </summary>
+    /// <summary>The current foreground window (0 if none).</summary>
+    public static nint Current() => (nint)PInvoke.GetForegroundWindow();
+
+    /// <summary>True while <paramref name="hwnd"/> is still a window.</summary>
+    public static bool Exists(nint hwnd) => hwnd != 0 && PInvoke.IsWindow(new HWND(hwnd));
+
     public static bool Activate(nint hwnd)
     {
         var target = new HWND(hwnd);

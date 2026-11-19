@@ -89,6 +89,17 @@ public sealed class NotchHoverTests
     }
 
     [Fact]
+    public void Hold_OnlyEditAndText_KeepOpen()
+    {
+        // Spec §6.4: "closes when the mouse leaves (unless editing)". An expanded list is not a hold (review #2).
+        var h = Opened();
+        h.Hold("expand", true, Ms(500));
+        h.Pointer(false, false, Ms(1000));
+        h.Update(Ms(1300));
+        Assert.False(h.IsOpen);
+    }
+
+    [Fact]
     public void Fullscreen_ClosesAndBlocksOpen()
     {
         var h = Opened();

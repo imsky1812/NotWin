@@ -80,6 +80,35 @@ public sealed class DashboardTests
     }
 
     [Fact]
+    public void AddBack_TakesFirstRemovedThatFits_AtSmallestFittingSize()
+    {
+        // Page has room for exactly one 1x1 (review #3): a removed Timer (2x2 default) can come back as 1x1.
+        var page = new List<TileSpec> { T(Media, Big), T(Clipboard, Big), T(Notes, Big), T(Shelf, Big),
+            T(KeepAwake, Wide), T(Weather, Wide), T(GrabText, Wide), T(Phone, One) };
+        var l = Layout(page, removed: [T(TileKind.Timer, Big), T(Color, One)]);
+        Assert.True(l.CanAddBack(0));
+        var after = l.AddBack(0);
+        Assert.Equal(T(TileKind.Timer, One), after.Pages[0][^1]);
+        Assert.Equal([T(Color, One)], after.Removed);
+    }
+
+    [Fact]
+    public void AddBack_PrefersDefaultSizeWhenItFits()
+    {
+        var l = Layout([T(Media, Big)], removed: [T(TileKind.Timer, One)]);
+        Assert.Equal(T(TileKind.Timer, Big), l.AddBack(0).Pages[0][^1]);
+    }
+
+    [Fact]
+    public void CanAddBack_FalseWhenNothingFits()
+    {
+        var full = new List<TileSpec> { T(TileKind.Timer, Big), T(Media, Big), T(Clipboard, Big), T(Notes, Big),
+            T(KeepAwake, Wide), T(Weather, Wide), T(GrabText, Wide), T(Phone, Wide) };
+        Assert.False(Layout(full, removed: [T(Color, One)]).CanAddBack(0));
+        Assert.False(Layout([T(Media, Big)]).CanAddBack(0)); // nothing removed
+    }
+
+    [Fact]
     public void Sanitize_RepairsBadLayouts()
     {
         Assert.Equal(DashboardLayout.Default, DashboardLayout.Sanitize(null));
