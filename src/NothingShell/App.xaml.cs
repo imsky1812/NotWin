@@ -143,6 +143,7 @@ public partial class App : Application
             try { _clips = new Clips.ClipboardService(DataDir); }
             catch (Exception e) { Log.Error("clipboard history failed to start", e); }
             var timer = _timer;
+            var tools = new Tools.ToolRunner(_notch, () => _notch?.RequestSettings());
             _notch.TileFactory = kind => kind switch
             {
                 Core.Notch.TileKind.Timer => new Notch.Dashboard.Tiles.TimerTile(timer),
@@ -152,6 +153,9 @@ public partial class App : Application
                 Core.Notch.TileKind.KeepAwake => new Notch.Dashboard.Tiles.KeepAwakeTile(_awake),
                 Core.Notch.TileKind.Weather when _weather is not null => new Notch.Dashboard.Tiles.WeatherTile(_weather, () => _notch?.RequestSettings()),
                 Core.Notch.TileKind.Shelf => new Notch.Dashboard.Tiles.ShelfTile(new Core.Shelving.ShelfStore(DataDir), new Dock.AppIconCache()),
+                Core.Notch.TileKind.GrabText or Core.Notch.TileKind.Color or Core.Notch.TileKind.Snip
+                    or Core.Notch.TileKind.Phone or Core.Notch.TileKind.Draw or Core.Notch.TileKind.Settings
+                    => new Notch.Dashboard.Tiles.ToolTile(kind, tools.Run),
                 _ => new Notch.Dashboard.PlaceholderTile(kind),
             };
             _fullscreen.Changed += fs => _notch?.SetFullscreen(fs);
