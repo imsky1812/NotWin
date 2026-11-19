@@ -144,6 +144,7 @@ public partial class App : Application
                 Core.Notch.TileKind.Timer => new Notch.Dashboard.Tiles.TimerTile(timer),
                 Core.Notch.TileKind.Media when _media is not null => new Notch.Dashboard.Tiles.MediaTile(_media, MediaAppName),
                 Core.Notch.TileKind.Clipboard when _clips is not null => new Notch.Dashboard.Tiles.ClipboardTile(_clips, () => _notch!),
+                Core.Notch.TileKind.Notes => new Notch.Dashboard.Tiles.NotesTile(new NotesStore(DataDir), () => _notch!),
                 _ => new Notch.Dashboard.PlaceholderTile(kind),
             };
             _fullscreen.Changed += fs => _notch?.SetFullscreen(fs);
