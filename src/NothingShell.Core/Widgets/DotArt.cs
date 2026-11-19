@@ -1,0 +1,139 @@
+namespace NothingShell.Core.Widgets;
+
+/// <summary>
+/// Dot drawings for app folders and the empty photo frame (Plan 5b), 11 × 11, '#' = lit dot. Drawn in the style of the
+/// dot-matrix clock and weather glyphs.
+/// </summary>
+public static class DotArt
+{
+    private static readonly Dictionary<string, string[]> Art = new()
+    {
+        ["cat"] =
+        [
+            ".#.......#.",
+            ".##.....##.",
+            ".#.#####.#.",
+            ".#.......#.",
+            "#..#...#..#",
+            "#.........#",
+            "#....#....#",
+            "#..#...#..#",
+            ".#..###..#.",
+            "..#.....#..",
+            "...#####...",
+        ],
+        ["folder"] =
+        [
+            "...........",
+            ".####......",
+            "#....#.....",
+            "#.....####.",
+            "#.........#",
+            "###########",
+            "#.........#",
+            "#.........#",
+            "#.........#",
+            "#.........#",
+            "###########",
+        ],
+        ["plant"] =
+        [
+            ".....#.....",
+            "...#.#.#...",
+            "..##.#.##..",
+            "..###.###..",
+            "...##.##...",
+            ".....#.....",
+            ".....#.....",
+            ".#########.",
+            "..#.....#..",
+            "..#.....#..",
+            "...#####...",
+        ],
+        ["gamepad"] =
+        [
+            "...........",
+            "..#######..",
+            ".#.......#.",
+            "#..#....#.#",
+            "#.###..#.##",
+            "#..#....#.#",
+            "#.........#",
+            "#...###...#",
+            ".#.#...#.#.",
+            "..#.....#..",
+            "...........",
+        ],
+        ["note"] =
+        [
+            "....######.",
+            "....#....#.",
+            "....######.",
+            "....#....#.",
+            "....#....#.",
+            "....#....#.",
+            "....#....#.",
+            "..###..###.",
+            ".####.####.",
+            ".####.####.",
+            "..##...##..",
+        ],
+        ["camera"] =
+        [
+            "...........",
+            "...###.....",
+            ".#########.",
+            "#.........#",
+            "#...###...#",
+            "#..#...#..#",
+            "#..#...#..#",
+            "#...###...#",
+            "#.........#",
+            ".#########.",
+            "...........",
+        ],
+        ["cup"] =
+        [
+            "...#..#....",
+            "....#..#...",
+            "...#..#....",
+            "...........",
+            "#########..",
+            "#.......###",
+            "#.......#.#",
+            "#.......###",
+            ".#.....#...",
+            "..#####....",
+            "###########",
+        ],
+        ["star"] =
+        [
+            ".....#.....",
+            ".....#.....",
+            "....###....",
+            "###########",
+            ".#########.",
+            "..#######..",
+            "...#####...",
+            "..###.###..",
+            "..##...##..",
+            ".#.......#.",
+            "...........",
+        ],
+    };
+
+    /// <summary>The folder pictures, in the order a click in edit mode steps through them.</summary>
+    public static IReadOnlyList<string> Pictures { get; } = ["cat", "folder", "plant", "gamepad", "note", "camera", "cup", "star"];
+
+    /// <summary>The picture's rows; an unknown name draws the folder.</summary>
+    public static string[] Rows(string? name) => name is not null && Art.TryGetValue(name, out var rows) ? rows : Art["folder"];
+
+    /// <summary>The next picture (wraps; an unknown name restarts at the first).</summary>
+    public static string Next(string? current)
+    {
+        var i = current is null ? -1 : Pictures.ToList().IndexOf(current);
+        return Pictures[(i + 1) % Pictures.Count];
+    }
+
+    public static string Random(Random rng) => Pictures[rng.Next(Pictures.Count)];
+}
