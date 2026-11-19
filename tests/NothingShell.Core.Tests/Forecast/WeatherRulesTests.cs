@@ -45,6 +45,18 @@ public sealed class WeatherRulesTests
     [InlineData(99, WeatherKind.Storm)]
     public void Kind_MapsWmoCodes(int code, WeatherKind kind) => Assert.Equal(kind, WeatherRules.Kind(code));
 
+    [Theory]
+    [InlineData(WeatherKind.Clear, true, 's')]
+    [InlineData(WeatherKind.Clear, false, 'm')]
+    [InlineData(WeatherKind.PartlyCloudy, true, 'c')]
+    [InlineData(WeatherKind.Cloudy, false, 'c')]
+    [InlineData(WeatherKind.Drizzle, true, 'r')]
+    [InlineData(WeatherKind.Rain, true, 'r')]
+    [InlineData(WeatherKind.Snow, true, 'w')]
+    [InlineData(WeatherKind.Storm, true, 't')]
+    [InlineData(WeatherKind.Fog, true, 'f')]
+    public void Glyph_MapsKinds(WeatherKind kind, bool isDay, char glyph) => Assert.Equal(glyph, WeatherRules.Glyph(kind, isDay));
+
     [Fact]
     public void ParseForecast_ReadsCurrentAndFiveDays()
     {

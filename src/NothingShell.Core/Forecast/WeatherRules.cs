@@ -86,5 +86,16 @@ public static class WeatherRules
 
     public static bool IsStale(WeatherReport r, DateTimeOffset now) => now - r.FetchedAt > StaleAfter;
 
+    /// <summary>The dot-font glyph for the widget's condition icon (Notch.DotFont letters c m r s w t f).</summary>
+    public static char Glyph(WeatherKind kind, bool isDay) => kind switch
+    {
+        WeatherKind.Clear => isDay ? 's' : 'm',
+        WeatherKind.Drizzle or WeatherKind.Rain => 'r',
+        WeatherKind.Snow => 'w',
+        WeatherKind.Storm => 't',
+        WeatherKind.Fog => 'f',
+        _ => 'c',
+    };
+
     private static int Round(double v) => (int)Math.Round(v, MidpointRounding.AwayFromZero);
 }

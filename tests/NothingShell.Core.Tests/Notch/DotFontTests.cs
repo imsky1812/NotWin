@@ -20,6 +20,18 @@ public sealed class DotFontTests
         Assert.Equal(["00000", "00000", "00000", "11111", "00000", "00000", "00000"], DotFont.GlyphRows('-')!);
 
     [Fact]
+    public void DotFont_HasWeatherGlyphs()
+    {
+        foreach (var c in "cmrswtf")
+        {
+            var rows = DotFont.GlyphRows(c);
+            Assert.NotNull(rows);
+            Assert.Equal(7, rows!.Length);
+            Assert.All(rows, r => Assert.Equal(rows[0].Length, r.Length));
+        }
+    }
+
+    [Fact]
     public void Colon_IsOneWide() =>
         Assert.Equal(["0", "0", "1", "0", "1", "0", "0"], DotFont.GlyphRows(':')!);
 
