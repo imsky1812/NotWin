@@ -50,19 +50,24 @@ public sealed class WinKeyListener : IDisposable
     {
         if (vk == 0x1B && down && EscapeWanted && !injectedByUs)
             _ui.BeginInvoke(DispatcherPriority.Input, () => Safe(() => EscapePressed?.Invoke()));
-        if (SnakeGate is { Armed: true } gate && !injectedByUs && !ModifierDown())
+        if (SnakeGate is { } gate && !injectedByUs)
         {
-            if (vk == 0x1B) // Esc: disarm, and let the key through
-            {
-                if (down) { gate.Disarm(); _ui.BeginInvoke(DispatcherPriority.Input, () => Safe(() => SnakeReleased?.Invoke())); }
-            }
-            else if (gate.ShouldSwallow((int)vk))
+            var wasArmed = gate.Armed;
+            if (wasArmed && vk == 0x1B && down) gate.Disarm(); // Esc gives the keys back, and is let through
+            var swallow = vk != 0x1B && gate.Filter((int)vk, down, wasArmed ? ForegroundNative.Current() : 0, wasArmed && ModifierDown());
+            if (wasArmed && !gate.Armed) _ui.BeginInvoke(DispatcherPriority.Input, () => Safe(() => SnakeReleased?.Invoke()));
+            if (swallow)
             {
                 if (down && gate.Map((int)vk) is { } key) _ui.BeginInvoke(DispatcherPriority.Input, () => Safe(() => SnakeKeyPressed?.Invoke(key)));
                 return true;
             }
         }
         var v = _detector.OnKey(vk, down, injectedByUs);
+        if ((v.OpenLauncher || v.OpenPanel) && SnakeGate is { Armed: true } armed)
+        {
+            armed.Disarm(); // the launcher / panel takes the keys
+            _ui.BeginInvoke(DispatcherPriority.Input, () => Safe(() => SnakeReleased?.Invoke()));
+        }
         if (v.InjectMaskFirst) KeyboardHookNative.InjectMaskKey();
         if (v.OpenLauncher) _ui.BeginInvoke(DispatcherPriority.Input, Raise);
         if (v.OpenPanel) _ui.BeginInvoke(DispatcherPriority.Input, RaisePanel);

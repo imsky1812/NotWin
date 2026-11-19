@@ -80,7 +80,8 @@ public sealed class EditChrome
             Stroke = TileChrome.Red, StrokeThickness = 2 / scale, StrokeDashArray = [4, 3], RadiusX = 26, RadiusY = 26,
             IsHitTestVisible = false, Visibility = overlaps ? Visibility.Visible : Visibility.Collapsed,
         };
-        Grab = new Border { Background = Brushes.Transparent, Cursor = Cursors.SizeAll };
+        // Alpha 1, not 0: fully transparent pixels of a per-pixel-transparent window pass clicks through (the bare clock).
+        Grab = new Border { Background = TileChrome.FrozenArgb(0x01, 0x00, 0x00, 0x00), Cursor = Cursors.SizeAll };
         var root = new Grid { Children = { card, Grab, Outline } };
         if (WidgetRules.Sizes(p.Kind).Count > 1)
         {

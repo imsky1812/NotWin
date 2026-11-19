@@ -13,14 +13,14 @@ public static class DesktopAttach
 {
     public const int WsChild = 0x40000000, WsVisible = 0x10000000, WsClipSiblings = 0x04000000;
     private const int WsPopup = unchecked((int)0x80000000), WsCaption = 0x00C00000;
-    private const int WsExAppWindow = 0x00040000, WsExToolWindow = 0x00000080, WsExNoActivate = 0x08000000;
+    private const int WsExAppWindow = 0x00040000, WsExToolWindow = 0x00000080, WsExNoActivate = 0x08000000, WsExNoParentNotify = 0x00000004;
     private const uint SwpNoActivate = 0x0010, SwpShowWindow = 0x0040, SwpFrameChanged = 0x0020, SwpNoZOrder = 0x0004;
 
     /// <summary>A window style made into a plain child window (no popup, no caption).</summary>
     public static int ChildStyle(int style) => (style | WsChild) & ~WsPopup & ~WsCaption;
 
     /// <summary>Extended style for a widget: a tool window that never activates; never an app window.</summary>
-    public static int ChildExStyle(int ex) => (ex | WsExToolWindow | WsExNoActivate) & ~WsExAppWindow;
+    public static int ChildExStyle(int ex) => (ex | WsExToolWindow | WsExNoActivate | WsExNoParentNotify) & ~WsExAppWindow;
 
     /// <summary>The desktop window hosting SHELLDLL_DefView: Progman, or (older layouts) a top-level WorkerW. 0 if none yet.</summary>
     public static nint FindHost()

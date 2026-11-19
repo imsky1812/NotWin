@@ -19,5 +19,6 @@ public sealed class DesktopAttachTests
         var ex = DesktopAttach.ChildExStyle(WsExAppWindow);
         Assert.Equal(WsExToolWindow | WsExNoActivate, ex & (WsExToolWindow | WsExNoActivate));
         Assert.Equal(0, ex & WsExAppWindow);
+        Assert.Equal(0x4, ex & 0x4); // WS_EX_NOPARENTNOTIFY: no synchronous WM_PARENTNOTIFY to Explorer's desktop
     }
 }

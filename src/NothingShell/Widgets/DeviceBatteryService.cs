@@ -40,6 +40,7 @@ public sealed class DeviceBatteryService : IBatterySource, IDisposable
         public bool Connected;
         public Guid? Container;
         public string Icon = "speaker";
+        public bool HasClass;
         public int? Percent;
     }
 
@@ -50,8 +51,8 @@ public sealed class DeviceBatteryService : IBatterySource, IDisposable
         _refresh.Tick += (_, _) => _ = RefreshLevelsAsync();
         try
         {
-            // Paired Bluetooth (classic) devices as association endpoints.
-            const string aqs = "System.Devices.Aep.ProtocolId:=\"{e0cbf06c-cd8b-4647-bb8a-263b43f0f974}\" AND System.Devices.Aep.IsPaired:=System.StructuredQueryType.Boolean#True";
+            // Paired Bluetooth devices, classic and LE, as association endpoints.
+            const string aqs = "(System.Devices.Aep.ProtocolId:=\"{e0cbf06c-cd8b-4647-bb8a-263b43f0f974}\" OR System.Devices.Aep.ProtocolId:=\"{bb7bb05e-5972-42b5-94fc-76eaa7084d49}\") AND System.Devices.Aep.IsPaired:=System.StructuredQueryType.Boolean#True";
             _watcher = DeviceInformation.CreateWatcher(aqs, [ConnectedKey, ContainerKey, MajorClassKey], DeviceInformationKind.AssociationEndpoint);
             _watcher.Added += (_, d) => _ui.BeginInvoke(() => Upsert(d.Id, d.Name, d.Properties));
             _watcher.Updated += (_, u) => _ui.BeginInvoke(() => Upsert(u.Id, null, u.Properties));
@@ -87,15 +88,28 @@ public sealed class DeviceBatteryService : IBatterySource, IDisposable
     {
         if (_disposed) return;
         if (!_bt.TryGetValue(id, out var b)) _bt[id] = b = new Bt { Id = id };
-        if (!string.IsNullOrEmpty(name)) b.Name = name;
+        if (!string.IsNullOrEmpty(name))
+        {
+            b.Name = name;
+            if (!b.HasClass) b.Icon = IconFromName(name);
+        }
         var was = b.Connected;
         if (props.TryGetValue(ConnectedKey, out var c) && c is bool connected) b.Connected = connected;
         if (props.TryGetValue(ContainerKey, out var g) && g is Guid container) b.Container = container;
-        if (props.TryGetValue(MajorClassKey, out var m) && m is byte major)
-            b.Icon = major switch { 4 => "head", 5 => "mouse", 2 => "phone", _ => "speaker" }; // Audio/Video, Peripheral, Phone
+        if (props.TryGetValue(MajorClassKey, out var m) && m is byte major && major != 0)
+            (b.HasClass, b.Icon) = (true, major switch { 4 => "head", 5 => "mouse", 2 => "phone", _ => "speaker" }); // Audio/Video, Peripheral, Phone
         if (b.Connected && !was) _ = ReadLevelAsync(b);
         if (_bt.Values.Any(x => x.Connected)) _refresh.Start(); else _refresh.Stop();
         Raise();
+    }
+
+    // LE devices carry no class of device: a best guess from the name (in memory only, never logged).
+    private static string IconFromName(string name)
+    {
+        var n = name.ToLowerInvariant();
+        if (n.Contains("mouse") || n.Contains("keyboard") || n.Contains("mx ")) return "mouse";
+        if (n.Contains("bud") || n.Contains("pod") || n.Contains("ear") || n.Contains("head") || n.Contains("phone ")) return "head";
+        return "speaker";
     }
 
     private async Task RefreshLevelsAsync()

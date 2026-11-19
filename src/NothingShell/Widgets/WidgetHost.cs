@@ -25,6 +25,9 @@ public sealed class WidgetHost : IDisposable
     /// <summary>The widget's window was destroyed with the desktop (Explorer restart).</summary>
     public event Action? Lost;
 
+    /// <summary>The monitor's DPI changed (WM_DPICHANGED_AFTERPARENT): sizes and positions must be recomputed.</summary>
+    public event Action? DpiChanged;
+
     public nint Hwnd => _source?.Handle ?? 0;
 
     public FrameworkElement Content => _content;
@@ -70,7 +73,14 @@ public sealed class WidgetHost : IDisposable
         };
         _source = new HwndSource(p) { RootVisual = _content };
         _source.CompositionTarget.BackgroundColor = Colors.Transparent;
+        _source.AddHook(Hook);
         _source.Disposed += OnDisposed;
+    }
+
+    private nint Hook(nint hwnd, int msg, nint wParam, nint lParam, ref bool handled)
+    {
+        if (msg == 0x02E3) Application.Current?.Dispatcher.BeginInvoke(() => DpiChanged?.Invoke());
+        return 0;
     }
 
     private void OnDisposed(object? sender, EventArgs e)

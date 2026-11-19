@@ -60,9 +60,10 @@ public sealed class SnakeWidget : IDesktopWidget
     {
         if (!Gate.Armed)
         {
-            Gate.Arm();
-            // The click itself made the desktop the foreground window; any other foreground window disarms.
+            // The window in front at the click; any other window in front disarms (the hook thread checks it on
+            // every key, the WinEvent hook pauses the game).
             var desktop = ForegroundNative.Current();
+            Gate.Arm(desktop);
             _focus ??= new ForegroundChangeHook(hwnd =>
             {
                 if (hwnd != desktop && hwnd != 0) Application.Current?.Dispatcher.BeginInvoke(Release);

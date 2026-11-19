@@ -116,11 +116,41 @@ public sealed class SnakeGame
 /// </summary>
 public sealed class SnakeKeyGate
 {
-    public bool Armed { get; private set; }
+    private volatile bool _armed;
+    private long _foreground;
+    private readonly HashSet<int> _swallowedDowns = []; // hook thread only
 
-    public void Arm() => Armed = true;
+    public bool Armed => _armed;
 
-    public void Disarm() => Armed = false;
+    /// <summary>Armed by a click; <paramref name="foreground"/> is the window in front at that click (0 = not checked).</summary>
+    public void Arm(nint foreground = 0)
+    {
+        Interlocked.Exchange(ref _foreground, foreground);
+        _armed = true;
+    }
+
+    public void Disarm() => _armed = false;
+
+    /// <summary>
+    /// The hook thread's decision for one key event: true = swallow. A key-down is swallowed only while armed, with
+    /// no modifier held, for a snake key, and while the window that was in front at the arming click still is (any
+    /// other window in front disarms right here, before the UI thread hears about it). A key-up is swallowed exactly
+    /// when its key-down was, so no key is ever left "down" for other apps.
+    /// </summary>
+    public bool Filter(int vk, bool down, nint foreground, bool modifierDown)
+    {
+        if (!down) return _swallowedDowns.Remove(vk);
+        if (!_armed) return false;
+        var armedFor = (nint)Interlocked.Read(ref _foreground);
+        if (armedFor != 0 && foreground != armedFor)
+        {
+            _armed = false;
+            return false;
+        }
+        if (modifierDown || Map(vk) is null) return false;
+        _swallowedDowns.Add(vk);
+        return true;
+    }
 
     public SnakeKey? Map(int vk) => vk switch
     {

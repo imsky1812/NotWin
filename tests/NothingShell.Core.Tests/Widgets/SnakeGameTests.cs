@@ -161,4 +161,27 @@ public sealed class SnakeGameTests
         Assert.False(gate.ShouldSwallow(0x26));
         Assert.False(gate.Armed);
     }
+
+    [Fact]
+    public void Gate_Filter_SwallowsOnlyUpsOfSwallowedDowns()
+    {
+        var gate = new SnakeKeyGate();
+        gate.Arm(100);
+        Assert.False(gate.Filter(0x41, down: true, foreground: 100, modifierDown: true)); // Ctrl+A passes
+        Assert.False(gate.Filter(0x41, down: false, foreground: 100, modifierDown: false)); // its key-up passes too
+        Assert.True(gate.Filter(0x26, down: true, foreground: 100, modifierDown: false));
+        gate.Disarm();
+        Assert.True(gate.Filter(0x26, down: false, foreground: 100, modifierDown: false)); // paired up still swallowed
+        Assert.False(gate.Filter(0x26, down: false, foreground: 100, modifierDown: false)); // only once
+    }
+
+    [Fact]
+    public void Gate_Filter_ForegroundMoved_DisarmsOnTheHookThread()
+    {
+        var gate = new SnakeKeyGate();
+        gate.Arm(100);
+        Assert.False(gate.Filter(0x57, down: true, foreground: 200, modifierDown: false)); // W reaches the new window
+        Assert.False(gate.Armed);
+        Assert.False(gate.Filter(0x57, down: false, foreground: 200, modifierDown: false));
+    }
 }

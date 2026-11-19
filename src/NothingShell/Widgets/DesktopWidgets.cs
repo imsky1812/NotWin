@@ -26,6 +26,7 @@ public sealed class DesktopWidgets : IDisposable
     private readonly Dictionary<WidgetKind, (WidgetHost Host, Grid Root)> _hosts = [];
     private readonly DispatcherTimer _reattach = new() { Interval = TimeSpan.FromMilliseconds(250) };
     private readonly Stopwatch _lostFor = new();
+    private readonly DispatcherTimer _dpiDebounce = new() { Interval = TimeSpan.FromMilliseconds(200) };
     private DesktopLayout _layout = DesktopLayout.Default;
     private RectI _monitor;
     private double _px = 1;   // physical px per unscaled widget px = DPI scale × widget scale
@@ -43,6 +44,7 @@ public sealed class DesktopWidgets : IDisposable
         _update = update;
         _widgets = widgets;
         _reattach.Tick += (_, _) => TryReattach();
+        _dpiDebounce.Tick += (_, _) => { _dpiDebounce.Stop(); Rebuild(); };
         SystemEvents.DisplaySettingsChanged += OnDisplayChanged;
     }
 
@@ -78,6 +80,24 @@ public sealed class DesktopWidgets : IDisposable
     public void Rebuild()
     {
         if (!_started || _disposed) return;
+        try { RebuildCore(); }
+        catch (Exception e)
+        {
+            // A monitor that briefly has no info, or the desktop dying mid-create: try again once it is back.
+            Log.Error("widget rebuild failed; retrying when the desktop is back", e);
+            StartReattach();
+        }
+    }
+
+    // Many WM_DPICHANGED_AFTERPARENT messages arrive together (one per widget): one rebuild after they settle.
+    private void OnDpiChanged()
+    {
+        _dpiDebounce.Stop();
+        _dpiDebounce.Start();
+    }
+
+    private void RebuildCore()
+    {
         Measure();
         _layout = DesktopLayout.Sanitize(_get().Widgets, Area.W, Area.H);
         var host = DesktopAttach.FindHost();
@@ -100,6 +120,7 @@ public sealed class DesktopWidgets : IDisposable
             {
                 var wh = new WidgetHost(root);
                 wh.Lost += OnLost;
+                wh.DpiChanged += OnDpiChanged;
                 h = (wh, root);
                 _hosts[p.Kind] = h;
             }
@@ -113,7 +134,16 @@ public sealed class DesktopWidgets : IDisposable
                 root = h.Root;
             }
             var rect = ScreenRect(p);
-            if (host != 0) h.Host.Attach(host, rect);
+            if (host != 0)
+            {
+                try { h.Host.Attach(host, rect); }
+                catch (Exception e)
+                {
+                    Log.Error($"widget {p.Kind} could not attach to the desktop", e);
+                    StartReattach();
+                    continue;
+                }
+            }
             Safe(() => widget.Placed(rect, _monitor));
         }
         if (host == 0) StartReattach();
@@ -176,6 +206,12 @@ public sealed class DesktopWidgets : IDisposable
     }
 
     private void ShowBackdrop()
+    {
+        try { ShowBackdropCore(); }
+        catch (Exception e) { Log.Error("widget edit backdrop failed", e); }
+    }
+
+    private void ShowBackdropCore()
     {
         var host = DesktopAttach.FindHost();
         if (host == 0) return;
@@ -338,7 +374,8 @@ public sealed class DesktopWidgets : IDisposable
         var host = DesktopAttach.FindHost();
         if (host == 0) return;
         _reattach.Stop();
-        DesktopAttach.Prepare();
+        try { DesktopAttach.Prepare(); }
+        catch (Exception e) { Log.Error("desktop prepare failed", e); }
         Rebuild();
         if (Editing)
         {
@@ -358,6 +395,7 @@ public sealed class DesktopWidgets : IDisposable
     {
         _disposed = true;
         _reattach.Stop();
+        _dpiDebounce.Stop();
         _settle?.Stop();
         _popup?.CloseIfOpen();
         _backdrop?.Dispose();

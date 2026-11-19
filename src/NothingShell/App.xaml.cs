@@ -101,6 +101,7 @@ public partial class App : Application
         {
             _taskbar.AppBarReRegistered = _appBar.ReRegister();
             _mouse?.Reinstall();
+            _widgets?.Rebuild(); // backup for the widget windows' own loss signal
         };
         _taskbar.TaskbarReHidden += () => _mouse?.Reinstall();
         _taskbar.QuitRequested += () => Shutdown(); // `NothingShell.exe --quit`: same exit path as the menu's Quit
