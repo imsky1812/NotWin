@@ -80,6 +80,33 @@ public sealed class NotchController : IDisposable
         Render();
     }
 
+    /// <summary>Nothing Shell's own card in the notch (timer, tools): same rules as a notification (3.6 s, hidden in full screen).</summary>
+    public void NotifyLocal(string title, string text, string icon)
+    {
+        var n = new NotchNotification("", title, text);
+        _machine.Notify(n, DateTimeOffset.Now);
+        if (_machine.CurrentNotification == n) _window.SetNotification(n, TileChrome.IconImage(icon));
+        Render();
+    }
+
+    /// <summary>Follows the shared timer: the live Timer state while it runs (spec §6.4 priority).</summary>
+    public void AttachTimer(Timing.TimerService timer)
+    {
+        _timer = timer;
+        timer.Changed += OnTimerChanged;
+        OnTimerChanged();
+    }
+
+    private Timing.TimerService? _timer;
+
+    private void OnTimerChanged()
+    {
+        if (_timer is null) return;
+        _window.SetTimer(_timer.Fraction, _timer.Text, _timer.Running, _timer.FlashOn);
+        _machine.SetTimerRunning(_timer.Running);
+        Render();
+    }
+
     public void SetMusic(bool playing, ImageSource? art)
     {
         _machine.SetMusicPlaying(playing);
@@ -253,6 +280,7 @@ public sealed class NotchController : IDisposable
         _transient.Stop();
         _hoverTimer.Stop();
         if (_mouse is not null) _mouse.Moved -= OnMoved;
+        if (_timer is not null) _timer.Changed -= OnTimerChanged;
         _dash.Dispose();
         _tray.PropertyChanged -= OnTrayChanged;
         _tray.DefaultDeviceChanged -= _window.RebindMeter;

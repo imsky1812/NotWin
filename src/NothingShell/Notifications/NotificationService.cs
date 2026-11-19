@@ -14,6 +14,8 @@ namespace NothingShell.Notifications;
 public sealed class NotificationService : IDisposable
 {
     private UserNotificationListener? _listener;
+    private readonly List<NotificationItem> _local = [];
+    private uint _nextLocalId = uint.MaxValue;
     private SynchronizationContext? _ui;
     private bool _disposed;
 
@@ -58,9 +60,29 @@ public sealed class NotificationService : IDisposable
         }
     }
 
+    /// <summary>
+    /// Adds Nothing Shell's own notification (e.g. the timer's "Time is up") to the panel list. Local items have ids
+    /// counting down from uint.MaxValue and an empty AppId; they live in memory only and are listed even without the
+    /// Windows listener.
+    /// </summary>
+    public NotificationItem AddLocal(string appName, string text)
+    {
+        var item = new NotificationItem(_nextLocalId--, "", appName, text, DateTimeOffset.Now);
+        _local.Add(item);
+        Post(() => ListChanged?.Invoke());
+        return item;
+    }
+
     public async Task<IReadOnlyList<NotificationItem>> GetAllAsync()
     {
-        if (!Available || _listener is null) return [];
+        var local = _local.ToList();
+        if (!Available || _listener is null) return local;
+        return local.Concat(await GetWindowsAsync()).ToList();
+    }
+
+    private async Task<IReadOnlyList<NotificationItem>> GetWindowsAsync()
+    {
+        if (_listener is null) return [];
         try
         {
             var list = await _listener.GetNotificationsAsync(NotificationKinds.Toast);
@@ -75,9 +97,9 @@ public sealed class NotificationService : IDisposable
 
     public void Remove(IEnumerable<uint> ids)
     {
-        if (_listener is null) return;
         foreach (var id in ids)
         {
+            if (_local.RemoveAll(i => i.Id == id) > 0 || _listener is null) continue;
             try { _listener.RemoveNotification(id); }
             catch (Exception e) { Log.Error($"removing notification {id} failed", e); }
         }
@@ -86,7 +108,8 @@ public sealed class NotificationService : IDisposable
 
     public void ClearAll()
     {
-        if (_listener is null) return;
+        _local.Clear();
+        if (_listener is null) { Post(() => ListChanged?.Invoke()); return; }
         try { _listener.ClearNotifications(); }
         catch (Exception e) { Log.Error("clearing notifications failed", e); }
         Post(() => ListChanged?.Invoke());

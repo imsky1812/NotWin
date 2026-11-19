@@ -68,6 +68,18 @@ public static class TileChrome
         return new Viewbox { Width = size, Height = size, Child = canvas, SnapsToDevicePixels = true };
     }
 
+    /// <summary>A line icon as an image (white strokes on transparent), e.g. for the notch's own notification cards.</summary>
+    public static ImageSource IconImage(string name)
+    {
+        var pen = new Pen(Text, 1.6) { StartLineCap = PenLineCap.Round, EndLineCap = PenLineCap.Round, LineJoin = PenLineJoin.Round };
+        var group = new DrawingGroup();
+        group.Children.Add(new GeometryDrawing(Brushes.Transparent, null, new RectangleGeometry(new Rect(0, 0, 24, 24))));
+        group.Children.Add(new GeometryDrawing(null, pen, (Geometry)Icons["Icon." + name]));
+        var image = new DrawingImage(group);
+        image.Freeze();
+        return image;
+    }
+
     /// <summary>Header row: icon 16, title (Geist SemiBold 13), optional right-aligned element (mockup <c>.hd</c>).</summary>
     public static DockPanel Header(string icon, string title, UIElement? right = null)
     {

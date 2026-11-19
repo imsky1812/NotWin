@@ -24,6 +24,7 @@ public partial class App : Application
     private Launcher.LauncherController? _launcher;
     private Launcher.AppIndex? _index;
     private Notch.NotchController? _notch;
+    private Timing.TimerService? _timer;
     private Media.MediaSessionService? _media;
     private Notifications.NotificationService? _notifications;
     private Panel.QuickPanelController? _panel;
@@ -127,6 +128,17 @@ public partial class App : Application
                 dockCtl is null ? null : () => dockCtl.Settings,
                 dockCtl is null ? null : dockCtl.UpdateSettings);
             _notch.SetFullscreen(_fullscreen!.IsFullscreen);
+
+            // The shared timer (spec §6.6): notch tile + live state now, the desktop widget in Plan 5.
+            var minutes = dockCtl?.Settings.TimerMinutes ?? 25;
+            _timer = new Timing.TimerService(minutes, m => dockCtl?.UpdateSettings(s => s with { TimerMinutes = m }));
+            _notch.AttachTimer(_timer);
+            var timer = _timer;
+            _notch.TileFactory = kind => kind switch
+            {
+                Core.Notch.TileKind.Timer => new Notch.Dashboard.Tiles.TimerTile(timer),
+                _ => new Notch.Dashboard.PlaceholderTile(kind),
+            };
             _fullscreen.Changed += fs => _notch?.SetFullscreen(fs);
             _launcher.Launched += name => _notch?.Opening(name);
 
@@ -142,6 +154,13 @@ public partial class App : Application
                 new Core.Notch.NotchNotification(item.AppId, item.AppName, item.Text),
                 string.IsNullOrEmpty(item.AppId) ? null : notchIcons.Get(item.AppId, 40));
             _ = _notifications.StartAsync();
+            var notifications = _notifications;
+            _timer.Finished += () =>
+            {
+                Log.Info("timer finished");
+                _notch?.NotifyLocal("Timer", "Time is up", "timer");
+                notifications.AddLocal("Timer", "Time is up"); // kept in the panel, also when full screen hid the notch
+            };
         }
         catch (Exception e) { Log.Error("notch failed to start", e); }
         if (_dock is not null)
@@ -269,6 +288,7 @@ public partial class App : Application
             _notifications?.Dispose();
             _panel?.Dispose();
             _notch?.Dispose();
+            _timer?.Dispose();
             _controller?.Dispose();
             _tray?.Dispose();
             _mouse?.Dispose();

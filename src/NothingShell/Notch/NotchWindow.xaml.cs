@@ -42,6 +42,7 @@ public partial class NotchWindow : Window
     private double _pillW = 196, _pillH = 34;
     private double _openHeight = 232;
     private bool _typing;
+    private readonly Dashboard.GridTimerView _timerGrid = new(22, 5);
 
     /// <summary>Right-click on the open notch (spec §6.7: Settings).</summary>
     public event Action? SettingsRequested;
@@ -88,6 +89,7 @@ public partial class NotchWindow : Window
             if (PowerBar.Lit >= _fillTarget) { _fill.Stop(); return; }
             PowerBar.Lit++;
         };
+        TimerGridHost.Child = _timerGrid;
         PowerBar.On = Lit;
         PowerBar.Off = Frozen(0x2A, 0x2A, 0x2A);
         PowerBar.Accent = _accent;
@@ -191,6 +193,13 @@ public partial class NotchWindow : Window
 
     public void SetOpening(string name) => OpeningName.Text = name;
 
+    /// <summary>The live Timer state's content (270x34: mini grid + dot countdown).</summary>
+    public void SetTimer(double fraction, string text, bool running, bool flash)
+    {
+        _timerGrid.Show(fraction, running, flash);
+        TimerText.Text = text;
+    }
+
     /// <summary>
     /// Fills the plugged-in / unplugged card (<paramref name="charging"/> = the charger is in). Plugging in fills the
     /// level dots one by one (the last lit dot red and pulsing); unplugging shows the level at once with a grey bolt.
@@ -262,7 +271,8 @@ public partial class NotchWindow : Window
         Animate(Pill, HeightProperty, h);
         Pill.CornerRadius = new CornerRadius(r);
 
-        Fade(RestLayer, state is NotchState.Resting or NotchState.Timer);
+        Fade(RestLayer, state == NotchState.Resting);
+        Fade(TimerLayer, state == NotchState.Timer);
         Fade(OpeningLayer, state == NotchState.Opening);
         Fade(MusicLayer, state == NotchState.Music);
         Fade(NotifyLayer, state == NotchState.Notification);

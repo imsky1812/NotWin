@@ -44,6 +44,12 @@
                     <local:DotMatrix x:Name="Clock" Dot="2.6" Gap="1" Fill="#FFEEEEEE" VerticalAlignment="Center" HorizontalAlignment="Left" />
                 </DockPanel>
 
+                <!-- Timer (Plan 4): mini 5x5 grid timer | dot countdown (mockup l-timer: gridTimer(22,5) + dots 2.6/1 #eee) -->
+                <DockPanel x:Name="TimerLayer" Margin="14,0" Opacity="0">
+                    <Border x:Name="TimerGridHost" Width="22" Height="22" VerticalAlignment="Center" DockPanel.Dock="Left" />
+                    <local:DotMatrix x:Name="TimerText" Dot="2.6" Gap="1" Fill="#FFEEEEEE" VerticalAlignment="Center" HorizontalAlignment="Right" />
+                </DockPanel>
+
                 <!-- Opening ‹name›… -->
                 <StackPanel x:Name="OpeningLayer" Orientation="Horizontal" Margin="16,0" Opacity="0" VerticalAlignment="Center">
                     <TextBlock Text="Opening " FontSize="12" Foreground="{StaticResource Brush.Dim}" />
