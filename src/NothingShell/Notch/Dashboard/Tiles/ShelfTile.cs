@@ -16,7 +16,7 @@ namespace NothingShell.Notch.Dashboard.Tiles;
 /// out to use. 1×1 icon + "SHELF · N"; 2×1 / 2×2 header with the count, then a dashed drop area when empty or the
 /// file chips (icon + name, ✕ on hover). Saved to shelf.json; missing files are dropped on load. Names never logged.
 /// </summary>
-public sealed class ShelfTile : ITileView
+public sealed class ShelfTile : ITileView, IFileDropTarget
 {
     private static readonly Brush ChipBrush = TileChrome.Frozen(0x22, 0x22, 0x22);
     private readonly ShelfStore _store;
@@ -38,23 +38,9 @@ public sealed class ShelfTile : ITileView
     public FrameworkElement Build(TileSize size)
     {
         _size = size;
+        // Drops arrive through the notch window (WM_DROPFILES, see FileDropNative), not WPF drag-and-drop: OLE drops
+        // from Explorer cannot reach this High-integrity process.
         _tile = TileChrome.Tile(new Grid(), center: size == TileSize.One);
-        _tile.AllowDrop = true;
-        _tile.DragOver += (_, e) =>
-        {
-            e.Effects = e.Data.GetDataPresent(DataFormats.FileDrop) ? DragDropEffects.Link | DragDropEffects.Copy : DragDropEffects.None;
-            e.Handled = true;
-        };
-        _tile.Drop += (_, e) =>
-        {
-            if (e.Data.GetData(DataFormats.FileDrop) is string[] paths)
-            {
-                var added = paths.Count(_shelf.Add);
-                if (added > 0) Save();
-                Log.Info($"shelf: {added} added, {_shelf.Paths.Count} held");
-            }
-            e.Handled = true;
-        };
         Fill();
         return _tile;
     }
@@ -143,6 +129,13 @@ public sealed class ShelfTile : ITileView
             DragDrop.DoDragDrop(chip, data, DragDropEffects.Copy | DragDropEffects.Link);
         };
         return chip;
+    }
+
+    public void AddFiles(IEnumerable<string> paths)
+    {
+        var added = paths.Count(_shelf.Add);
+        if (added > 0) Save();
+        Log.Info($"shelf: {added} added, {_shelf.Paths.Count} held");
     }
 
     private void Save()

@@ -60,7 +60,7 @@ public sealed class NotchController : IDisposable, IDashboardHost
         _window.SettingsRequested += () => SettingsRequested?.Invoke();
         _window.EscPressed += Close;
         _window.TypingEnded += () => Hold("text", false);
-        _window.FileDragEntered += () => ShowPageOf(TileKind.Shelf);
+        _window.FilesDropped += OnFilesDropped;
         if (_mouse is not null) _mouse.Moved += OnMoved;
         _tray.PropertyChanged += OnTrayChanged;
         _tray.DefaultDeviceChanged += _window.RebindMeter;
@@ -125,6 +125,27 @@ public sealed class NotchController : IDisposable, IDashboardHost
         _machine.SetFullscreen(fullscreen);
         if (wasOpen && !_hover.IsOpen) ApplyOpen();
         else Render();
+    }
+
+    /// <summary>The launcher or the quick-settings panel is open: close the dashboard and keep it closed meanwhile.</summary>
+    public void SetCovered(bool covered)
+    {
+        var wasOpen = _hover.IsOpen;
+        _hover.SetCovered(covered);
+        if (wasOpen && !_hover.IsOpen) ApplyOpen();
+        PumpHover();
+    }
+
+    // Anything dropped on the notch goes to the shelf (spec §6.4 file shelf), whose page is then shown.
+    private void OnFilesDropped(string[] paths)
+    {
+        if (_dash.PageOf(TileKind.Shelf) < 0)
+        {
+            NotifyLocal("Shelf", "Add the Shelf tile in Edit to drop files", "shelf");
+            return;
+        }
+        if (_dash.View(TileKind.Shelf) is IFileDropTarget shelf) shelf.AddFiles(paths);
+        ShowPageOf(TileKind.Shelf);
     }
 
     // ---- dashboard ----

@@ -100,6 +100,27 @@ public sealed class NotchHoverTests
     }
 
     [Fact]
+    public void Covered_ClosesAndBlocksOpen_UntilUncovered()
+    {
+        // The launcher or the quick-settings panel opening must not leave the dashboard on top of it (user 2026-11-19).
+        var h = Opened();
+        h.SetCovered(true);
+        Assert.False(h.IsOpen);
+        h.Pointer(true, false, Ms(2000));
+        h.Update(Ms(3000));
+        Assert.False(h.IsOpen);
+        Assert.Null(h.NextCheckAt);
+        h.SetCovered(false);
+        h.Pointer(true, false, Ms(4000));
+        h.Update(Ms(4150));
+        Assert.False(h.IsOpen);   // still resting where it was when covered: leave and come back first
+        h.Pointer(false, false, Ms(4200));
+        h.Pointer(true, false, Ms(4300));
+        h.Update(Ms(4450));
+        Assert.True(h.IsOpen);
+    }
+
+    [Fact]
     public void Fullscreen_ClosesAndBlocksOpen()
     {
         var h = Opened();

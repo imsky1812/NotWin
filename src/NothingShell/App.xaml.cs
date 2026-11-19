@@ -190,6 +190,7 @@ public partial class App : Application
             _dock.SearchClicked += _launcher.Toggle;
         }
         _fullscreen!.Changed += fs => { if (fs) { _launcher?.Close(); _panel?.Close(); } };
+        _launcher.VisibleChanged += _ => UpdateNotchCover();
 
         // Quick-settings panel (spec §6.3): Win+A / Win+N (below) and the dock tray. Guarded like the notch: a failure
         // here must never take the dock and launcher down with it (Win+A / Win+N then simply do nothing).
@@ -208,6 +209,7 @@ public partial class App : Application
                 panel.Opening += () => _ = notes.RefreshAsync();
             }
             _panel = panel;
+            panel.Window.IsVisibleChanged += (_, _) => UpdateNotchCover(); // after it is really shown / hidden
             if (_dock is not null) _dock.TrayClicked += panel.Toggle;
         }
         catch (Exception e) { Log.Error("quick-settings panel failed to start", e); }
@@ -224,6 +226,10 @@ public partial class App : Application
             Log.Error("win key hook failed; Win opens Windows' Start", e);
         }
     }
+
+    // The open dashboard must never sit on top of the launcher or the panel (user feedback 2026-11-19).
+    private void UpdateNotchCover() =>
+        _notch?.SetCovered(_launcher?.IsOpen == true || _panel?.IsOpen == true);
 
     // Settings window (spec §6.7): the dock controller is the one settings writer.
     private void ShowSettings()

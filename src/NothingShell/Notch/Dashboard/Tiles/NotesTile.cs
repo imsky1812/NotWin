@@ -91,6 +91,7 @@ public sealed class NotesTile : ITileView
             Margin = new Thickness(0, 8, 0, 0),
             AcceptsReturn = multiLine,
             AcceptsTab = false,
+            AllowDrop = false, // a WPF drop target would register OLE on the notch and block WM_DROPFILES (shelf)
             TextWrapping = multiLine ? TextWrapping.Wrap : TextWrapping.NoWrap,
             VerticalScrollBarVisibility = multiLine ? ScrollBarVisibility.Auto : ScrollBarVisibility.Disabled,
             VerticalAlignment = multiLine ? VerticalAlignment.Stretch : VerticalAlignment.Top,

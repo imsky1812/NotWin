@@ -2,6 +2,12 @@ using System.Windows;
 
 namespace NothingShell.Notch.Dashboard;
 
+/// <summary>A tile that takes files dropped on the notch (the shelf).</summary>
+public interface IFileDropTarget
+{
+    void AddFiles(IEnumerable<string> paths);
+}
+
 /// <summary>What a tile may ask of the open notch (implemented by <see cref="NotchController"/>).</summary>
 public interface IDashboardHost
 {

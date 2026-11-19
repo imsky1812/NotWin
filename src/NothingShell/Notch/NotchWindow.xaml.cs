@@ -54,8 +54,8 @@ public partial class NotchWindow : Window
     /// <summary>The window lost activation while typing (click elsewhere): the controller releases the "text" hold.</summary>
     public event Action? TypingEnded;
 
-    /// <summary>Files are being dragged over the open notch (the controller shows the shelf's page).</summary>
-    public event Action? FileDragEntered;
+    /// <summary>Files were dropped on the notch (WM_DROPFILES; works across UIPI from Explorer).</summary>
+    public event Action<string[]>? FilesDropped;
 
     public NotchWindow()
     {
@@ -66,6 +66,9 @@ public partial class NotchWindow : Window
             DockWindowNative.ApplyDockStyles(hwnd);
             // Click-through until the dashboard opens, so the pill's soft shadow never swallows clicks below it.
             DockWindowNative.AddExStyle(hwnd, WsExTransparent);
+            // File drops from Explorer (Medium) into this uiAccess (High) process: WM_DROPFILES, not OLE (ND.9).
+            FileDropNative.Enable(hwnd);
+            HwndSource.FromHwnd(hwnd)?.AddHook(DropHook);
         };
         Pill.MouseRightButtonUp += (_, e) =>
         {
@@ -80,11 +83,7 @@ public partial class NotchWindow : Window
             EscPressed?.Invoke();
         };
         Deactivated += (_, _) => { if (_typing) TypingEnded?.Invoke(); };
-        Pill.AllowDrop = true;
-        Pill.PreviewDragEnter += (_, e) =>
-        {
-            if (_shown == NotchState.Open && e.Data.GetDataPresent(DataFormats.FileDrop)) FileDragEntered?.Invoke();
-        };
+
         // 20 fps while the music state is visible, off otherwise (spec §7).
         _eq = new DispatcherTimer(DispatcherPriority.Render) { Interval = TimeSpan.FromMilliseconds(50) };
         _eq.Tick += (_, _) => StepEqualizer();
@@ -305,9 +304,19 @@ public partial class NotchWindow : Window
         else StopEqualizer(); // the equalizer and its meter only run while it is visible (spec §7)
     }
 
+    private nint DropHook(nint hwnd, int msg, nint wParam, nint lParam, ref bool handled)
+    {
+        if (msg != FileDropNative.WmDropFiles) return 0;
+        handled = true;
+        var paths = FileDropNative.Read(wParam);
+        if (paths.Length > 0) FilesDropped?.Invoke(paths);
+        return 0;
+    }
+
     private void SetClickThrough(bool on)
     {
         if (_hwnd == 0) return;
+        if (!on) FileDropNative.RevokeOle(_hwnd); // opening: make sure no OLE target shadows WM_DROPFILES
         if (on) DockWindowNative.AddExStyle(_hwnd, WsExTransparent);
         else DockWindowNative.RemoveExStyle(_hwnd, WsExTransparent);
     }

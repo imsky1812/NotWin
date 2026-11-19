@@ -15,7 +15,9 @@ public sealed class NotchHover
     private readonly HashSet<string> _holds = [];
     private TimeSpan? _onPillSince;
     private TimeSpan? _outsideSince;
-    private bool _overPill, _inside, _fullscreen, _mustLeave;
+    private bool _overPill, _inside, _fullscreen, _covered, _mustLeave;
+
+    private bool Blocked => _fullscreen || _covered;
 
     public bool IsOpen { get; private set; }
 
@@ -42,7 +44,23 @@ public sealed class NotchHover
     public void SetFullscreen(bool fullscreen)
     {
         _fullscreen = fullscreen;
-        if (!fullscreen) return;
+        if (fullscreen) ForceClosed();
+    }
+
+    /// <summary>
+    /// Another shell surface (the launcher, the quick-settings panel) is open: close the dashboard and do not open it
+    /// over that surface until it closes (user feedback 2026-11-19: the open notch covered the launcher).
+    /// </summary>
+    public void SetCovered(bool covered)
+    {
+        _covered = covered;
+        if (!covered) return;
+        ForceClosed();
+        _mustLeave = _overPill; // closing the launcher with the pointer still up there must not pop the dashboard open
+    }
+
+    private void ForceClosed()
+    {
         IsOpen = false;
         _onPillSince = null;
         _outsideSince = null;
@@ -61,7 +79,7 @@ public sealed class NotchHover
     /// <summary>Applies the rules at <paramref name="now"/>; true when <see cref="IsOpen"/> changed.</summary>
     public bool Update(TimeSpan now)
     {
-        if (_fullscreen) return false;
+        if (Blocked) return false;
         if (!IsOpen)
         {
             if (_onPillSince is not { } since || _mustLeave || now - since < OpenDwell) return false;
@@ -78,7 +96,7 @@ public sealed class NotchHover
 
     /// <summary>When <see cref="Update"/> could next change something, or null if nothing is pending.</summary>
     public TimeSpan? NextCheckAt =>
-        _fullscreen ? null
+        Blocked ? null
         : !IsOpen ? (_onPillSince is { } s && !_mustLeave ? s + OpenDwell : null)
         : _holds.Count == 0 && _outsideSince is { } o ? o + CloseDelay : null;
 }
