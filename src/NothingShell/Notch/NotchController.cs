@@ -143,8 +143,28 @@ public sealed class NotchController : IDisposable, IDashboardHost
     /// <summary>The launcher or the quick-settings panel is open: close the dashboard and keep it closed meanwhile.</summary>
     public void SetCovered(bool covered)
     {
+        _uiCovered = covered;
+        ApplyCover();
+    }
+
+    /// <summary>
+    /// A screen tool is capturing or open: hide the notch entirely so it is neither over the tool's toolbar nor in its
+    /// picture (user screenshot 2026-11-19), and keep the dashboard from opening meanwhile.
+    /// </summary>
+    public void SetSuppressed(bool suppressed)
+    {
+        _suppressed = suppressed;
+        _machine.SetSuppressed(suppressed);
+        ApplyCover();
+        Render();
+    }
+
+    private bool _uiCovered, _suppressed;
+
+    private void ApplyCover()
+    {
         var wasOpen = _hover.IsOpen;
-        _hover.SetCovered(covered);
+        _hover.SetCovered(_uiCovered || _suppressed);
         if (wasOpen && !_hover.IsOpen) ApplyOpen();
         PumpHover();
     }

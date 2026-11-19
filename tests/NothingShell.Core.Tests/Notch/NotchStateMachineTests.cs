@@ -176,6 +176,19 @@ public sealed class NotchStateMachineTests
     }
 
     [Fact]
+    public void Suppressed_HidesTheNotch_ButKeepsAShowingNotification()
+    {
+        // A screen tool (Draw, Snip, Grab text, Color) must not have the notch over it or in its picture (user 2026-11-19);
+        // unlike full screen, a notification still due shows again afterwards.
+        var m = new NotchStateMachine();
+        m.Notify(N1, T0);
+        m.SetSuppressed(true);
+        Assert.Equal(NotchState.Hidden, m.StateAt(Ms(100)));
+        m.SetSuppressed(false);
+        Assert.Equal(NotchState.Notification, m.StateAt(Ms(200)));
+    }
+
+    [Fact]
     public void NextChangeAt_IsTransientEnd()
     {
         var m = new NotchStateMachine();

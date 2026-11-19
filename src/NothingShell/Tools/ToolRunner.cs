@@ -54,11 +54,16 @@ public sealed class ToolRunner(NotchController notch, Action openSettings)
         _ => k.ToString(),
     };
 
+    // The notch hides for the whole pick so it is neither in the frozen shot nor over the picker.
     private async Task<PickResult?> PickAsync(PickMode mode)
     {
-        notch.Close();
-        await Task.Delay(200); // let the notch shrink out of the shot
-        return await RegionPicker.PickAsync(mode);
+        notch.SetSuppressed(true);
+        try
+        {
+            await Task.Delay(200); // let the hidden notch leave the screen before the capture
+            return await RegionPicker.PickAsync(mode);
+        }
+        finally { notch.SetSuppressed(false); }
     }
 
     private async Task GrabTextAsync()
@@ -98,9 +103,14 @@ public sealed class ToolRunner(NotchController notch, Action openSettings)
     // Draw (user request 2026-11-19): pen on a frozen picture of the screen; Done copies it and saves a PNG.
     private async Task DrawAsync()
     {
-        notch.Close();
-        await Task.Delay(200); // let the notch shrink out of the picture
-        var picture = await DrawOverlay.DrawAsync();
+        notch.SetSuppressed(true); // not in the picture, not over the toolbar
+        BitmapSource? picture;
+        try
+        {
+            await Task.Delay(200);
+            picture = await DrawOverlay.DrawAsync();
+        }
+        finally { notch.SetSuppressed(false); }
         if (picture is null) return;
         var copied = CopyAndSave(picture);
         Log.Info($"draw saved ({picture.PixelWidth}x{picture.PixelHeight}), copied={copied}");

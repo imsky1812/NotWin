@@ -26,6 +26,13 @@ public sealed class NotchStateMachine
     private bool _timer;
     private bool _fullscreen;
     private bool _open;
+    private bool _suppressed;
+
+    /// <summary>
+    /// A screen tool is capturing or open (Draw, Snip, Grab text, Color): the notch hides so it is neither over the
+    /// tool nor in its picture. Transients keep their clocks (unlike full screen), so a notification still due returns.
+    /// </summary>
+    public void SetSuppressed(bool suppressed) => _suppressed = suppressed;
 
     public NotchNotification? CurrentNotification { get; private set; }
     public string? OpeningName { get; private set; }
@@ -76,7 +83,7 @@ public sealed class NotchStateMachine
 
     public NotchState StateAt(DateTimeOffset now)
     {
-        if (_fullscreen) return NotchState.Hidden;
+        if (_fullscreen || _suppressed) return NotchState.Hidden;
         if (_open) return NotchState.Open;
         if (now < _notificationUntil) return NotchState.Notification;
         if (now < _powerUntil) return NotchState.Power;
