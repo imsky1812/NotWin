@@ -29,6 +29,7 @@ public partial class App : Application
     private readonly Power.KeepAwakeService _awake = new();
     private Forecast.WeatherService? _weather;
     private Widgets.DesktopWidgets? _widgets;
+    private Widgets.DeviceBatteryService? _deviceBatteries;
 
     private static string DataDir => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "NothingShell");
     private Media.MediaSessionService? _media;
@@ -252,6 +253,11 @@ public partial class App : Application
         };
         if (_weather is not null) widgets[Core.Widgets.WidgetKind.Weather] = new Widgets.WeatherWidget(_weather);
         if (_media is not null) widgets[Core.Widgets.WidgetKind.Media] = new Widgets.MediaWidget(_media);
+        if (_tray is not null)
+        {
+            _deviceBatteries = new Widgets.DeviceBatteryService(_tray);
+            widgets[Core.Widgets.WidgetKind.Battery] = new Widgets.BatteryWidget(_deviceBatteries);
+        }
         _widgets = new Widgets.DesktopWidgets(() => dock.Settings, dock.UpdateSettings, widgets);
         _widgets.Start();
     }
@@ -373,6 +379,7 @@ public partial class App : Application
             _awake.Dispose(); // keep awake never outlives the shell
             _weather?.Dispose();
             _widgets?.Dispose();
+            _deviceBatteries?.Dispose();
             _controller?.Dispose();
             _tray?.Dispose();
             _mouse?.Dispose();
