@@ -122,7 +122,10 @@ public partial class App : Application
         // Notch (spec §6.4): resting time/battery, "Opening ‹name›…" after a launch; hidden in full screen.
         try
         {
-            _notch = new Notch.NotchController(_tray!);
+            var dockCtl = _controller;
+            _notch = new Notch.NotchController(_tray!, _mouse,
+                dockCtl is null ? null : () => dockCtl.Settings,
+                dockCtl is null ? null : dockCtl.UpdateSettings);
             _notch.SetFullscreen(_fullscreen!.IsFullscreen);
             _fullscreen.Changed += fs => _notch?.SetFullscreen(fs);
             _launcher.Launched += name => _notch?.Opening(name);

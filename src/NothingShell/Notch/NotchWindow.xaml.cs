@@ -17,7 +17,10 @@ namespace NothingShell.Notch;
 /// </summary>
 public partial class NotchWindow : Window
 {
-    private const double BandWidth = 480, BandHeight = 112; // DIPs: room for the 420x64 pill plus its shadow
+    // DIPs: room for the open 770x326 pill (3 rows) plus its shadow. Click-through except while open, so the big band
+    // costs nothing when closed.
+    private const double BandWidth = 800, BandHeight = 360, PillTop = 8, DashboardWidth = 770;
+    private const int WsExTransparent = 0x00000020;
     private static readonly Duration Resize = new(TimeSpan.FromMilliseconds(300));
     private static readonly KeySpline Ease = new(0.2, 0.8, 0.2, 1);
     private static readonly TimeSpan FillDelay = TimeSpan.FromMilliseconds(300), FillStep = TimeSpan.FromMilliseconds(70);
@@ -34,6 +37,20 @@ public partial class NotchWindow : Window
     private long _nextBind;
     private nint _hwnd;
     private NotchState _shown = NotchState.Resting;
+    private RectI _band;
+    private double _scale = 1;
+    private double _pillW = 196, _pillH = 34;
+    private double _openHeight = 232;
+    private bool _typing;
+
+    /// <summary>Right-click on the open notch (spec §6.7: Settings).</summary>
+    public event Action? SettingsRequested;
+
+    /// <summary>Esc while the notch has keyboard focus.</summary>
+    public event Action? EscPressed;
+
+    /// <summary>The window lost activation while typing (click elsewhere): the controller releases the "text" hold.</summary>
+    public event Action? TypingEnded;
 
     public NotchWindow()
     {
@@ -42,10 +59,22 @@ public partial class NotchWindow : Window
         {
             var hwnd = new WindowInteropHelper(this).Handle;
             DockWindowNative.ApplyDockStyles(hwnd);
-            // Plan 3's notch has no click or hover behaviour: make the whole band click-through (WS_EX_TRANSPARENT),
-            // so the pill's soft shadow never swallows clicks on the title bars below. Plan 4 (hover dashboard) revisits.
-            DockWindowNative.AddExStyle(hwnd, 0x00000020);
+            // Click-through until the dashboard opens, so the pill's soft shadow never swallows clicks below it.
+            DockWindowNative.AddExStyle(hwnd, WsExTransparent);
         };
+        Pill.MouseRightButtonUp += (_, e) =>
+        {
+            if (_shown != NotchState.Open) return;
+            e.Handled = true;
+            SettingsRequested?.Invoke();
+        };
+        PreviewKeyDown += (_, e) =>
+        {
+            if (e.Key != System.Windows.Input.Key.Escape) return;
+            e.Handled = true;
+            EscPressed?.Invoke();
+        };
+        Deactivated += (_, _) => { if (_typing) TypingEnded?.Invoke(); };
         // 20 fps while the music state is visible, off otherwise (spec §7).
         _eq = new DispatcherTimer(DispatcherPriority.Render) { Interval = TimeSpan.FromMilliseconds(50) };
         _eq.Tick += (_, _) => StepEqualizer();
@@ -87,7 +116,63 @@ public partial class NotchWindow : Window
         var w = (int)Math.Round(BandWidth * s);
         var h = (int)Math.Round(BandHeight * s);
         var x = mon.Left + (mon.Right - mon.Left - w) / 2;
-        DockWindowNative.PlaceTopmost(_hwnd, new RectI(x, mon.Top, x + w, mon.Top + h));
+        _band = new RectI(x, mon.Top, x + w, mon.Top + h);
+        _scale = s;
+        DockWindowNative.PlaceTopmost(_hwnd, _band);
+    }
+
+    // ---- hit areas (physical pixels, for the global mouse feed) ----
+
+    /// <summary>
+    /// The pill of the current state, extended up to the top of the screen (pushing the mouse against the top edge
+    /// counts as resting on the notch), in physical pixels.
+    /// </summary>
+    public bool OverPill(PointI p) => Inside(p, _pillW, _pillH);
+
+    /// <summary>The open dashboard's area (physical pixels), also extended to the top edge.</summary>
+    public bool OverOpenArea(PointI p) => _shown == NotchState.Open && Inside(p, DashboardWidth, _openHeight);
+
+    private bool Inside(PointI p, double w, double h)
+    {
+        if (_band.Right <= _band.Left) return false;
+        var cx = (_band.Left + _band.Right) / 2.0;
+        var half = w * _scale / 2;
+        var bottom = _band.Top + (PillTop + h) * _scale;
+        return p.X >= cx - half && p.X < cx + half && p.Y >= _band.Top && p.Y < bottom;
+    }
+
+    // ---- open dashboard ----
+
+    /// <summary>Sets the open layer's content and height (the pill animates to it while open).</summary>
+    public void SetOpenContent(FrameworkElement root, double height)
+    {
+        if (!ReferenceEquals(OpenLayer.Content, root)) OpenLayer.Content = root;
+        OpenLayer.Width = DashboardWidth;
+        _openHeight = height;
+        if (_shown != NotchState.Open) return;
+        _pillH = height;
+        Animate(Pill, HeightProperty, height);
+    }
+
+    /// <summary>Lets a text box in the dashboard take the keyboard: the window becomes activatable and comes to front.</summary>
+    public void ActivateForTyping()
+    {
+        if (_hwnd == 0 || _typing) return;
+        _typing = true;
+        DockWindowNative.RemoveExStyle(_hwnd, DockWindowNative.WsExNoActivate);
+        Focusable = true;
+        ForegroundNative.Activate(_hwnd);
+        Activate();
+    }
+
+    /// <summary>Back to a no-activate window (typing ended or the notch closed).</summary>
+    public void EndTyping()
+    {
+        if (_hwnd == 0 || !_typing) return;
+        _typing = false;
+        System.Windows.Input.Keyboard.ClearFocus();
+        Focusable = false;
+        DockWindowNative.AddExStyle(_hwnd, DockWindowNative.WsExNoActivate);
     }
 
     // ---- content ----
@@ -146,6 +231,8 @@ public partial class NotchWindow : Window
     {
         if (state == NotchState.Hidden)
         {
+            SetClickThrough(true);
+            EndTyping();
             StopEqualizer();
             StopPower();
             Hide();
@@ -163,8 +250,14 @@ public partial class NotchWindow : Window
             NotchState.Opening => (300.0, 34.0, 20.0),
             NotchState.Power => (300.0, 34.0, 20.0),
             NotchState.Notification => (420.0, 64.0, 30.0),
+            NotchState.Open => (DashboardWidth, _openHeight, 34.0),
             _ => (196.0, 34.0, 20.0),
         };
+        _pillW = w;
+        _pillH = h;
+        SetClickThrough(state != NotchState.Open);
+        if (state != NotchState.Open) EndTyping();
+        OpenLayer.IsHitTestVisible = state == NotchState.Open;
         Animate(Pill, WidthProperty, w);
         Animate(Pill, HeightProperty, h);
         Pill.CornerRadius = new CornerRadius(r);
@@ -174,6 +267,7 @@ public partial class NotchWindow : Window
         Fade(MusicLayer, state == NotchState.Music);
         Fade(NotifyLayer, state == NotchState.Notification);
         Fade(PowerLayer, state == NotchState.Power);
+        Fade(OpenLayer, state == NotchState.Open);
 
         if (state == NotchState.Power && _charging)
             _accent.BeginAnimation(SolidColorBrush.OpacityProperty, new DoubleAnimation(1, 0.35, new Duration(TimeSpan.FromMilliseconds(600)))
@@ -185,6 +279,13 @@ public partial class NotchWindow : Window
 
         if (state == NotchState.Music) StartEqualizer();
         else StopEqualizer(); // the equalizer and its meter only run while it is visible (spec §7)
+    }
+
+    private void SetClickThrough(bool on)
+    {
+        if (_hwnd == 0) return;
+        if (on) DockWindowNative.AddExStyle(_hwnd, WsExTransparent);
+        else DockWindowNative.RemoveExStyle(_hwnd, WsExTransparent);
     }
 
     private void StopPower()
