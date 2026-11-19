@@ -99,6 +99,16 @@ public sealed class SettingsStoreTests : IDisposable
     }
 
     [Fact]
+    public void ScaleFactor_MapsSml()
+    {
+        Assert.Equal(0.5, ShellSettings.ScaleFactor("S"));
+        Assert.Equal(0.65, ShellSettings.ScaleFactor("M"));
+        Assert.Equal(0.8, ShellSettings.ScaleFactor("L"));
+        Assert.Equal(0.65, ShellSettings.ScaleFactor("huge"));
+        Assert.Equal("M", new ShellSettings().WidgetScale); // spec §5: 65 % by default
+    }
+
+    [Fact]
     public void SaveThenLoad_RoundTripsWidgets()
     {
         var store = new SettingsStore(_dir);

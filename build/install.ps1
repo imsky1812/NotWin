@@ -121,6 +121,10 @@ if ((-not $watchdogWasRunning) -or (Get-Process -Name 'NothingShell.Watchdog' -E
 Start-Sleep -Milliseconds 500
 
 # 6. Mirror to Program Files
+# The four Nothing wallpapers (spec §5) and their previews, for the Settings wallpaper picker (Plan 5).
+$wallOut = Join-Path $outApp 'Wallpapers'
+New-Item -ItemType Directory -Force -Path $wallOut | Out-Null
+Copy-Item (Join-Path $repo 'wallpapers/*.png'), (Join-Path $repo 'wallpapers/*_preview.jpg') $wallOut -Force
 robocopy $outApp $install /MIR /NFL /NDL /NJH /NJS /NP | Out-Null
 if ($LASTEXITCODE -ge 8) { throw "robocopy failed (exit $LASTEXITCODE)" }
 $global:LASTEXITCODE = 0

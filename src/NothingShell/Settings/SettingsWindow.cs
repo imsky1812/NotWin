@@ -27,8 +27,11 @@ public sealed class SettingsWindow : Window
     private readonly TextBlock _cityStatus;
     private readonly Border _startToggle = new(), _keepToggle = new();
 
+    /// <summary>Plan 5 widget settings: widget size (S/M/L), the wallpapers folder, and entering widget edit mode.</summary>
+    public sealed record WidgetOptions(Action<string> SetScale, string? WallpaperDir, Action EditWidgets);
+
     private SettingsWindow(Func<ShellSettings> settings, Action<bool> setStart, Action<bool> setKeep, WeatherService? weather,
-        Action<WeatherPlace> saveWeather, Action quit)
+        Action<WeatherPlace> saveWeather, Action quit, WidgetOptions? widgets)
     {
         _settings = settings;
         _setStart = setStart;
@@ -78,6 +81,8 @@ public sealed class SettingsWindow : Window
         _cityStatus.Margin = new Thickness(2, 8, 0, 18);
         stack.Children.Add(_cityStatus);
 
+        if (widgets is not null) AddWidgetSections(stack, widgets);
+
         stack.Children.Add(Section("Shell"));
         stack.Children.Add(ToggleRow("Start with Windows", _startToggle, () => _settings().StartWithWindows, _setStart));
         stack.Children.Add(ToggleRow("Keep dock visible", _keepToggle, () => _settings().KeepDockVisible, _setKeep));
@@ -104,7 +109,7 @@ public sealed class SettingsWindow : Window
 
     /// <summary>Shows the settings window, or brings the open one to the front.</summary>
     public static void ShowOrActivate(Func<ShellSettings> settings, Action<bool> setStart, Action<bool> setKeep,
-        WeatherService? weather, Action<WeatherPlace> saveWeather, Action quit)
+        WeatherService? weather, Action<WeatherPlace> saveWeather, Action quit, WidgetOptions? widgets = null)
     {
         if (s_open is not null)
         {
@@ -112,8 +117,85 @@ public sealed class SettingsWindow : Window
             ForegroundNative.Activate(new WindowInteropHelper(s_open).Handle);
             return;
         }
-        s_open = new SettingsWindow(settings, setStart, setKeep, weather, saveWeather, quit);
+        s_open = new SettingsWindow(settings, setStart, setKeep, weather, saveWeather, quit, widgets);
         s_open.Show();
+    }
+
+    // Widgets: size S / M / L (applies live) and "Edit widgets"; Wallpaper: the four Nothing wallpapers (spec §5, §6.7).
+    // The wallpaper changes only when the user clicks one.
+    private void AddWidgetSections(StackPanel stack, WidgetOptions w)
+    {
+        stack.Children.Add(Section("Widgets"));
+        var sizes = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 10) };
+        void PaintSizes()
+        {
+            sizes.Children.Clear();
+            foreach (var (key, label) in new[] { ("S", "Small"), ("M", "Medium"), ("L", "Large") })
+            {
+                var on = (_settings().WidgetScale ?? "M") == key;
+                var pill = new Border
+                {
+                    Background = on ? TileChrome.Text : TileChrome.Frozen(0x22, 0x22, 0x22), CornerRadius = new CornerRadius(12),
+                    Padding = new Thickness(14, 6, 14, 6), Margin = new Thickness(0, 0, 6, 0), Cursor = Cursors.Hand,
+                    Child = new TextBlock { Text = label, FontFamily = TileChrome.Font, FontSize = 12, FontWeight = FontWeights.Medium, Foreground = on ? TileChrome.Dark : TileChrome.Text },
+                };
+                var k = key;
+                pill.MouseLeftButtonUp += (_, _) => { w.SetScale(k); PaintSizes(); };
+                sizes.Children.Add(pill);
+            }
+        }
+        PaintSizes();
+        stack.Children.Add(sizes);
+        var edit = new DockPanel { Margin = new Thickness(0, 0, 0, 18), Background = Brushes.Transparent, Cursor = Cursors.Hand };
+        var editArrow = TileChrome.Label("›");
+        editArrow.FontSize = 14;
+        DockPanel.SetDock(editArrow, System.Windows.Controls.Dock.Right);
+        edit.Children.Add(editArrow);
+        edit.Children.Add(TileChrome.Body("Edit widgets", 13, FontWeights.Normal));
+        edit.MouseLeftButtonUp += (_, _) => { Close(); w.EditWidgets(); };
+        stack.Children.Add(edit);
+
+        if (w.WallpaperDir is not { } dir || !System.IO.Directory.Exists(dir)) return;
+        stack.Children.Add(Section("Wallpaper"));
+        var grid = new System.Windows.Controls.Primitives.UniformGrid { Columns = 2, Margin = new Thickness(0, 0, 0, 18) };
+        var current = WallpaperNative.Current();
+        foreach (var name in new[] { "nothing_halftone_light", "nothing_halftone_dark", "nothing_glyph_dark", "nothing_grid_light" })
+        {
+            var full = System.IO.Path.Combine(dir, name + ".png");
+            var preview = System.IO.Path.Combine(dir, name + "_preview.jpg");
+            if (!System.IO.File.Exists(full)) continue;
+            var selected = string.Equals(current, full, StringComparison.OrdinalIgnoreCase);
+            var thumb = new Border
+            {
+                Height = 96, CornerRadius = new CornerRadius(10), Margin = new Thickness(0, 0, 8, 8), Cursor = Cursors.Hand,
+                BorderBrush = selected ? TileChrome.Text : Brushes.Transparent, BorderThickness = new Thickness(2),
+                Background = System.IO.File.Exists(preview)
+                    ? new ImageBrush(Thumb(preview)) { Stretch = Stretch.UniformToFill }
+                    : TileChrome.Frozen(0x33, 0x33, 0x33),
+                ToolTip = name.Replace("nothing_", "").Replace('_', ' '),
+            };
+            thumb.MouseLeftButtonUp += (_, _) =>
+            {
+                var ok = WallpaperNative.Apply(full);
+                Log.Info($"wallpaper applied ok={ok} ({name})");
+                foreach (var t in grid.Children.OfType<Border>()) t.BorderBrush = Brushes.Transparent;
+                if (ok) thumb.BorderBrush = TileChrome.Text;
+            };
+            grid.Children.Add(thumb);
+        }
+        stack.Children.Add(grid);
+    }
+
+    private static ImageSource Thumb(string path)
+    {
+        var b = new System.Windows.Media.Imaging.BitmapImage();
+        b.BeginInit();
+        b.CacheOption = System.Windows.Media.Imaging.BitmapCacheOption.OnLoad;
+        b.DecodePixelWidth = 400; // ~190 DIP thumbnails at up to 200 %
+        b.UriSource = new Uri(path);
+        b.EndInit();
+        b.Freeze();
+        return b;
     }
 
     private static string? PlaceText(WeatherPlace? p) =>

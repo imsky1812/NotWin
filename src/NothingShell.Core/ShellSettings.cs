@@ -5,6 +5,9 @@ public sealed record ShellSettings
     public bool KeepDockVisible { get; init; } = false;
     public bool StartWithWindows { get; init; } = true;
     public string WidgetScale { get; init; } = "M";
+
+    /// <summary>Spec §5 global widget scale: S 50 %, M 65 % (default), L 80 %.</summary>
+    public static double ScaleFactor(string? scale) => scale switch { "S" => 0.5, "L" => 0.8, _ => 0.65 };
     public IReadOnlyList<PinnedApp> PinnedApps { get; init; } = [];
     public bool PinsImported { get; init; } = false;
 
