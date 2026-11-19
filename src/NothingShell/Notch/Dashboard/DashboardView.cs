@@ -72,14 +72,16 @@ public sealed class DashboardView : IDisposable
         DockPanel.SetDock(footer, System.Windows.Controls.Dock.Bottom);
         root.Children.Add(footer);
         root.Children.Add(content);
-        root.MouseMove += (_, e) => DragMove(e);
+        // A drag is a nicety: any failure in it ends the drag and is logged, never the shell (live crash 2026-11-19).
+        root.MouseMove += (_, e) => Guarded(() => DragMove(e));
         root.PreviewMouseLeftButtonUp += (_, e) =>
         {
-            if (_dragging) { e.Handled = true; Drop(e.GetPosition(_viewport)); }
+            if (_dragging) { e.Handled = true; Guarded(() => Drop(e.GetPosition(_viewport))); }
             EndDrag();
         };
         root.LostMouseCapture += (_, _) => { if (_dragging) EndDrag(); };
         Root = root;
+        CaptureForDrag = () => Root.CaptureMouse();
     }
 
     public FrameworkElement Root { get; }
@@ -275,23 +277,43 @@ public sealed class DashboardView : IDisposable
 
     // ---- edit-mode drag ----
 
-    private void BeginPress(FrameworkElement el, int index, MouseButtonEventArgs e)
+    /// <summary>Captures the mouse for a drag (replaceable so tests can simulate WPF's synchronous MouseMove on capture).</summary>
+    public Func<bool> CaptureForDrag { get; set; }
+
+    public bool IsDragging => _dragging;
+
+    private void Guarded(Action act)
+    {
+        try { act(); }
+        catch (Exception ex)
+        {
+            Log.Error("notch tile drag failed", ex);
+            try { EndDrag(); } catch { }
+        }
+    }
+
+    private void BeginPress(FrameworkElement el, int index, MouseButtonEventArgs e) => PressAt(el, index, e.GetPosition(_viewport));
+
+    private void DragMove(MouseEventArgs e) => DragTo(e.GetPosition(_viewport), e.LeftButton == MouseButtonState.Pressed);
+
+    /// <summary>Edit mode: the left button went down on tile <paramref name="index"/> at <paramref name="p"/> (viewport DIPs).</summary>
+    public void PressAt(FrameworkElement el, int index, Point p)
     {
         _dragIndex = index;
         _dragEl = el;
-        _dragFrom = e.GetPosition(_viewport);
+        _dragFrom = p;
     }
 
-    private void DragMove(MouseEventArgs e)
+    /// <summary>Edit mode: the pointer moved to <paramref name="p"/> (viewport DIPs) with the button held or not.</summary>
+    public void DragTo(Point p, bool pressed)
     {
         if (_dragIndex < 0 || _dragEl is null) return;
-        if (e.LeftButton != MouseButtonState.Pressed) { EndDrag(); return; }
-        var p = e.GetPosition(_viewport);
+        if (!pressed) { EndDrag(); return; }
         if (!_dragging)
         {
             if ((p - _dragFrom).Length < 6) return;
-            _dragging = true;
-            Root.CaptureMouse();
+            // Everything the move code touches exists BEFORE the capture: CaptureMouse() raises MouseMove synchronously
+            // and re-enters here (live crash 2026-11-19).
             _ghost = new Border
             {
                 Width = _dragEl.ActualWidth, Height = _dragEl.ActualHeight, Opacity = 0.85, CornerRadius = new CornerRadius(22),
@@ -304,7 +326,11 @@ public sealed class DashboardView : IDisposable
             _dragLayer.Children.Add(_hint);
             _dragLayer.Children.Add(_ghost);
             _dragEl.Opacity = 0.25;
+            _dragging = true;
+            CaptureForDrag();
+            if (!_dragging || _ghost is null || _dragEl is null) return; // the capture's re-entrant move may have ended it
         }
+        if (_ghost is null) return;
         var origin = new Point(Canvas.GetLeft(_dragEl), Canvas.GetTop(_dragEl));
         Canvas.SetLeft(_ghost, origin.X + p.X - _dragFrom.X);
         Canvas.SetTop(_ghost, origin.Y + p.Y - _dragFrom.Y);
@@ -319,7 +345,8 @@ public sealed class DashboardView : IDisposable
         foreach (var (hit, page) in _dotHits)
         {
             if (page == _page || !hit.IsVisible) continue;
-            var box = hit.TransformToAncestor(_viewport).TransformBounds(new Rect(hit.RenderSize));
+            // The dots are in the footer, not under the viewport: TransformToVisual (TransformToAncestor throws here).
+            var box = hit.TransformToVisual(_viewport).TransformBounds(new Rect(hit.RenderSize));
             box.Inflate(8, 8);
             if (box.Contains(p)) return (DropKind.Page, page);
         }
