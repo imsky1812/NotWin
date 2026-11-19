@@ -28,6 +28,7 @@ public partial class App : Application
     private Clips.ClipboardService? _clips;
     private readonly Power.KeepAwakeService _awake = new();
     private Forecast.WeatherService? _weather;
+    private Widgets.DesktopWidgets? _widgets;
 
     private static string DataDir => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "NothingShell");
     private Media.MediaSessionService? _media;
@@ -195,6 +196,11 @@ public partial class App : Application
         _fullscreen!.Changed += fs => { if (fs) { _launcher?.Close(); _panel?.Close(); } };
         _launcher.VisibleChanged += _ => UpdateNotchCover();
 
+        // Desktop widgets (spec §6.5): on the desktop layer, sharing the timer / media / weather services. Guarded: a
+        // failure here must never take the dock, launcher or notch down.
+        try { StartWidgets(); }
+        catch (Exception e) { Log.Error("desktop widgets failed to start", e); }
+
         // Quick-settings panel (spec §6.3): Win+A / Win+N (below) and the dock tray. Guarded like the notch: a failure
         // here must never take the dock and launcher down with it (Win+A / Win+N then simply do nothing).
         try
@@ -234,6 +240,19 @@ public partial class App : Application
     private void UpdateNotchCover() =>
         _notch?.SetCovered(_launcher?.IsOpen == true || _panel?.IsOpen == true);
 
+    private void StartWidgets()
+    {
+        var dock = _controller;
+        if (dock is null || _timer is null) return;
+        var widgets = new Dictionary<Core.Widgets.WidgetKind, Widgets.IDesktopWidget>
+        {
+            [Core.Widgets.WidgetKind.Clock] = new Widgets.ClockWidget(),
+            [Core.Widgets.WidgetKind.Timer] = new Widgets.TimerWidget(_timer),
+        };
+        _widgets = new Widgets.DesktopWidgets(() => dock.Settings, dock.UpdateSettings, widgets);
+        _widgets.Start();
+    }
+
     // Settings window (spec §6.7): the dock controller is the one settings writer.
     private void ShowSettings()
     {
@@ -245,7 +264,11 @@ public partial class App : Application
                 dock.UpdateSettings(s => s with { Weather = place });
                 _weather?.Start(place);
             },
-            () => Shutdown());
+            () => Shutdown(),
+            new Settings.SettingsWindow.WidgetOptions(
+                scale => { if (_widgets is null) dock.UpdateSettings(s => s with { WidgetScale = scale }); else _widgets.SetScale(scale); },
+                Path.Combine(AppContext.BaseDirectory, "Wallpapers"),
+                () => Log.Info("edit widgets requested (Task 11)")));
     }
 
     // Source app of a media session (AUMID or exe) as a short name for the media tile: the launcher index, else the
@@ -346,6 +369,7 @@ public partial class App : Application
             _clips?.Dispose();
             _awake.Dispose(); // keep awake never outlives the shell
             _weather?.Dispose();
+            _widgets?.Dispose();
             _controller?.Dispose();
             _tray?.Dispose();
             _mouse?.Dispose();
