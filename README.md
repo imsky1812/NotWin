@@ -80,8 +80,20 @@ notifications. `uninstall.ps1` removes it. Use `-NoTimestamp` to skip the signin
 
   ✎ **Edit** (bottom left) resizes tiles with their size chip, removes them with ✕ and brings them back with
   **＋ Add**; **Done** saves the layout. Esc closes the dashboard.
+- **Desktop widgets:** on the desktop, under your windows (still there after Win+D): **Clock** (dot matrix, drawn
+  straight on the wallpaper, dark or light to stay legible), **Snake**, **Timer** (the same timer as the notch),
+  **Calendar** (dates; Google events come in a later plan), **Weather**, **Media** and **Battery** (the laptop and
+  connected Bluetooth devices; dots or the wheel switch devices).
+  - **Snake:** click the board to play; arrows or WASD steer, Space pauses / restarts. While you play, those keys go
+    only to the snake; clicking anywhere else, switching windows or Esc pauses it and gives the keys back. The best
+    score is saved.
+  - **Edit mode:** right-click any widget > **Edit widgets** (or Settings > Widgets > Edit widgets). Drag widgets
+    (they snap to the dot grid; a spot that overlaps shows red and is refused), click a size chip to change size,
+    then **Done** or Esc. Full screen also ends it. The layout is saved.
 - **Settings:** right-click the open notch, the Settings tile, or "Settings…" in the start button's right-click
-  menu: weather city, start with Windows, keep the dock visible, and Quit.
+  menu: weather city, widget size (**S / M / L**, applied live), **Edit widgets**, a **wallpaper** picker (four
+  Nothing-style wallpapers; one is only applied when you click it), start with Windows, keep the dock visible, and
+  Quit.
 - **Windows' own notification pop-ups:** Nothing Shell never changes your notification settings. A one-time tip in
   the panel offers to open Windows' settings so you can turn on *Do not disturb*, or turn off banners for chatty apps.
 - Quit from a script: `& 'C:\Program Files\NothingShell\NothingShell.exe' --quit` (the same clean exit as the menu).
