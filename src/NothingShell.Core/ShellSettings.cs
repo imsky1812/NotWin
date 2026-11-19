@@ -13,4 +13,7 @@ public sealed record ShellSettings
 
     /// <summary>The notch dashboard's pages and removed tiles (null = the default layout). Sanitized on use.</summary>
     public Notch.DashboardLayout? NotchLayout { get; init; }
+
+    /// <summary>The timer's length in minutes (spec §6.5 default 25), saved when − / + change it while idle.</summary>
+    public int TimerMinutes { get; init; } = 25;
 }
