@@ -62,9 +62,25 @@ notifications. `uninstall.ps1` removes it. Use `-NoTimestamp` to skip the signin
   - the time (dot matrix) and battery;
   - the playing song (art and an equalizer);
   - new notifications for about 3.6 s;
-  - "Opening ‹app›…" after a launch.
+  - "Opening ‹app›…" after a launch;
+  - a running timer (small dot grid and countdown);
+  - a short charging card when you plug in or unplug.
 
   It hides while a full-screen app is in front.
+- **Notch dashboard:** rest the mouse on the notch to open it; it closes when the mouse leaves. Two pages (dots
+  bottom right, or the mouse wheel):
+  - page 1: **Timer** (dots go out as time passes; − / play / +; "Time is up" in the notch and the panel),
+    **Media** (art, progress, previous / play / next), **Clipboard** (recent text you copied; click to copy it
+    again; ⤢ for the whole list) and **Notes** (one note, saved as you type);
+  - page 2: **Shelf** (drop files to keep them handy, drag them out to use), **Keep awake**, **Weather**, and the
+    tools **Grab text** (copies the text in a screen region), **Color** (copies a pixel's hex), **Snip** (copies a
+    region and saves a PNG to `Pictures\Screenshots`), **Phone** (Phone Link), **Draw** (Snipping Tool) and
+    **Settings**.
+
+  ✎ **Edit** (bottom left) resizes tiles with their size chip, removes them with ✕ and brings them back with
+  **＋ Add**; **Done** saves the layout. Esc closes the dashboard.
+- **Settings:** right-click the open notch, the Settings tile, or "Settings…" in the start button's right-click
+  menu: weather city, start with Windows, keep the dock visible, and Quit.
 - **Windows' own notification pop-ups:** Nothing Shell never changes your notification settings. A one-time tip in
   the panel offers to open Windows' settings so you can turn on *Do not disturb*, or turn off banners for chatty apps.
 - Quit from a script: `& 'C:\Program Files\NothingShell\NothingShell.exe' --quit` (the same clean exit as the menu).
@@ -88,7 +104,11 @@ This stops the shell and the watchdog, restores the Windows taskbar, removes the
 
 | File | What it is |
 |---|---|
-| `settings.json` | Pinned apps, keep-visible, start-with-Windows |
+| `settings.json` | Pinned apps, keep-visible, start-with-Windows, the dashboard layout, the timer length, the weather city |
+| `clipboard.json` | The notch's clipboard history: the last 50 text copies (copies password managers mark private are skipped) |
+| `notes.txt` | The notch's note |
+| `shelf.json` | Paths of the files on the shelf (references, not copies) |
+| `weather.json` | The last weather report, shown while offline |
 | `launcher-usage.json` | How often and when you launched each item from the launcher (for Most used; max 500 entries) |
 | `log.txt` | Startup, taskbar hide/restore, appbar and full-screen events |
 | `taskbar-restore.json` | Present only while the shell runs: the taskbar's original auto-hide setting |
