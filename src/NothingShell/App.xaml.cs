@@ -248,6 +248,7 @@ public partial class App : Application
         {
             [Core.Widgets.WidgetKind.Clock] = new Widgets.ClockWidget(),
             [Core.Widgets.WidgetKind.Timer] = new Widgets.TimerWidget(_timer),
+            [Core.Widgets.WidgetKind.Calendar] = new Widgets.CalendarWidget(),
         };
         if (_weather is not null) widgets[Core.Widgets.WidgetKind.Weather] = new Widgets.WeatherWidget(_weather);
         if (_media is not null) widgets[Core.Widgets.WidgetKind.Media] = new Widgets.MediaWidget(_media);
