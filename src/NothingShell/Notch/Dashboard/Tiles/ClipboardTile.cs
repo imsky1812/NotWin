@@ -4,6 +4,7 @@ using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using System.Windows.Media;
 using NothingShell.Clips;
+using NothingShell.Core.Clips;
 using NothingShell.Core.Notch;
 
 namespace NothingShell.Notch.Dashboard.Tiles;
@@ -84,14 +85,35 @@ public sealed class ClipboardTile : ITileView
         _tile.Child = panel;
     }
 
-    // One clipboard line (mockup .clip div): mono 11, one line, newest on #222; click copies it again.
-    private Border Row(string text, bool first, Action? remove)
+    // One clipboard line (mockup .clip div): mono 11, one line, newest on #222; click copies it again. Images show a
+    // small thumbnail and their size (user request 2026-11-19).
+    private Border Row(ClipItem item, bool first, Action? remove)
     {
-        var line = new TextBlock
+        FrameworkElement line;
+        if (item.IsImage)
         {
-            Text = OneLine(text), FontFamily = TileChrome.Mono, FontSize = 11, Foreground = first ? TileChrome.Text : Muted,
-            TextTrimming = TextTrimming.CharacterEllipsis, VerticalAlignment = VerticalAlignment.Center,
-        };
+            var thumb = _clips.Thumbnail(item.ImageId!);
+            var row1 = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
+            row1.Children.Add(new Border
+            {
+                Width = 30, Height = 18, CornerRadius = new CornerRadius(4), Margin = new Thickness(0, 0, 8, 0),
+                Background = thumb is null ? TileChrome.Frozen(0x33, 0x33, 0x33) : new ImageBrush(thumb) { Stretch = Stretch.UniformToFill },
+            });
+            row1.Children.Add(new TextBlock
+            {
+                Text = $"IMAGE · {item.Width} × {item.Height}", FontFamily = TileChrome.Mono, FontSize = 10,
+                Foreground = first ? TileChrome.Text : Muted, VerticalAlignment = VerticalAlignment.Center,
+            });
+            line = row1;
+        }
+        else
+        {
+            line = new TextBlock
+            {
+                Text = OneLine(item.Text ?? ""), FontFamily = TileChrome.Mono, FontSize = 11, Foreground = first ? TileChrome.Text : Muted,
+                TextTrimming = TextTrimming.CharacterEllipsis, VerticalAlignment = VerticalAlignment.Center,
+            };
+        }
         var content = new DockPanel();
         if (remove is not null)
         {
@@ -113,7 +135,7 @@ public sealed class ClipboardTile : ITileView
         var normal = row.Background;
         row.MouseEnter += (_, _) => row.Background = Hover;
         row.MouseLeave += (_, _) => row.Background = normal;
-        row.MouseLeftButtonUp += (_, e) => { e.Handled = true; _clips.Copy(text); };
+        row.MouseLeftButtonUp += (_, e) => { e.Handled = true; _clips.Copy(item); };
         return row;
     }
 

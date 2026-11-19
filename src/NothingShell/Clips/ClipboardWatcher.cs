@@ -24,6 +24,12 @@ public sealed class ClipboardWatcher : IDisposable
 
     public event Action<string>? TextCopied;
 
+    /// <summary>
+    /// An image (no text) landed on the clipboard and may be recorded — a screenshot from Win+Shift+S / Print Screen,
+    /// Snip, Draw (user request 2026-11-19). Raised after the clipboard is closed; read it with System.Windows.Clipboard.
+    /// </summary>
+    public event Action? ImageCopied;
+
     public ClipboardWatcher()
     {
         _source = new HwndSource(new HwndSourceParameters("NothingShell.Clipboard") { ParentWindow = HwndMessage, WindowStyle = 0 });
@@ -54,6 +60,7 @@ public sealed class ClipboardWatcher : IDisposable
             return;
         }
         string? text = null;
+        var image = false;
         try
         {
             var names = new List<string>();
@@ -65,12 +72,16 @@ public sealed class ClipboardWatcher : IDisposable
                 if (f == _canIncludeFormat) hasCanInclude = true;
             }
             if (hasCanInclude && ReadDword(_canIncludeFormat) is { } v) canInclude = v;
-            if (ClipboardRules.ShouldRecord(names, hasCanInclude ? canInclude : null) && names.Contains("UnicodeText"))
-                text = ReadText();
+            if (ClipboardRules.ShouldRecord(names, hasCanInclude ? canInclude : null))
+            {
+                if (names.Contains("UnicodeText")) text = ReadText();
+                else image = names.Contains("#8") || names.Contains("#17") || names.Contains("#2"); // CF_DIB, CF_DIBV5, CF_BITMAP
+            }
         }
         catch (Exception e) { Log.Error("clipboard read failed", e); }
         finally { CloseClipboard(); }
         if (text is not null) TextCopied?.Invoke(text);
+        else if (image) ImageCopied?.Invoke();
     }
 
     private static string FormatName(uint f)

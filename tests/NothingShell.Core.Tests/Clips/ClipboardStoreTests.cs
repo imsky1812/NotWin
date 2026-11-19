@@ -16,8 +16,17 @@ public sealed class ClipboardStoreTests : IDisposable
     {
         var store = new ClipboardStore(_dir);
         Assert.Empty(store.Load());
-        store.Save(["new", "old é ✓\nline"]);
-        Assert.Equal(["new", "old é ✓\nline"], store.Load());
+        IReadOnlyList<ClipItem> items = [ClipItem.OfText("new"), ClipItem.OfImage("3f2a", 1920, 1080), ClipItem.OfText("old é ✓\nline")];
+        store.Save(items);
+        Assert.Equal(items, store.Load());
+    }
+
+    [Fact]
+    public void Load_OldTextOnlyFile_StillReads()
+    {
+        Directory.CreateDirectory(_dir);
+        File.WriteAllText(Path.Combine(_dir, "clipboard.json"), "[\"new\",\"old\"]");
+        Assert.Equal([ClipItem.OfText("new"), ClipItem.OfText("old")], new ClipboardStore(_dir).Load());
     }
 
     [Fact]

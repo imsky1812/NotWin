@@ -70,11 +70,12 @@ notifications. `uninstall.ps1` removes it. Use `-NoTimestamp` to skip the signin
 - **Notch dashboard:** rest the mouse on the notch to open it; it closes when the mouse leaves. Two pages (dots
   bottom right, or the mouse wheel):
   - page 1: **Timer** (dots go out as time passes; − / play / +; "Time is up" in the notch and the panel),
-    **Media** (art, progress, previous / play / next), **Clipboard** (recent text you copied; click to copy it
-    again; ⤢ for the whole list) and **Notes** (one note, saved as you type);
+    **Media** (art, progress, previous / play / next), **Clipboard** (recent text and images you copied, screenshots
+    included; click to copy one again; ⤢ for the whole list) and **Notes** (one note, saved as you type);
   - page 2: **Shelf** (drop files to keep them handy, drag them out to use), **Keep awake**, **Weather**, and the
     tools **Grab text** (copies the text in a screen region), **Color** (copies a pixel's hex), **Snip** (copies a
-    region and saves a PNG to `Pictures\Screenshots`), **Phone** (Phone Link), **Draw** (Snipping Tool) and
+    region and saves a PNG to `Pictures\Screenshots`), **Phone** (Phone Link), **Draw** (draw on the screen with a pen; Done copies
+    it and saves a PNG to `Pictures\Screenshots`) and
     **Settings**.
 
   ✎ **Edit** (bottom left) resizes tiles with their size chip, removes them with ✕ and brings them back with
@@ -105,7 +106,8 @@ This stops the shell and the watchdog, restores the Windows taskbar, removes the
 | File | What it is |
 |---|---|
 | `settings.json` | Pinned apps, keep-visible, start-with-Windows, the dashboard layout, the timer length, the weather city |
-| `clipboard.json` | The notch's clipboard history: the last 50 text copies (copies password managers mark private are skipped) |
+| `clipboard.json` | The notch's clipboard history: the last 50 copies, up to 20 of them images (copies password managers mark private are skipped) |
+| `clips\` | The history's images as PNG files (deleted when they leave the history) |
 | `notes.txt` | The notch's note |
 | `shelf.json` | Paths of the files on the shelf (references, not copies) |
 | `weather.json` | The last weather report, shown while offline |

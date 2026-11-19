@@ -16,8 +16,8 @@ namespace NothingShell.Tools;
 /// <summary>
 /// Runs the notch's tool buttons (spec §6.4). Region tools close the notch first (so it is not in the shot), then:
 /// Grab text = OCR of a region to the clipboard; Color = a pixel's hex to the clipboard; Snip = the region to the
-/// clipboard and a PNG in Pictures\Screenshots (user decision 2026-11-19). Phone opens Phone Link; Draw opens
-/// Snipping Tool; Settings opens Nothing Shell's settings. Each result shows as a card in the notch. OCR text is never
+/// clipboard and a PNG in Pictures\Screenshots (user decision 2026-11-19). Phone opens Phone Link; Draw lets you draw on the
+/// screen and copies + saves the result; Settings opens Nothing Shell's settings. Each result shows as a card in the notch. OCR text is never
 /// logged.
 /// </summary>
 public sealed class ToolRunner(NotchController notch, Action openSettings)
@@ -36,7 +36,7 @@ public sealed class ToolRunner(NotchController notch, Action openSettings)
                 case TileKind.Color: await ColorAsync(); break;
                 case TileKind.Snip: await SnipAsync(); break;
                 case TileKind.Phone: Phone(); break;
-                case TileKind.Draw: Draw(); break;
+                case TileKind.Draw: await DrawAsync(); break;
                 case TileKind.Settings: notch.Close(); openSettings(); break;
             }
         }
@@ -90,15 +90,33 @@ public sealed class ToolRunner(NotchController notch, Action openSettings)
     {
         var pick = await PickAsync(PickMode.Region);
         if (pick is null) return;
-        var copied = SetClipboard(() => Clipboard.SetImage(pick.Shot));
-        var dir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyPictures), "Screenshots");
-        Directory.CreateDirectory(dir);
-        var path = Path.Combine(dir, ToolMath.SnipFileName(DateTime.Now));
-        var encoder = new PngBitmapEncoder();
-        encoder.Frames.Add(BitmapFrame.Create(pick.Shot));
-        using (var fs = File.Create(path)) encoder.Save(fs);
+        var copied = CopyAndSave(pick.Shot);
         Log.Info($"snip saved ({pick.Rect.Right - pick.Rect.Left}x{pick.Rect.Bottom - pick.Rect.Top}), copied={copied}");
         notch.NotifyLocal("Snip", copied ? "Copied and saved to Screenshots" : "Saved to Screenshots", "region");
+    }
+
+    // Draw (user request 2026-11-19): pen on a frozen picture of the screen; Done copies it and saves a PNG.
+    private async Task DrawAsync()
+    {
+        notch.Close();
+        await Task.Delay(200); // let the notch shrink out of the picture
+        var picture = await DrawOverlay.DrawAsync();
+        if (picture is null) return;
+        var copied = CopyAndSave(picture);
+        Log.Info($"draw saved ({picture.PixelWidth}x{picture.PixelHeight}), copied={copied}");
+        notch.NotifyLocal("Draw", copied ? "Copied and saved to Screenshots" : "Saved to Screenshots", "draw");
+    }
+
+    // Copies the picture (the clipboard history picks it up) and saves it to Pictures\Screenshots.
+    private static bool CopyAndSave(BitmapSource picture)
+    {
+        var copied = SetClipboard(() => Clipboard.SetImage(picture));
+        var dir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyPictures), "Screenshots");
+        Directory.CreateDirectory(dir);
+        var encoder = new PngBitmapEncoder();
+        encoder.Frames.Add(BitmapFrame.Create(picture));
+        using (var fs = File.Create(Path.Combine(dir, ToolMath.SnipFileName(DateTime.Now)))) encoder.Save(fs);
+        return copied;
     }
 
     private void Phone()
@@ -106,13 +124,6 @@ public sealed class ToolRunner(NotchController notch, Action openSettings)
         notch.Close();
         if (!ShellLinkNative.Open(@"shell:AppsFolder\Microsoft.YourPhone_8wekyb3d8bbwe!App"))
             notch.NotifyLocal("Phone", "Phone Link isn't installed", "phone");
-    }
-
-    private void Draw()
-    {
-        notch.Close();
-        if (!ShellLinkNative.Open(@"shell:AppsFolder\Microsoft.ScreenSketch_8wekyb3d8bbwe!App") && !ShellLinkNative.Open("ms-screenclip:"))
-            notch.NotifyLocal("Draw", "Snipping Tool isn't available", "draw");
     }
 
     private static bool SetClipboard(Action set)
