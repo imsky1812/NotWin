@@ -7,7 +7,7 @@ using NothingShell.Native;
 namespace NothingShell.Widgets;
 
 /// <summary>
-/// One desktop widget's window: a per-pixel-transparent child <see cref="HwndSource"/> of the desktop host (Progman),
+/// One desktop widget's window: a per-pixel-transparent child <see cref="HwndSource"/> of the desktop icon view (SHELLDLL_DefView),
 /// so it sits on the desktop layer (spec §7) and never shows in Alt+Tab (spike D.4). A small surface per widget keeps
 /// redraws cheap. When Explorer restarts, the desktop and with it this child window are destroyed: <see cref="Lost"/>
 /// fires and <see cref="Attach"/> builds a fresh window on the new desktop.

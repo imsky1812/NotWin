@@ -22,18 +22,33 @@ public static class DesktopAttach
     /// <summary>Extended style for a widget: a tool window that never activates; never an app window.</summary>
     public static int ChildExStyle(int ex) => (ex | WsExToolWindow | WsExNoActivate | WsExNoParentNotify) & ~WsExAppWindow;
 
-    /// <summary>The desktop window hosting SHELLDLL_DefView: Progman, or (older layouts) a top-level WorkerW. 0 if none yet.</summary>
+    /// <summary>
+    /// The desktop's icon view, SHELLDLL_DefView (inside Progman, or on older layouts a top-level WorkerW). Widgets are
+    /// its children: Explorer now draws Progman and the wallpaper WorkerW through composition with no surface for
+    /// child windows, so children of those are never drawn, while children of the icon view are (live probe,
+    /// 2026-11-19). 0 if there is no desktop yet.
+    /// </summary>
     public static nint FindHost()
     {
         var progman = FindWindowW("Progman", null);
-        if (progman != 0 && FindWindowExW(progman, 0, "SHELLDLL_DefView", null) != 0) return progman;
+        var view = progman != 0 ? FindWindowExW(progman, 0, "SHELLDLL_DefView", null) : 0;
+        if (view != 0) return view;
         nint found = 0;
         EnumWindows((w, _) =>
         {
-            if (FindWindowExW(w, 0, "SHELLDLL_DefView", null) != 0) { found = w; return false; }
+            var v = FindWindowExW(w, 0, "SHELLDLL_DefView", null);
+            if (v != 0) { found = v; return false; }
             return true;
         }, 0);
         return found;
+    }
+
+    /// <summary>The window's class name ("" if none).</summary>
+    public static string ClassOf(nint hwnd)
+    {
+        var buffer = new char[256];
+        var n = GetClassNameW(hwnd, buffer, buffer.Length);
+        return n > 0 ? new string(buffer, 0, n) : "";
     }
 
     /// <summary>Asks Explorer to set up its desktop worker windows (the 0x052C message), as the spike did.</summary>
@@ -78,6 +93,7 @@ public static class DesktopAttach
     [DllImport("user32.dll")] private static extern bool EnumWindows(EnumProc proc, nint lParam);
     [DllImport("user32.dll")] private static extern nint SendMessageTimeoutW(nint hwnd, uint msg, nint wParam, nint lParam, uint flags, uint timeout, out nint result);
     [DllImport("user32.dll")] private static extern bool ScreenToClient(nint hwnd, ref Pt p);
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)] private static extern int GetClassNameW(nint hwnd, char[] buffer, int max);
     [DllImport("user32.dll")] private static extern bool SetWindowPos(nint hwnd, nint after, int x, int y, int w, int h, uint flags);
     [DllImport("user32.dll")] private static extern nint GetParent(nint hwnd);
     [DllImport("user32.dll")] private static extern bool IsWindow(nint hwnd);

@@ -21,4 +21,15 @@ public sealed class DesktopAttachTests
         Assert.Equal(0, ex & WsExAppWindow);
         Assert.Equal(0x4, ex & 0x4); // WS_EX_NOPARENTNOTIFY: no synchronous WM_PARENTNOTIFY to Explorer's desktop
     }
+
+    // Explorer (2026-11 builds) draws Progman through composition with no surface for child windows: children of
+    // Progman or of the wallpaper WorkerW are never drawn. Children of SHELLDLL_DefView (the icon view) are.
+    // Read-only against the live desktop; skipped in effect when there is no Explorer desktop.
+    [Fact]
+    public void FindHost_IsTheDesktopIconView()
+    {
+        var host = DesktopAttach.FindHost();
+        if (host == 0) return; // no Explorer desktop (CI)
+        Assert.Equal("SHELLDLL_DefView", DesktopAttach.ClassOf(host));
+    }
 }
