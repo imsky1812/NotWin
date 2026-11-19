@@ -139,6 +139,8 @@ public partial class App : Application
             _timer = new Timing.TimerService(minutes, m => dockCtl?.UpdateSettings(s => s with { TimerMinutes = m }));
             _notch.AttachTimer(_timer);
             _weather = new Forecast.WeatherService(DataDir);
+            _notch.SettingsRequested += ShowSettings;
+            if (dockCtl is not null) dockCtl.SettingsRequested += ShowSettings;
             _weather.Start(dockCtl?.Settings.Weather);
             try { _clips = new Clips.ClipboardService(DataDir); }
             catch (Exception e) { Log.Error("clipboard history failed to start", e); }
@@ -221,6 +223,20 @@ public partial class App : Application
             // Without the hook Win simply opens Windows' Start, which is a safe fallback.
             Log.Error("win key hook failed; Win opens Windows' Start", e);
         }
+    }
+
+    // Settings window (spec §6.7): the dock controller is the one settings writer.
+    private void ShowSettings()
+    {
+        var dock = _controller;
+        if (dock is null) { Log.Info("settings: no dock controller, nothing to edit"); return; }
+        Settings.SettingsWindow.ShowOrActivate(() => dock.Settings, dock.SetStartWithWindows, dock.SetKeepVisible, _weather,
+            place =>
+            {
+                dock.UpdateSettings(s => s with { Weather = place });
+                _weather?.Start(place);
+            },
+            () => Shutdown());
     }
 
     // Source app of a media session (AUMID or exe) as a short name for the media tile: the launcher index, else the
