@@ -27,6 +27,7 @@ public partial class App : Application
     private Timing.TimerService? _timer;
     private Clips.ClipboardService? _clips;
     private readonly Power.KeepAwakeService _awake = new();
+    private Forecast.WeatherService? _weather;
 
     private static string DataDir => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "NothingShell");
     private Media.MediaSessionService? _media;
@@ -137,6 +138,8 @@ public partial class App : Application
             var minutes = dockCtl?.Settings.TimerMinutes ?? 25;
             _timer = new Timing.TimerService(minutes, m => dockCtl?.UpdateSettings(s => s with { TimerMinutes = m }));
             _notch.AttachTimer(_timer);
+            _weather = new Forecast.WeatherService(DataDir);
+            _weather.Start(dockCtl?.Settings.Weather);
             try { _clips = new Clips.ClipboardService(DataDir); }
             catch (Exception e) { Log.Error("clipboard history failed to start", e); }
             var timer = _timer;
@@ -147,6 +150,7 @@ public partial class App : Application
                 Core.Notch.TileKind.Clipboard when _clips is not null => new Notch.Dashboard.Tiles.ClipboardTile(_clips, () => _notch!),
                 Core.Notch.TileKind.Notes => new Notch.Dashboard.Tiles.NotesTile(new NotesStore(DataDir), () => _notch!),
                 Core.Notch.TileKind.KeepAwake => new Notch.Dashboard.Tiles.KeepAwakeTile(_awake),
+                Core.Notch.TileKind.Weather when _weather is not null => new Notch.Dashboard.Tiles.WeatherTile(_weather, () => _notch?.RequestSettings()),
                 Core.Notch.TileKind.Shelf => new Notch.Dashboard.Tiles.ShelfTile(new Core.Shelving.ShelfStore(DataDir), new Dock.AppIconCache()),
                 _ => new Notch.Dashboard.PlaceholderTile(kind),
             };
@@ -312,6 +316,7 @@ public partial class App : Application
             _timer?.Dispose();
             _clips?.Dispose();
             _awake.Dispose(); // keep awake never outlives the shell
+            _weather?.Dispose();
             _controller?.Dispose();
             _tray?.Dispose();
             _mouse?.Dispose();

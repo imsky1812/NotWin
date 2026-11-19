@@ -89,6 +89,16 @@ public sealed class SettingsStoreTests : IDisposable
     }
 
     [Fact]
+    public void SaveThenLoad_RoundTripsWeatherPlace()
+    {
+        var store = new SettingsStore(_dir);
+        Assert.Null(store.Load().Weather);
+        var place = new NothingShell.Core.Forecast.WeatherPlace("Delhi", "India", 28.65195, 77.23149);
+        store.Save(new ShellSettings { Weather = place });
+        Assert.Equal(place, store.Load().Weather);
+    }
+
+    [Fact]
     public void Load_UnknownTileKind_KeepsTheRestOfTheSettings()
     {
         Directory.CreateDirectory(_dir);
