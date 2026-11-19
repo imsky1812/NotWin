@@ -9,6 +9,11 @@ namespace NothingShell.Media;
 public sealed record MediaSnapshot(bool Playing, string? Title, string? Artist, string? SourceAppId, ImageSource? Art)
 {
     public static readonly MediaSnapshot None = new(false, null, null, null, null);
+
+    /// <summary>Timeline as last reported by the session (Plan 4 media tile); interpolate with MediaProgress.Position.</summary>
+    public TimeSpan Position { get; init; }
+    public TimeSpan Duration { get; init; }
+    public DateTimeOffset PositionAt { get; init; }
 }
 
 /// <summary>The current media session, abstracted so tests do not need WinRT.</summary>
@@ -19,6 +24,10 @@ public interface ISessionSource
     string? Artist { get; }
     string? AppId { get; }
     Task<Stream?> ThumbnailAsync();
+    (TimeSpan Position, TimeSpan Duration, DateTimeOffset At) Timeline { get; }
+    Task<bool> PlayPauseAsync();
+    Task<bool> NextAsync();
+    Task<bool> PreviousAsync();
     event Action? Changed;
 }
 
@@ -65,6 +74,25 @@ public sealed class MediaSessionService : IDisposable
         await Idle();
     }
 
+    /// <summary>Transport controls for the current session (media tile). False without a session or on failure.</summary>
+    public Task<bool> PlayPauseAsync() => Control(s => s.PlayPauseAsync(), "play/pause");
+
+    public Task<bool> NextAsync() => Control(s => s.NextAsync(), "next");
+
+    public Task<bool> PreviousAsync() => Control(s => s.PreviousAsync(), "previous");
+
+    private async Task<bool> Control(Func<ISessionSource, Task<bool>> act, string what)
+    {
+        var s = _session;
+        if (s is null) return false;
+        try { return await act(s); }
+        catch (Exception e)
+        {
+            Log.Error($"media {what} failed", e);
+            return false;
+        }
+    }
+
     /// <summary>Completes when the latest refresh has finished (tests, diagnostics).</summary>
     public Task Idle() { lock (_gate) return _refresh; }
 
@@ -97,13 +125,22 @@ public sealed class MediaSessionService : IDisposable
             if (s is null) snap = MediaSnapshot.None;
             else
             {
+                // Art also while paused (the media tile shows a paused track); reused while the track is the same.
+                var title = s.Title;
+                var artist = s.Artist;
                 ImageSource? art = null;
-                if (s.PlaybackPlaying)
+                if (Current.Art is not null && Current.Title == title && Current.Artist == artist && Current.SourceAppId == s.AppId)
+                    art = Current.Art;
+                else
                 {
                     using var stream = await s.ThumbnailAsync();
                     if (stream is not null) art = _decodeArt(stream);
                 }
-                snap = new MediaSnapshot(s.PlaybackPlaying, s.Title, s.Artist, s.AppId, art);
+                var (position, duration, at) = s.Timeline;
+                snap = new MediaSnapshot(s.PlaybackPlaying, title, artist, s.AppId, art)
+                {
+                    Position = position, Duration = duration, PositionAt = at,
+                };
             }
         }
         catch (Exception e)
@@ -111,8 +148,7 @@ public sealed class MediaSessionService : IDisposable
             Log.Error("media session read failed", e);
             snap = MediaSnapshot.None;
         }
-        if (snap.Playing == Current.Playing && snap.Title == Current.Title && snap.SourceAppId == Current.SourceAppId
-            && ReferenceEquals(snap.Art, Current.Art) && snap.Art is null) return; // nothing visible changed
+        if (snap == Current) return; // nothing visible changed (art is reused, so equal tracks compare equal)
         Current = snap;
         if (_context is null) { Changed?.Invoke(snap); return; }
         // Deliver on the starting context and finish this refresh only once it ran, so Idle() covers delivery.
@@ -132,7 +168,7 @@ public sealed class MediaSessionService : IDisposable
             var bmp = new BitmapImage();
             bmp.BeginInit();
             bmp.CacheOption = BitmapCacheOption.OnLoad;
-            bmp.DecodePixelWidth = 44; // 22 DIP at up to 200%
+            bmp.DecodePixelWidth = 120; // the media tile's 54 DIP art at up to 200%
             bmp.StreamSource = stream;
             bmp.EndInit();
             bmp.Freeze();
@@ -181,7 +217,25 @@ public sealed class MediaSessionService : IDisposable
             _s = s;
             _s.PlaybackInfoChanged += (_, _) => Changed?.Invoke();
             _s.MediaPropertiesChanged += (_, _) => { _props = null; Changed?.Invoke(); };
+            _s.TimelinePropertiesChanged += (_, _) => Changed?.Invoke();
         }
+
+        public (TimeSpan Position, TimeSpan Duration, DateTimeOffset At) Timeline
+        {
+            get
+            {
+                try
+                {
+                    var t = _s.GetTimelineProperties();
+                    return (t.Position - t.StartTime, t.EndTime - t.StartTime, t.LastUpdatedTime);
+                }
+                catch { return default; }
+            }
+        }
+
+        public async Task<bool> PlayPauseAsync() => await _s.TryTogglePlayPauseAsync();
+        public async Task<bool> NextAsync() => await _s.TrySkipNextAsync();
+        public async Task<bool> PreviousAsync() => await _s.TrySkipPreviousAsync();
 
         public bool PlaybackPlaying =>
             _s.GetPlaybackInfo()?.PlaybackStatus == GlobalSystemMediaTransportControlsSessionPlaybackStatus.Playing;

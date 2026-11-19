@@ -137,6 +137,7 @@ public partial class App : Application
             _notch.TileFactory = kind => kind switch
             {
                 Core.Notch.TileKind.Timer => new Notch.Dashboard.Tiles.TimerTile(timer),
+                Core.Notch.TileKind.Media when _media is not null => new Notch.Dashboard.Tiles.MediaTile(_media, MediaAppName),
                 _ => new Notch.Dashboard.PlaceholderTile(kind),
             };
             _fullscreen.Changed += fs => _notch?.SetFullscreen(fs);
@@ -202,6 +203,16 @@ public partial class App : Application
             // Without the hook Win simply opens Windows' Start, which is a safe fallback.
             Log.Error("win key hook failed; Win opens Windows' Start", e);
         }
+    }
+
+    // Source app of a media session (AUMID or exe) as a short name for the media tile: the launcher index, else the
+    // exe name without ".exe", else "Media".
+    private string MediaAppName(string? id)
+    {
+        if (string.IsNullOrWhiteSpace(id)) return "Media";
+        if (_index?.FindApp(id) is { } app) return app.Name;
+        var file = Path.GetFileName(id);
+        return file.EndsWith(".exe", StringComparison.OrdinalIgnoreCase) ? Path.GetFileNameWithoutExtension(file) : "Media";
     }
 
     private static void ApplyStartWithWindows(ShellSettings settings, bool loadedOk)
