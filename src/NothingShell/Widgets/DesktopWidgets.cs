@@ -32,6 +32,7 @@ public sealed class DesktopWidgets : IDisposable
     private double _px = 1;   // physical px per unscaled widget px = DPI scale × widget scale
     private double _scale = 0.65;
     private bool _started, _disposed;
+    private int _failedRebuilds;
     private WidgetHost? _backdrop;
     private Dock.DockPopup? _popup;
     private (WidgetKind Kind, PointI Cursor, RectI Start, EditChrome Chrome)? _drag;
@@ -80,12 +81,17 @@ public sealed class DesktopWidgets : IDisposable
     public void Rebuild()
     {
         if (!_started || _disposed) return;
-        try { RebuildCore(); }
+        try
+        {
+            RebuildCore();
+            _failedRebuilds = 0;
+        }
         catch (Exception e)
         {
-            // A monitor that briefly has no info, or the desktop dying mid-create: try again once it is back.
-            Log.Error("widget rebuild failed; retrying when the desktop is back", e);
-            StartReattach();
+            // A monitor that briefly has no info, or the desktop dying mid-create: try again a few times, never forever.
+            _failedRebuilds++;
+            Log.Error($"widget rebuild failed ({_failedRebuilds})", e);
+            if (_failedRebuilds <= 3) StartReattach();
         }
     }
 
@@ -115,23 +121,16 @@ public sealed class DesktopWidgets : IDisposable
                 Log.Error($"widget {p.Kind} failed to build", e);
                 continue;
             }
-            var root = Root(p, card);
-            if (!_hosts.TryGetValue(p.Kind, out var h))
+            if (_hosts.TryGetValue(p.Kind, out var h)) WidgetRoots.Fill(h.Root, card, p.Size, _scale);
+            else
             {
+                var root = WidgetRoots.Fill(null, card, p.Size, _scale);
+                root.MouseRightButtonUp += (_, e) => OnContext(e);
                 var wh = new WidgetHost(root);
                 wh.Lost += OnLost;
                 wh.DpiChanged += OnDpiChanged;
                 h = (wh, root);
                 _hosts[p.Kind] = h;
-            }
-            else
-            {
-                h.Root.Children.Clear();
-                h.Root.Children.Add(card);
-                h.Root.Width = p.Size.PxW;
-                h.Root.Height = p.Size.PxH;
-                h.Root.LayoutTransform = new ScaleTransform(_scale, _scale);
-                root = h.Root;
             }
             var rect = ScreenRect(p);
             if (host != 0)
@@ -332,18 +331,7 @@ public sealed class DesktopWidgets : IDisposable
         popup.ShowAbove(0, c.X, c.Y - 4, _monitor);
     }
 
-    private Grid Root(WidgetPlacement p, FrameworkElement card)
-    {
-        var root = new Grid
-        {
-            Width = p.Size.PxW,
-            Height = p.Size.PxH,
-            LayoutTransform = new ScaleTransform(_scale, _scale),
-            Children = { card },
-        };
-        root.MouseRightButtonUp += (_, e) => OnContext(e);
-        return root;
-    }
+
 
     private void Measure()
     {
@@ -402,5 +390,20 @@ public sealed class DesktopWidgets : IDisposable
         SystemEvents.DisplaySettingsChanged -= OnDisplayChanged;
         foreach (var (host, _) in _hosts.Values) host.Dispose();
         foreach (var w in _widgets.Values) w.Dispose();
+    }
+}
+
+/// <summary>A widget window's root: the card at the widget's size and the global scale, reused on every rebuild.</summary>
+public static class WidgetRoots
+{
+    public static Grid Fill(Grid? existing, FrameworkElement card, WidgetSize size, double scale)
+    {
+        var root = existing ?? new Grid();
+        root.Children.Clear();
+        root.Children.Add(card);
+        root.Width = size.PxW;
+        root.Height = size.PxH;
+        root.LayoutTransform = new ScaleTransform(scale, scale);
+        return root;
     }
 }
