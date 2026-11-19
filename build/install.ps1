@@ -68,6 +68,14 @@ if (-not $SkipAdminSteps) {
 }
 
 # 3. Publish
+# A copy started straight from the build output (for example by double-clicking it) locks $outApp: stop it first.
+$fromOut = @(Get-Process -Name 'NothingShell', 'NothingShell.Watchdog' -ErrorAction SilentlyContinue |
+    Where-Object { $_.Path -and $_.Path.StartsWith([IO.Path]::GetFullPath($outApp), [StringComparison]::OrdinalIgnoreCase) })
+if ($fromOut.Count -gt 0) {
+    Write-Host "Stopping $($fromOut.Count) process(es) running from $outApp"
+    $fromOut | Stop-Process -Force
+    Start-Sleep -Milliseconds 500
+}
 if (Test-Path $outApp) { Remove-Item $outApp -Recurse -Force }
 Invoke-Native $dotnet @('publish', (Join-Path $repo 'src/NothingShell'), '-c', 'Release', '-p:UiAccess=true', '-o', $outApp)
 try {
