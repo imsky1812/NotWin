@@ -21,6 +21,7 @@ public partial class App : Application
     private DockAppBar? _appBar;
     private HookThread? _hooks;
     private Launcher.WinKeyListener? _winKeys;
+    private Widgets.SnakeWidget? _snake;
     private Launcher.LauncherController? _launcher;
     private Launcher.AppIndex? _index;
     private Notch.NotchController? _notch;
@@ -229,6 +230,12 @@ public partial class App : Application
             _winKeys = new Launcher.WinKeyListener(_hooks!, Dispatcher);
             _winKeys.LauncherRequested += _launcher.Toggle;
             _winKeys.PanelRequested += () => _panel?.Toggle();
+            if (_snake is { } snake)
+            {
+                _winKeys.SnakeGate = snake.Gate;
+                _winKeys.SnakeKeyPressed += snake.OnKey;
+                _winKeys.SnakeReleased += snake.Release;
+            }
         }
         catch (Exception e)
         {
@@ -251,6 +258,9 @@ public partial class App : Application
             [Core.Widgets.WidgetKind.Timer] = new Widgets.TimerWidget(_timer),
             [Core.Widgets.WidgetKind.Calendar] = new Widgets.CalendarWidget(),
         };
+        _snake = new Widgets.SnakeWidget(new Core.Widgets.SnakeKeyGate(), dock.Settings.SnakeBest,
+            best => dock.UpdateSettings(s => s with { SnakeBest = Math.Max(s.SnakeBest, best) }));
+        widgets[Core.Widgets.WidgetKind.Snake] = _snake;
         if (_weather is not null) widgets[Core.Widgets.WidgetKind.Weather] = new Widgets.WeatherWidget(_weather);
         if (_media is not null) widgets[Core.Widgets.WidgetKind.Media] = new Widgets.MediaWidget(_media);
         if (_tray is not null)

@@ -16,6 +16,12 @@ public static unsafe class MouseHookNative
     private const uint WmMouseMove = 0x0200;
 
     /// <summary>
+    /// Optional: called on the hook thread for a left or right button press (screen pixels) while the hook is
+    /// installed. Must only post work and return. The snake widget sets it while it has the keys (Plan 5).
+    /// </summary>
+    public static volatile Action<int, int>? ButtonDown;
+
+    /// <summary>
     /// Installs the hook on <paramref name="thread"/> (a pumping <see cref="HookThread"/>, not the UI thread, so a busy
     /// UI can never make Windows drop the hook). The callback runs on that thread.
     /// One instance at a time: the callback lives in a static slot because the native entry point is a
@@ -53,6 +59,12 @@ public static unsafe class MouseHookNative
             {
                 var info = (MSLLHOOKSTRUCT*)lParam.Value;
                 try { s_callback?.Invoke(info->pt.X, info->pt.Y); }
+                catch { /* never throw across the native boundary */ }
+            }
+            else if (code >= 0 && (wParam.Value == 0x0201 || wParam.Value == 0x0204) && ButtonDown is { } down)
+            {
+                var info = (MSLLHOOKSTRUCT*)lParam.Value;
+                try { down(info->pt.X, info->pt.Y); }
                 catch { /* never throw across the native boundary */ }
             }
             return PInvoke.CallNextHookEx(HHOOK.Null, code, wParam, lParam);
