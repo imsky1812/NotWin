@@ -19,4 +19,10 @@ public sealed record ShellSettings
 
     /// <summary>The weather tile's place (spec §6.5: a city the user types in Settings); null until set.</summary>
     public Forecast.WeatherPlace? Weather { get; init; }
+
+    /// <summary>Where the desktop widgets are and their sizes (null = the default layout). Sanitized on use.</summary>
+    public Widgets.DesktopLayout? Widgets { get; init; }
+
+    /// <summary>The snake widget's best score.</summary>
+    public int SnakeBest { get; init; }
 }

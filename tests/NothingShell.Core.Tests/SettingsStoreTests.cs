@@ -99,6 +99,18 @@ public sealed class SettingsStoreTests : IDisposable
     }
 
     [Fact]
+    public void SaveThenLoad_RoundTripsWidgets()
+    {
+        var store = new SettingsStore(_dir);
+        Assert.Null(store.Load().Widgets);
+        var layout = NothingShell.Core.Widgets.DesktopLayout.Default;
+        store.Save(new ShellSettings { Widgets = layout, SnakeBest = 7 });
+        var back = store.Load();
+        Assert.Equal(layout.Widgets, back.Widgets!.Widgets);
+        Assert.Equal(7, back.SnakeBest);
+    }
+
+    [Fact]
     public void Load_UnknownTileKind_KeepsTheRestOfTheSettings()
     {
         Directory.CreateDirectory(_dir);
