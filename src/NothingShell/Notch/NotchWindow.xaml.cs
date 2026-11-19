@@ -53,6 +53,9 @@ public partial class NotchWindow : Window
     /// <summary>The window lost activation while typing (click elsewhere): the controller releases the "text" hold.</summary>
     public event Action? TypingEnded;
 
+    /// <summary>Files are being dragged over the open notch (the controller shows the shelf's page).</summary>
+    public event Action? FileDragEntered;
+
     public NotchWindow()
     {
         InitializeComponent();
@@ -76,6 +79,11 @@ public partial class NotchWindow : Window
             EscPressed?.Invoke();
         };
         Deactivated += (_, _) => { if (_typing) TypingEnded?.Invoke(); };
+        Pill.AllowDrop = true;
+        Pill.PreviewDragEnter += (_, e) =>
+        {
+            if (_shown == NotchState.Open && e.Data.GetDataPresent(DataFormats.FileDrop)) FileDragEntered?.Invoke();
+        };
         // 20 fps while the music state is visible, off otherwise (spec §7).
         _eq = new DispatcherTimer(DispatcherPriority.Render) { Interval = TimeSpan.FromMilliseconds(50) };
         _eq.Tick += (_, _) => StepEqualizer();

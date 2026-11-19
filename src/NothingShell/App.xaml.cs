@@ -26,6 +26,7 @@ public partial class App : Application
     private Notch.NotchController? _notch;
     private Timing.TimerService? _timer;
     private Clips.ClipboardService? _clips;
+    private readonly Power.KeepAwakeService _awake = new();
 
     private static string DataDir => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "NothingShell");
     private Media.MediaSessionService? _media;
@@ -145,6 +146,8 @@ public partial class App : Application
                 Core.Notch.TileKind.Media when _media is not null => new Notch.Dashboard.Tiles.MediaTile(_media, MediaAppName),
                 Core.Notch.TileKind.Clipboard when _clips is not null => new Notch.Dashboard.Tiles.ClipboardTile(_clips, () => _notch!),
                 Core.Notch.TileKind.Notes => new Notch.Dashboard.Tiles.NotesTile(new NotesStore(DataDir), () => _notch!),
+                Core.Notch.TileKind.KeepAwake => new Notch.Dashboard.Tiles.KeepAwakeTile(_awake),
+                Core.Notch.TileKind.Shelf => new Notch.Dashboard.Tiles.ShelfTile(new Core.Shelving.ShelfStore(DataDir), new Dock.AppIconCache()),
                 _ => new Notch.Dashboard.PlaceholderTile(kind),
             };
             _fullscreen.Changed += fs => _notch?.SetFullscreen(fs);
@@ -308,6 +311,7 @@ public partial class App : Application
             _notch?.Dispose();
             _timer?.Dispose();
             _clips?.Dispose();
+            _awake.Dispose(); // keep awake never outlives the shell
             _controller?.Dispose();
             _tray?.Dispose();
             _mouse?.Dispose();

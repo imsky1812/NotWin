@@ -60,6 +60,7 @@ public sealed class NotchController : IDisposable, IDashboardHost
         _window.SettingsRequested += () => SettingsRequested?.Invoke();
         _window.EscPressed += Close;
         _window.TypingEnded += () => Hold("text", false);
+        _window.FileDragEntered += () => ShowPageOf(TileKind.Shelf);
         if (_mouse is not null) _mouse.Moved += OnMoved;
         _tray.PropertyChanged += OnTrayChanged;
         _tray.DefaultDeviceChanged += _window.RebindMeter;
