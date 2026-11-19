@@ -32,6 +32,12 @@ public sealed class WinKeyListener : IDisposable
     /// <summary>Raised on the UI thread for Esc while the gate is armed (the snake gives the keys back).</summary>
     public event Action? SnakeReleased;
 
+    /// <summary>While true, Esc (never swallowed) also raises <see cref="EscapePressed"/> (widget edit mode).</summary>
+    public volatile bool EscapeWanted;
+
+    /// <summary>Raised on the UI thread for Esc while <see cref="EscapeWanted"/>.</summary>
+    public event Action? EscapePressed;
+
     public WinKeyListener(HookThread hookThread, Dispatcher ui)
     {
         _ui = ui;
@@ -42,6 +48,8 @@ public sealed class WinKeyListener : IDisposable
     // Hook thread. Tiny: detector + optional mask injection + a posted UI call.
     private bool OnKey(uint vk, bool down, bool injectedByUs)
     {
+        if (vk == 0x1B && down && EscapeWanted && !injectedByUs)
+            _ui.BeginInvoke(DispatcherPriority.Input, () => Safe(() => EscapePressed?.Invoke()));
         if (SnakeGate is { Armed: true } gate && !injectedByUs && !ModifierDown())
         {
             if (vk == 0x1B) // Esc: disarm, and let the key through

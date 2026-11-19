@@ -230,6 +230,7 @@ public partial class App : Application
             _winKeys = new Launcher.WinKeyListener(_hooks!, Dispatcher);
             _winKeys.LauncherRequested += _launcher.Toggle;
             _winKeys.PanelRequested += () => _panel?.Toggle();
+            _winKeys.EscapePressed += () => _widgets?.EndEdit();
             if (_snake is { } snake)
             {
                 _winKeys.SnakeGate = snake.Gate;
@@ -269,6 +270,12 @@ public partial class App : Application
             widgets[Core.Widgets.WidgetKind.Battery] = new Widgets.BatteryWidget(_deviceBatteries);
         }
         _widgets = new Widgets.DesktopWidgets(() => dock.Settings, dock.UpdateSettings, widgets);
+        _widgets.EditingChanged += editing =>
+        {
+            if (_winKeys is not null) _winKeys.EscapeWanted = editing; // Esc ends edit mode
+            if (editing) _snake?.Release();                            // the snake never keeps the keys while editing
+        };
+        if (_fullscreen is not null) _fullscreen.Changed += fs => { if (fs) _widgets?.EndEdit(); };
         _widgets.Start();
     }
 
@@ -287,7 +294,7 @@ public partial class App : Application
             new Settings.SettingsWindow.WidgetOptions(
                 scale => { if (_widgets is null) dock.UpdateSettings(s => s with { WidgetScale = scale }); else _widgets.SetScale(scale); },
                 Path.Combine(AppContext.BaseDirectory, "Wallpapers"),
-                () => Log.Info("edit widgets requested (Task 11)")));
+                () => _widgets?.BeginEdit()));
     }
 
     // Source app of a media session (AUMID or exe) as a short name for the media tile: the launcher index, else the

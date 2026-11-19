@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Threading;
 using Microsoft.Win32;
@@ -30,6 +31,10 @@ public sealed class DesktopWidgets : IDisposable
     private double _px = 1;   // physical px per unscaled widget px = DPI scale × widget scale
     private double _scale = 0.65;
     private bool _started, _disposed;
+    private WidgetHost? _backdrop;
+    private Dock.DockPopup? _popup;
+    private (WidgetKind Kind, PointI Cursor, RectI Start, EditChrome Chrome)? _drag;
+    private DispatcherTimer? _settle;
 
     public DesktopWidgets(Func<ShellSettings> get, Action<Func<ShellSettings, ShellSettings>> update,
         IReadOnlyDictionary<WidgetKind, IDesktopWidget> widgets)
@@ -80,7 +85,11 @@ public sealed class DesktopWidgets : IDisposable
         {
             if (!_widgets.TryGetValue(p.Kind, out var widget)) continue;
             FrameworkElement card;
-            try { card = WidgetCard.Wrap(widget.Build(p.Size), widget.Bare); }
+            try
+            {
+                card = WidgetCard.Wrap(widget.Build(p.Size), widget.Bare);
+                if (Editing) card = EditFrame(p, card);
+            }
             catch (Exception e)
             {
                 Log.Error($"widget {p.Kind} failed to build", e);
@@ -136,16 +145,169 @@ public sealed class DesktopWidgets : IDisposable
         Rebuild();
     }
 
-    // Edit mode is added by Task 11 (BeginEdit / EndEdit).
-    public void SetEditing(bool editing) => Editing = editing;
+    /// <summary>Raised when edit mode starts (true) or ends (false).</summary>
+    public event Action<bool>? EditingChanged;
 
-    private Grid Root(WidgetPlacement p, FrameworkElement card) => new()
+    /// <summary>
+    /// Edit mode (spec §6.5): the dot-grid backdrop under the widgets, every widget draggable with a 74 px snap and a
+    /// size chip; content ignores clicks. Ends with Done, Esc (<see cref="EndEdit"/> from the key hook) or full screen.
+    /// </summary>
+    public void BeginEdit()
     {
-        Width = p.Size.PxW,
-        Height = p.Size.PxH,
-        LayoutTransform = new ScaleTransform(_scale, _scale),
-        Children = { card },
-    };
+        if (!_started || _disposed || Editing) return;
+        Editing = true;
+        Log.Info("widget edit mode on");
+        Safe(() => EditingChanged?.Invoke(true));
+        Rebuild();
+        ShowBackdrop();
+    }
+
+    public void EndEdit()
+    {
+        if (!Editing) return;
+        Editing = false;
+        _drag = null;
+        _settle?.Stop();
+        _backdrop?.Dispose();
+        _backdrop = null;
+        Log.Info("widget edit mode off");
+        Rebuild();
+        Safe(() => EditingChanged?.Invoke(false));
+    }
+
+    private void ShowBackdrop()
+    {
+        var host = DesktopAttach.FindHost();
+        if (host == 0) return;
+        var dpi = _px / _scale;
+        var content = EditBackdrop.Build((_monitor.Right - _monitor.Left) / dpi, (_monitor.Bottom - _monitor.Top) / dpi,
+            new Point(OriginX * _scale, OriginY * _scale), _scale, EndEdit);
+        _backdrop = new WidgetHost(content);
+        _backdrop.Attach(host, _monitor);
+        foreach (var (h, _) in _hosts.Values) h.Raise(); // the widgets above the backdrop
+    }
+
+    private FrameworkElement EditFrame(WidgetPlacement p, FrameworkElement card)
+    {
+        var index = IndexOf(p.Kind);
+        var chrome = new EditChrome(card, p, index >= 0 && _layout.Overlaps(index), _scale);
+        var kind = p.Kind;
+        chrome.Grab.MouseLeftButtonDown += (_, e) => { e.Handled = true; StartDrag(kind, chrome); };
+        chrome.Grab.MouseMove += (_, _) => DragMove();
+        chrome.Grab.MouseLeftButtonUp += (_, e) => { e.Handled = true; EndDrag(); };
+        chrome.Grab.LostMouseCapture += (_, _) => EndDrag();
+        if (chrome.Chip is { } chip)
+            chip.MouseLeftButtonUp += (_, e) =>
+            {
+                e.Handled = true;
+                var i = IndexOf(kind);
+                if (i >= 0) Apply(_layout.CycleSize(i)); // may overlap: the outline stays until it is moved
+            };
+        return chrome.Root;
+    }
+
+    private int IndexOf(WidgetKind kind)
+    {
+        for (var i = 0; i < _layout.Widgets.Count; i++)
+            if (_layout.Widgets[i].Kind == kind) return i;
+        return -1;
+    }
+
+    private void StartDrag(WidgetKind kind, EditChrome chrome)
+    {
+        var i = IndexOf(kind);
+        if (i < 0 || !_hosts.TryGetValue(kind, out var h) || DockWindowNative.GetCursorPos() is not { } cursor) return;
+        _settle?.Stop();
+        _drag = (kind, cursor, ScreenRect(_layout.Widgets[i]), chrome);
+        h.Host.Raise();
+        chrome.Grab.CaptureMouse();
+    }
+
+    private (RectI Rect, DesktopLayout Layout, bool Moved)? DragTarget()
+    {
+        if (_drag is not { } d || DockWindowNative.GetCursorPos() is not { } c) return null;
+        var i = IndexOf(d.Kind);
+        if (i < 0) return null;
+        var dx = c.X - d.Cursor.X;
+        var dy = c.Y - d.Cursor.Y;
+        var rect = new RectI(d.Start.Left + dx, d.Start.Top + dy, d.Start.Right + dx, d.Start.Bottom + dy);
+        var (x, y) = ToLayout(rect.Left, rect.Top);
+        var (layout, moved) = _layout.TryMove(i, x, y, Area.W, Area.H);
+        return (rect, layout, moved);
+    }
+
+    private void DragMove()
+    {
+        if (_drag is not { } d || DragTarget() is not { } t || !_hosts.TryGetValue(d.Kind, out var h)) return;
+        h.Host.Place(t.Rect); // follows the pointer; the snapped spot is taken on release
+        d.Chrome.ShowOverlap(!t.Moved);
+    }
+
+    private void EndDrag()
+    {
+        if (_drag is not { } d) return;
+        var target = DragTarget();
+        _drag = null;
+        if (d.Chrome.Grab.IsMouseCaptured) d.Chrome.Grab.ReleaseMouseCapture();
+        if (!_hosts.TryGetValue(d.Kind, out var h)) return;
+        var i = IndexOf(d.Kind);
+        if (target is { Moved: true } t && i >= 0)
+        {
+            _layout = t.Layout;
+            var saved = _layout;
+            _update(s => s with { Widgets = saved });
+            var rect = ScreenRect(_layout.Widgets[i]);
+            Animate(h.Host, t.Rect, rect);
+            d.Chrome.ShowOverlap(_layout.Overlaps(i));
+            if (_widgets.TryGetValue(d.Kind, out var w)) Safe(() => w.Placed(rect, _monitor));
+            return;
+        }
+        // Refused (overlap) or cancelled: back to where it was.
+        Animate(h.Host, target?.Rect ?? d.Start, d.Start);
+        if (i >= 0) d.Chrome.ShowOverlap(_layout.Overlaps(i));
+    }
+
+    // 180 ms ease-out slide of the widget window between two screen rectangles.
+    private void Animate(WidgetHost host, RectI from, RectI to)
+    {
+        _settle?.Stop();
+        var clock = Stopwatch.StartNew();
+        var timer = new DispatcherTimer(DispatcherPriority.Render) { Interval = TimeSpan.FromMilliseconds(15) };
+        timer.Tick += (_, _) =>
+        {
+            var t = Math.Min(1, clock.Elapsed.TotalMilliseconds / 180);
+            var k = 1 - Math.Pow(1 - t, 3);
+            int L(int a, int b) => (int)Math.Round(a + (b - a) * k);
+            host.Place(new RectI(L(from.Left, to.Left), L(from.Top, to.Top), L(from.Right, to.Right), L(from.Bottom, to.Bottom)));
+            if (t >= 1) timer.Stop();
+        };
+        _settle = timer;
+        timer.Start();
+    }
+
+    private void OnContext(MouseButtonEventArgs e)
+    {
+        e.Handled = true;
+        _popup?.CloseIfOpen();
+        if (DockWindowNative.GetCursorPos() is not { } c) return;
+        var popup = new Dock.DockPopup([Editing ? new Dock.PopupRow("Done editing", EndEdit) : new Dock.PopupRow("Edit widgets", BeginEdit)]);
+        popup.Dismissed += () => { if (ReferenceEquals(_popup, popup)) _popup = null; };
+        _popup = popup;
+        popup.ShowAbove(0, c.X, c.Y - 4, _monitor);
+    }
+
+    private Grid Root(WidgetPlacement p, FrameworkElement card)
+    {
+        var root = new Grid
+        {
+            Width = p.Size.PxW,
+            Height = p.Size.PxH,
+            LayoutTransform = new ScaleTransform(_scale, _scale),
+            Children = { card },
+        };
+        root.MouseRightButtonUp += (_, e) => OnContext(e);
+        return root;
+    }
 
     private void Measure()
     {
@@ -178,6 +340,11 @@ public sealed class DesktopWidgets : IDisposable
         _reattach.Stop();
         DesktopAttach.Prepare();
         Rebuild();
+        if (Editing)
+        {
+            _backdrop?.Dispose();
+            ShowBackdrop();
+        }
         Log.Info($"widgets reattached in {_lostFor.ElapsedMilliseconds} ms");
     }
 
@@ -191,6 +358,9 @@ public sealed class DesktopWidgets : IDisposable
     {
         _disposed = true;
         _reattach.Stop();
+        _settle?.Stop();
+        _popup?.CloseIfOpen();
+        _backdrop?.Dispose();
         SystemEvents.DisplaySettingsChanged -= OnDisplayChanged;
         foreach (var (host, _) in _hosts.Values) host.Dispose();
         foreach (var w in _widgets.Values) w.Dispose();
