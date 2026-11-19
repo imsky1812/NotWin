@@ -12,12 +12,29 @@ public sealed class EqualizerModelTests
     }
 
     [Fact]
-    public void Level_MapsDecibelsOntoZeroToOne()
+    public void Level_IsDecibelsBelowTheRecentPeak()
     {
-        Assert.Equal(0, EqualizerModel.Level(0f));
-        Assert.Equal(1, EqualizerModel.Level(1f));
-        Assert.Equal(0, EqualizerModel.Level(0.01f), 3);        // -40 dB: below the floor
-        Assert.Equal(1.0 / 3, EqualizerModel.Level(0.0631f), 2); // -24 dB, with a -36 dB floor: a third of the way up
+        Assert.Equal(1, EqualizerModel.Level(0.05f, 0.05));
+        Assert.Equal(0, EqualizerModel.Level(0f, 0.05));
+        Assert.Equal(0, EqualizerModel.Level(0.05f / 16, 0.05), 2);   // 24 dB below the reference: the floor
+        Assert.Equal(0.5, EqualizerModel.Level(0.05f / 4, 0.05), 2);  // 12 dB below: half way
+    }
+
+    [Fact]
+    public void QuietMusic_StillFillsTheBars()
+    {
+        // Measured live 2026-11-19: Spotify peaks of 0.01-0.05 left the bars on the baseline with a fixed -36 dB scale.
+        var m = After(0.03f, 0.021f, 0.009f, 0.015f, 0.041f, 0.033f, 0.05f);
+        Assert.True(m.Heights[4] >= 3);
+        var spread = m.Heights.Distinct().Count();
+        Assert.True(spread >= 2); // the ripple shows the variation, not a flat block
+    }
+
+    [Fact]
+    public void NearSilence_IsNotAmplified()
+    {
+        var m = After(0.0005f, 0.0008f, 0.0004f, 0.0006f, 0.0007f, 0.0005f);
+        Assert.All(m.Heights, h => Assert.Equal(1, h)); // below the noise floor: baseline only
     }
 
     [Fact]

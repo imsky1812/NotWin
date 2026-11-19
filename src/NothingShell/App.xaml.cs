@@ -165,7 +165,7 @@ public partial class App : Application
 
             // Music state: the system media session (Changed arrives on this UI thread).
             _media = new Media.MediaSessionService();
-            _media.Changed += snap => _notch?.SetMusic(snap.Playing, snap.Art);
+            _media.Changed += snap => _notch?.SetMusic(snap.Playing, snap.Art, snap.Title, snap.Artist);
             _ = _media.StartAsync();
 
             // Notifications: shown in the notch for 3.6 s (and listed in the panel, Task 12).

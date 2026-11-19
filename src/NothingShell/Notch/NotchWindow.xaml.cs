@@ -20,6 +20,9 @@ public partial class NotchWindow : Window
     // DIPs: room for the open 770x326 pill (3 rows) plus its shadow. Click-through except while open, so the big band
     // costs nothing when closed.
     private const double BandWidth = 800, BandHeight = 360, PillTop = 8, DashboardWidth = 770;
+    private const double SmallBandWidth = 480, SmallBandHeight = 112; // closed states (420x64 notification + shadow)
+    private bool _bigBand;
+    private readonly DispatcherTimer _shrink = new() { Interval = TimeSpan.FromMilliseconds(360) };
     private const int WsExTransparent = 0x00000020;
     private static readonly Duration Resize = new(TimeSpan.FromMilliseconds(300));
     private static readonly KeySpline Ease = new(0.2, 0.8, 0.2, 1);
@@ -101,6 +104,14 @@ public partial class NotchWindow : Window
             PowerBar.Lit++;
         };
         TimerGridHost.Child = _timerGrid;
+        _shrink.Tick += (_, _) =>
+        {
+            _shrink.Stop();
+            if (_shown == NotchState.Open || !_bigBand) return;
+            _bigBand = false;
+            Place();
+        };
+        TrackClip.SizeChanged += (_, _) => UpdateMarquee();
         PowerBar.On = Lit;
         PowerBar.Off = Frozen(0x2A, 0x2A, 0x2A);
         PowerBar.Accent = _accent;
@@ -126,8 +137,10 @@ public partial class NotchWindow : Window
         if (_hwnd == 0) return;
         var (mon, dpi) = DockWindowNative.GetPrimaryMonitor();
         var s = dpi / 96.0;
-        var w = (int)Math.Round(BandWidth * s);
-        var h = (int)Math.Round(BandHeight * s);
+        // The big band only while the dashboard is open: a layered window redraws its whole surface on every frame
+        // (equalizer, scrolling title), so the closed states keep the small one.
+        var w = (int)Math.Round((_bigBand ? BandWidth : SmallBandWidth) * s);
+        var h = (int)Math.Round((_bigBand ? BandHeight : SmallBandHeight) * s);
         var x = mon.Left + (mon.Right - mon.Left - w) / 2;
         _band = new RectI(x, mon.Top, x + w, mon.Top + h);
         _scale = s;
@@ -238,10 +251,40 @@ public partial class NotchWindow : Window
         else PowerBar.Lit = _fillTarget;
     }
 
-    public void SetMusicArt(ImageSource? art)
+    private static readonly Brush ArtPlaceholder = Frozen(0x3A, 0x3A, 0x3A);
+
+    /// <summary>The music state's art (a circle; grey without art) and "title · artist" (title only if no artist).</summary>
+    public void SetMusic(ImageSource? art, string? title, string? artist)
     {
-        Art.Source = art;
-        Art.Visibility = art is null ? Visibility.Collapsed : Visibility.Visible; // placeholder: the grey box itself
+        ArtCircle.Fill = art is null ? ArtPlaceholder : new ImageBrush(art) { Stretch = Stretch.UniformToFill };
+        var t = title ?? "";
+        var a = artist ?? "";
+        if (TrackTitle.Text == t && TrackArtist.Text == a) return;
+        TrackTitle.Text = t;
+        TrackDot.Text = t.Length > 0 && a.Length > 0 ? "  ·  " : "";
+        TrackArtist.Text = a;
+        UpdateMarquee();
+    }
+
+    // Long "title · artist" drifts left and back with pauses, only while the music state shows (30 fps cap).
+    private void UpdateMarquee()
+    {
+        TrackShift.BeginAnimation(TranslateTransform.XProperty, null);
+        TrackShift.X = 0;
+        if (_shown != NotchState.Music) return;
+        TrackText.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+        var overflow = TrackText.DesiredSize.Width - TrackClip.ActualWidth;
+        if (overflow <= 2 || TrackClip.ActualWidth <= 0) return;
+        var travel = TimeSpan.FromSeconds(overflow / 25); // 25 DIP/s
+        var hold = TimeSpan.FromSeconds(2);
+        var anim = new DoubleAnimationUsingKeyFrames { RepeatBehavior = RepeatBehavior.Forever };
+        anim.KeyFrames.Add(new DiscreteDoubleKeyFrame(0, KeyTime.FromTimeSpan(TimeSpan.Zero)));
+        anim.KeyFrames.Add(new LinearDoubleKeyFrame(0, KeyTime.FromTimeSpan(hold)));
+        anim.KeyFrames.Add(new LinearDoubleKeyFrame(-overflow, KeyTime.FromTimeSpan(hold + travel)));
+        anim.KeyFrames.Add(new LinearDoubleKeyFrame(-overflow, KeyTime.FromTimeSpan(hold + travel + hold)));
+        anim.KeyFrames.Add(new LinearDoubleKeyFrame(0, KeyTime.FromTimeSpan(hold + travel + hold + travel)));
+        Timeline.SetDesiredFrameRate(anim, 30);
+        TrackShift.BeginAnimation(TranslateTransform.XProperty, anim);
     }
 
     public void SetNotification(NotchNotification n, ImageSource? icon)
@@ -267,10 +310,12 @@ public partial class NotchWindow : Window
         if (!IsVisible) Show(); // ShowActivated=false: never steals focus
         if (state == _shown) return;
         _shown = state;
+        if (state == NotchState.Open && !_bigBand) { _shrink.Stop(); _bigBand = true; Place(); }
+        else if (state != NotchState.Open && _bigBand) { _shrink.Stop(); _shrink.Start(); } // after the close animation
 
         var (w, h, r) = state switch
         {
-            NotchState.Music => (300.0, 34.0, 20.0),
+            NotchState.Music => (340.0, 34.0, 20.0),
             NotchState.Timer => (270.0, 34.0, 20.0),
             NotchState.Opening => (300.0, 34.0, 20.0),
             NotchState.Power => (300.0, 34.0, 20.0),
@@ -305,6 +350,7 @@ public partial class NotchWindow : Window
 
         if (state == NotchState.Music) StartEqualizer();
         else StopEqualizer(); // the equalizer and its meter only run while it is visible (spec §7)
+        UpdateMarquee();
     }
 
     private nint DropHook(nint hwnd, int msg, nint wParam, nint lParam, ref bool handled)

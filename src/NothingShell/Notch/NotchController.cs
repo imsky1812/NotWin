@@ -124,10 +124,10 @@ public sealed class NotchController : IDisposable, IDashboardHost
         Render();
     }
 
-    public void SetMusic(bool playing, ImageSource? art)
+    public void SetMusic(bool playing, ImageSource? art, string? title = null, string? artist = null)
     {
         _machine.SetMusicPlaying(playing);
-        _window.SetMusicArt(art);
+        _window.SetMusic(art, title, artist);
         Render();
     }
 
