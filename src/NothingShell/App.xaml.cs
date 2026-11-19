@@ -25,6 +25,9 @@ public partial class App : Application
     private Launcher.AppIndex? _index;
     private Notch.NotchController? _notch;
     private Timing.TimerService? _timer;
+    private Clips.ClipboardService? _clips;
+
+    private static string DataDir => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "NothingShell");
     private Media.MediaSessionService? _media;
     private Notifications.NotificationService? _notifications;
     private Panel.QuickPanelController? _panel;
@@ -133,11 +136,14 @@ public partial class App : Application
             var minutes = dockCtl?.Settings.TimerMinutes ?? 25;
             _timer = new Timing.TimerService(minutes, m => dockCtl?.UpdateSettings(s => s with { TimerMinutes = m }));
             _notch.AttachTimer(_timer);
+            try { _clips = new Clips.ClipboardService(DataDir); }
+            catch (Exception e) { Log.Error("clipboard history failed to start", e); }
             var timer = _timer;
             _notch.TileFactory = kind => kind switch
             {
                 Core.Notch.TileKind.Timer => new Notch.Dashboard.Tiles.TimerTile(timer),
                 Core.Notch.TileKind.Media when _media is not null => new Notch.Dashboard.Tiles.MediaTile(_media, MediaAppName),
+                Core.Notch.TileKind.Clipboard when _clips is not null => new Notch.Dashboard.Tiles.ClipboardTile(_clips, () => _notch!),
                 _ => new Notch.Dashboard.PlaceholderTile(kind),
             };
             _fullscreen.Changed += fs => _notch?.SetFullscreen(fs);
@@ -300,6 +306,7 @@ public partial class App : Application
             _panel?.Dispose();
             _notch?.Dispose();
             _timer?.Dispose();
+            _clips?.Dispose();
             _controller?.Dispose();
             _tray?.Dispose();
             _mouse?.Dispose();

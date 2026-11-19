@@ -17,7 +17,7 @@ namespace NothingShell.Notch;
 /// Plan 4: the global mouse feed drives <see cref="NotchHover"/>, which opens the dashboard; a second timer is armed
 /// only for the hover's next deadline (open dwell / close delay).
 /// </summary>
-public sealed class NotchController : IDisposable
+public sealed class NotchController : IDisposable, IDashboardHost
 {
     private readonly NotchStateMachine _machine = new();
     private readonly NotchWindow _window = new();
@@ -165,6 +165,32 @@ public sealed class NotchController : IDisposable
     {
         Hold("text", true);
         _window.ActivateForTyping();
+    }
+
+    public void EndTyping()
+    {
+        _window.EndTyping();
+        Hold("text", false);
+    }
+
+    public void ShowOverlay(FrameworkElement content, int rows = 2)
+    {
+        Hold("expand", true);
+        _dash.ShowOverlay(content, rows);
+    }
+
+    public void CloseOverlay()
+    {
+        _dash.CloseOverlay();
+        Hold("expand", false);
+    }
+
+    public void ShowPageOf(TileKind kind)
+    {
+        var page = _dash.PageOf(kind);
+        if (page < 0 || page == _page || !_hover.IsOpen) return;
+        _page = page;
+        ShowDashboard();
     }
 
     /// <summary>Closes the dashboard now (Esc, a tool starting); it reopens only after the pointer leaves and returns.</summary>

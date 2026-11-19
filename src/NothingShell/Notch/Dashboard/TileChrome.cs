@@ -41,6 +41,7 @@ public static class TileChrome
         };
         if (center && content is FrameworkElement fe)
         {
+            b.Padding = new Thickness(6); // 1x1 stacks (icon, dots, label) need the room in an 84 DIP cell
             fe.HorizontalAlignment = HorizontalAlignment.Center;
             fe.VerticalAlignment = VerticalAlignment.Center;
         }
