@@ -137,6 +137,45 @@ public sealed class NotchStateMachineTests
     }
 
     [Fact]
+    public void Open_BeatsNotificationAndTimer()
+    {
+        var m = new NotchStateMachine();
+        m.SetTimerRunning(true);
+        m.Notify(N1, T0);
+        m.SetOpen(true);
+        Assert.Equal(NotchState.Open, m.StateAt(Ms(10)));
+        m.SetOpen(false);
+        Assert.Equal(NotchState.Notification, m.StateAt(Ms(20)));
+    }
+
+    [Fact]
+    public void Open_HiddenInFullscreen()
+    {
+        var m = new NotchStateMachine();
+        m.SetOpen(true);
+        m.SetFullscreen(true);
+        Assert.Equal(NotchState.Hidden, m.StateAt(T0));
+        m.SetFullscreen(false);
+        Assert.Equal(NotchState.Resting, m.StateAt(T0)); // entering full screen also closed it
+    }
+
+    [Fact]
+    public void NotificationDuringOpen_ShowsAfterCloseIfStillDue()
+    {
+        var m = new NotchStateMachine();
+        m.SetOpen(true);
+        m.Notify(N1, T0);
+        m.SetOpen(false);
+        Assert.Equal(NotchState.Notification, m.StateAt(Ms(1000)));
+
+        var m2 = new NotchStateMachine();
+        m2.SetOpen(true);
+        m2.Notify(N1, T0);
+        m2.SetOpen(false);
+        Assert.Equal(NotchState.Resting, m2.StateAt(Ms(4000))); // its 3.6 s ran out while open
+    }
+
+    [Fact]
     public void NextChangeAt_IsTransientEnd()
     {
         var m = new NotchStateMachine();

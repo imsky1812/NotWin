@@ -1,6 +1,6 @@
 namespace NothingShell.Core.Notch;
 
-public enum NotchState { Hidden, Resting, Music, Timer, Notification, Opening, Power }
+public enum NotchState { Hidden, Resting, Music, Timer, Notification, Opening, Power, Open }
 
 /// <summary>A notification as the notch shows it (app id for the icon, app name, one line of text).</summary>
 public readonly record struct NotchNotification(string AppId, string AppName, string Text);
@@ -25,6 +25,7 @@ public sealed class NotchStateMachine
     private bool _music;
     private bool _timer;
     private bool _fullscreen;
+    private bool _open;
 
     public NotchNotification? CurrentNotification { get; private set; }
     public string? OpeningName { get; private set; }
@@ -57,10 +58,14 @@ public sealed class NotchStateMachine
 
     public void SetTimerRunning(bool running) => _timer = running;
 
+    /// <summary>The hover dashboard is open (Plan 4): it beats every live state; transients keep their own clocks.</summary>
+    public void SetOpen(bool open) => _open = open;
+
     public void SetFullscreen(bool fullscreen)
     {
         _fullscreen = fullscreen;
         if (!fullscreen) return;
+        _open = false;
         _notificationUntil = DateTimeOffset.MinValue;
         _openingUntil = DateTimeOffset.MinValue;
         _powerUntil = DateTimeOffset.MinValue;
@@ -72,6 +77,7 @@ public sealed class NotchStateMachine
     public NotchState StateAt(DateTimeOffset now)
     {
         if (_fullscreen) return NotchState.Hidden;
+        if (_open) return NotchState.Open;
         if (now < _notificationUntil) return NotchState.Notification;
         if (now < _powerUntil) return NotchState.Power;
         if (now < _openingUntil) return NotchState.Opening;
