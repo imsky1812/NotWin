@@ -80,8 +80,7 @@ public sealed class DashboardView : IDisposable
     {
         get
         {
-            var rows = OverlayOpen ? _overlayRows
-                : Math.Max(1, GridPacker.Rows(_layout.Pages[_page].Select(t => t.Size).ToList()));
+            var rows = OverlayOpen ? _overlayRows : Math.Max(1, GridPacker.Rows(Sizes()));
             return Pad + rows * Cell + (rows - 1) * Gap + FooterHeight + Pad;
         }
     }
@@ -162,25 +161,105 @@ public sealed class DashboardView : IDisposable
     {
         _grid.Children.Clear();
         var tiles = _layout.Pages[_page];
-        var placed = GridPacker.Pack(tiles.Select(t => t.Size).ToList());
+        var sizes = Sizes();
+        var placed = GridPacker.Pack(sizes);
         var rows = 0;
-        for (var i = 0; i < tiles.Count; i++)
+        for (var i = 0; i < sizes.Count; i++)
         {
-            var (w, h) = TileRules.Cells(tiles[i].Size);
-            var el = View(tiles[i].Kind).Build(tiles[i].Size);
+            var (w, h) = TileRules.Cells(sizes[i]);
+            FrameworkElement el;
+            if (i < tiles.Count)
+            {
+                el = View(tiles[i].Kind).Build(tiles[i].Size);
+                if (_editing) el = Decorate(el, i, tiles[i]);
+            }
+            else el = AddTile();
             el.Width = w * Cell + (w - 1) * Gap;
             el.Height = h * Cell + (h - 1) * Gap;
             Canvas.SetLeft(el, placed[i].Col * (Cell + Gap));
             Canvas.SetTop(el, placed[i].Row * (Cell + Gap));
-            if (_editing) el.IsHitTestVisible = true;
             _grid.Children.Add(el);
-            TilePlaced?.Invoke(el, i);
+            if (i < tiles.Count) TilePlaced?.Invoke(el, i);
             rows = Math.Max(rows, placed[i].Row + h);
         }
         rows = Math.Max(1, rows);
         _grid.Width = GridPacker.Columns * Cell + (GridPacker.Columns - 1) * Gap;
         _grid.Height = rows * Cell + (rows - 1) * Gap;
         RenderFooter();
+    }
+
+    /// <summary>Edit mode: the size chip on tile <c>index</c> was clicked (cycle its size).</summary>
+    public event Action<int>? SizeChipClicked;
+
+    /// <summary>Edit mode: ✕ on tile <c>index</c> was clicked.</summary>
+    public event Action<int>? RemoveClicked;
+
+    /// <summary>Edit mode: "＋ Add" was clicked.</summary>
+    public event Action? AddClicked;
+
+    // Edit mode (mockup .nediting .t, .nchip, .nx): dashed outline, size chip at the bottom right, red ✕ at the top
+    // right; the tile itself ignores clicks while editing.
+    private FrameworkElement Decorate(FrameworkElement tile, int index, TileSpec spec)
+    {
+        tile.IsHitTestVisible = false;
+        var outline = new Rectangle
+        {
+            Stroke = TileChrome.Dim, StrokeThickness = 1.5, StrokeDashArray = [3, 2], RadiusX = 22, RadiusY = 22,
+            IsHitTestVisible = false,
+        };
+        var (cw, ch) = TileRules.Cells(spec.Size);
+        var chip = new Border
+        {
+            Background = TileChrome.Text, CornerRadius = new CornerRadius(10), Padding = new Thickness(8, 3, 8, 3),
+            HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Bottom,
+            Margin = new Thickness(8), Cursor = Cursors.Hand,
+            Child = new TextBlock { Text = $"{cw}×{ch} ▸", FontFamily = TileChrome.Mono, FontSize = 10, Foreground = TileChrome.Dark },
+        };
+        chip.MouseLeftButtonUp += (_, e) => { e.Handled = true; SizeChipClicked?.Invoke(index); };
+        var x = new Border
+        {
+            Width = 20, Height = 20, CornerRadius = new CornerRadius(10), Background = TileChrome.Red,
+            HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Top,
+            Margin = new Thickness(8), Cursor = Cursors.Hand,
+            Child = new TextBlock
+            {
+                Text = "✕", FontSize = 10, Foreground = Brushes.White,
+                HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center,
+            },
+        };
+        x.MouseLeftButtonUp += (_, e) => { e.Handled = true; RemoveClicked?.Invoke(index); };
+        return new Grid { Children = { tile, outline, chip, x } };
+    }
+
+    // "＋ ADD" (mockup .add): a dashed, transparent 1x1 that brings back the first removed tile.
+    private FrameworkElement AddTile()
+    {
+        var stack = new StackPanel { HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
+        stack.Children.Add(new TextBlock
+        {
+            Text = "＋", FontSize = 18, Foreground = TileChrome.Dim, HorizontalAlignment = HorizontalAlignment.Center,
+        });
+        var label = TileChrome.Label("Add");
+        label.HorizontalAlignment = HorizontalAlignment.Center;
+        stack.Children.Add(label);
+        var outline = new Rectangle
+        {
+            Stroke = TileChrome.Frozen(0x3A, 0x3A, 0x3A), StrokeThickness = 1.5, StrokeDashArray = [3, 2],
+            RadiusX = 22, RadiusY = 22, IsHitTestVisible = false,
+        };
+        var root = new Grid { Background = Brushes.Transparent, Cursor = Cursors.Hand, Children = { outline, stack } };
+        root.MouseLeftButtonUp += (_, e) => { e.Handled = true; AddClicked?.Invoke(); };
+        return root;
+    }
+
+    // The page's tile sizes, plus a 1x1 "＋ Add" in edit mode when something was removed and it still fits.
+    private List<TileSize> Sizes()
+    {
+        var tiles = _layout.Pages[_page];
+        var sizes = tiles.Select(t => t.Size).ToList();
+        if (_editing && _layout.Removed.Count > 0 && DashboardLayout.Fits([.. tiles, new(TileKind.Timer, TileSize.One)]))
+            sizes.Add(TileSize.One);
+        return sizes;
     }
 
     private void RenderFooter()

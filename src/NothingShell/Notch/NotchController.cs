@@ -53,6 +53,9 @@ public sealed class NotchController : IDisposable, IDashboardHost
         _dash = new DashboardView(k => TileFactory?.Invoke(k) ?? new PlaceholderTile(k));
         _dash.PageRequested += p => { _page = p; ShowDashboard(); };
         _dash.EditToggled += ToggleEdit;
+        _dash.SizeChipClicked += i => UpdateLayout(l => l.CycleSize(_page, i));
+        _dash.RemoveClicked += i => UpdateLayout(l => l.Remove(_page, i));
+        _dash.AddClicked += () => UpdateLayout(l => l.AddBack(_page));
         _dash.OverlayChanged += () => _window.SetOpenContent(_dash.Root, _dash.Height);
         _window.SettingsRequested += () => SettingsRequested?.Invoke();
         _window.EscPressed += Close;
