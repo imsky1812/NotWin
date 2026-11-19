@@ -105,6 +105,9 @@ public partial class App : Application
 #if DEBUG
         Theme.FontCheck.Run(Resources);
 #endif
+        // App launches go through Explorer (normal integrity); report any fallback.
+        ShellLinkNative.OnError = (message, ex) => { if (ex is null) Log.Info(message); else Log.Error(message, ex); };
+
         // Low-level hooks (mouse edge, Win key) run on their own message-loop thread so a busy UI thread can't
         // make Windows drop them.
         _hooks = new HookThread("NothingShell.Hooks");
