@@ -25,6 +25,7 @@ public sealed class NotchController : IDisposable
         _transient = new DispatcherTimer();
         _transient.Tick += (_, _) => { _transient.Stop(); Render(); };
         _tray.PropertyChanged += OnTrayChanged;
+        _tray.DefaultDeviceChanged += _window.RebindMeter;
         _window.Initialize();
         UpdateClockAndBattery();
         _plugged = _tray.HasBattery ? _tray.PluggedIn : null;
@@ -111,6 +112,7 @@ public sealed class NotchController : IDisposable
     {
         _transient.Stop();
         _tray.PropertyChanged -= OnTrayChanged;
+        _tray.DefaultDeviceChanged -= _window.RebindMeter;
         try { _window.Close(); } catch { }
     }
 }

@@ -2,7 +2,6 @@ using System.Windows;
 using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
-using System.Windows.Shapes;
 using System.Windows.Threading;
 using Microsoft.Win32;
 using NothingShell.Core;
@@ -29,6 +28,10 @@ public partial class NotchWindow : Window
     private int _fillTarget;
     private bool _charging;
     private readonly Random _rng = new();
+    private readonly EqualizerModel _eqModel = new();
+    private readonly AudioPeakMeter _meter = new();
+    private double _fakeLevel; // only when the meter is unavailable
+    private long _nextBind;
     private nint _hwnd;
     private NotchState _shown = NotchState.Resting;
 
@@ -43,8 +46,12 @@ public partial class NotchWindow : Window
             // so the pill's soft shadow never swallows clicks on the title bars below. Plan 4 (hover dashboard) revisits.
             DockWindowNative.AddExStyle(hwnd, 0x00000020);
         };
-        _eq = new DispatcherTimer(DispatcherPriority.Render) { Interval = TimeSpan.FromMilliseconds(125) };
-        _eq.Tick += (_, _) => DrawEqualizer();
+        // 20 fps while the music state is visible, off otherwise (spec §7).
+        _eq = new DispatcherTimer(DispatcherPriority.Render) { Interval = TimeSpan.FromMilliseconds(50) };
+        _eq.Tick += (_, _) => StepEqualizer();
+        Equalizer.On = Lit;
+        Equalizer.Off = Off;
+        Equalizer.Accent = Red;
         _fill = new DispatcherTimer(DispatcherPriority.Render) { Interval = FillStep };
         _fill.Tick += (_, _) =>
         {
@@ -56,7 +63,12 @@ public partial class NotchWindow : Window
         PowerBar.Off = Frozen(0x2A, 0x2A, 0x2A);
         PowerBar.Accent = _accent;
         SystemEvents.DisplaySettingsChanged += OnDisplayChanged;
-        Closed += (_, _) => SystemEvents.DisplaySettingsChanged -= OnDisplayChanged;
+        Closed += (_, _) =>
+        {
+            SystemEvents.DisplaySettingsChanged -= OnDisplayChanged;
+            _eq.Stop();
+            _meter.Dispose();
+        };
     }
 
     public void Initialize()
@@ -134,7 +146,7 @@ public partial class NotchWindow : Window
     {
         if (state == NotchState.Hidden)
         {
-            _eq.Stop();
+            StopEqualizer();
             StopPower();
             Hide();
             _shown = state;
@@ -171,8 +183,8 @@ public partial class NotchWindow : Window
             });
         else if (state != NotchState.Power) StopPower(); // nothing animates once the card is gone (spec §7)
 
-        if (state == NotchState.Music) { DrawEqualizer(); _eq.Start(); }
-        else _eq.Stop(); // the equalizer only runs while it is visible (spec §7)
+        if (state == NotchState.Music) StartEqualizer();
+        else StopEqualizer(); // the equalizer and its meter only run while it is visible (spec §7)
     }
 
     private void StopPower()
@@ -194,24 +206,41 @@ public partial class NotchWindow : Window
             BeginTime = on ? TimeSpan.FromMilliseconds(100) : TimeSpan.Zero,
         });
 
-    // 10 columns x 4 rows of 3 px dots on a 5 px pitch; lit from the bottom, the top lit dot red (mockup eqSVG).
-    private void DrawEqualizer()
+    /// <summary>The default playback device changed: follow it if the equalizer is running.</summary>
+    public void RebindMeter()
     {
-        const int cols = 10, rows = 4;
-        const double d = 3, pitch = 5;
-        Equalizer.Children.Clear();
-        for (var c = 0; c < cols; c++)
+        if (_eq.IsEnabled) _meter.Bind();
+    }
+
+    private void StartEqualizer()
+    {
+        _meter.Bind();
+        StepEqualizer();
+        _eq.Start();
+    }
+
+    private void StopEqualizer()
+    {
+        _eq.Stop();
+        _meter.Unbind();
+    }
+
+    // Real output level from Core Audio; without a meter, a smoothed random level so it still looks alive.
+    private void StepEqualizer()
+    {
+        var peak = _meter.Peak();
+        if (peak is null && _eq.IsEnabled && Environment.TickCount64 >= _nextBind)
         {
-            var hgt = 1 + _rng.Next(rows);
-            for (var row = 0; row < rows; row++)
-            {
-                var lit = row >= rows - hgt;
-                var dot = new Ellipse { Width = d, Height = d, Fill = lit ? (row == rows - hgt ? Red : Lit) : Off };
-                System.Windows.Controls.Canvas.SetLeft(dot, c * pitch);
-                System.Windows.Controls.Canvas.SetTop(dot, row * pitch);
-                Equalizer.Children.Add(dot);
-            }
+            _nextBind = Environment.TickCount64 + 1000; // no device / device went away: retry at most once a second
+            if (_meter.Bind()) peak = _meter.Peak();
         }
+        if (peak is null)
+        {
+            _fakeLevel += (_rng.NextDouble() - _fakeLevel) * 0.35;
+            peak = (float)Math.Pow(10, (_fakeLevel * 36 - 36) / 20);
+        }
+        _eqModel.Step(peak.Value);
+        Equalizer.Show(_eqModel);
     }
 
     private static SolidColorBrush Frozen(byte r, byte g, byte b)

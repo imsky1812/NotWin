@@ -70,7 +70,7 @@
                             VerticalAlignment="Center" DockPanel.Dock="Left">
                         <Image x:Name="Art" Stretch="UniformToFill" />
                     </Border>
-                    <Canvas x:Name="Equalizer" Width="48" Height="18" HorizontalAlignment="Right" VerticalAlignment="Center" />
+                    <local:DotColumns x:Name="Equalizer" Dot="3" Gap="2" HorizontalAlignment="Right" VerticalAlignment="Center" />
                 </DockPanel>
 
                 <!-- Notification: icon | app + text | now (Task 6) -->
