@@ -23,8 +23,14 @@ public sealed record ShellSettings
     /// <summary>The weather tile's place (spec §6.5: a city the user types in Settings); null until set.</summary>
     public Forecast.WeatherPlace? Weather { get; init; }
 
-    /// <summary>Where the desktop widgets are and their sizes (null = the default layout). Sanitized on use.</summary>
+    /// <summary>
+    /// Plan 5 layout (one widget per kind, no ids). Read once to convert into <see cref="WidgetList"/> and never written
+    /// again, so an older build reading this file still finds its layout.
+    /// </summary>
     public Widgets.DesktopLayout? Widgets { get; init; }
+
+    /// <summary>The desktop widget instances (Plan 5b): null = not converted yet. Sanitized on use.</summary>
+    public Widgets.DesktopLayout? WidgetList { get; init; }
 
     /// <summary>The snake widget's best score.</summary>
     public int SnakeBest { get; init; }

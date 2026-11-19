@@ -105,7 +105,14 @@ public sealed class DesktopWidgets : IDisposable
     private void RebuildCore()
     {
         Measure();
-        _layout = DesktopLayout.Sanitize(_get().Widgets, Area.W, Area.H);
+        var saved = _get();
+        _layout = DesktopLayout.Sanitize(saved.WidgetList ?? saved.Widgets, Area.W, Area.H, () => DesktopLayout.NewId(Random.Shared));
+        // First run of Plan 5b (or entries without ids): save once so the new ids stay the same from now on.
+        if (saved.WidgetList is null || saved.WidgetList.Widgets.Any(p => string.IsNullOrEmpty(p.Id)))
+        {
+            var converted = _layout;
+            _update(s => s with { WidgetList = converted });
+        }
         var host = DesktopAttach.FindHost();
         foreach (var p in _layout.Widgets)
         {
@@ -170,7 +177,7 @@ public sealed class DesktopWidgets : IDisposable
     /// <summary>Applies a layout change (edit mode) and saves it.</summary>
     public void Apply(DesktopLayout layout)
     {
-        _update(s => s with { Widgets = layout });
+        _update(s => s with { WidgetList = layout });
         Rebuild();
     }
 
@@ -290,7 +297,7 @@ public sealed class DesktopWidgets : IDisposable
         {
             _layout = t.Layout;
             var saved = _layout;
-            _update(s => s with { Widgets = saved });
+            _update(s => s with { WidgetList = saved });
             var rect = ScreenRect(_layout.Widgets[i]);
             Animate(h.Host, t.Rect, rect);
             d.Chrome.ShowOverlap(_layout.Overlaps(i));
