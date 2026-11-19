@@ -2,6 +2,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
+using System.Windows.Media.Animation;
 using System.Windows.Shapes;
 using NothingShell.Core.Notch;
 
@@ -11,6 +12,8 @@ namespace NothingShell.Notch.Dashboard;
 /// The open notch's content (mockup <c>.l-open</c>, <c>.ngrid</c>, <c>.nfoot</c>): tiles of 84 DIP cells with 10 DIP
 /// gaps on 8 columns, packed densely; footer with ✎ Edit on the left and page dots on the right. An overlay (clipboard
 /// list, notes editor) can replace the grid. Height = grid + 28 padding + 26 footer (mockup <c>fitN</c>).
+/// Pages slide in from the side they come from (280 ms); in edit mode tiles can be dragged onto another tile (swap),
+/// onto blank space (moves there and takes the size that fits) or onto a page dot (moves to that page).
 /// </summary>
 public sealed class DashboardView : IDisposable
 {
@@ -19,7 +22,18 @@ public sealed class DashboardView : IDisposable
 
     private readonly Func<TileKind, ITileView> _factory;
     private readonly Dictionary<TileKind, ITileView> _views = [];
-    private readonly Canvas _grid = new() { ClipToBounds = false };
+    private static readonly KeySpline Ease = new(0.2, 0.8, 0.2, 1);
+    private static readonly double GridWidth = GridPacker.Columns * Cell + (GridPacker.Columns - 1) * Gap;
+    private Canvas _grid = new();
+    private readonly Grid _viewport = new() { ClipToBounds = true, VerticalAlignment = VerticalAlignment.Top };
+    private readonly Canvas _dragLayer = new() { IsHitTestVisible = false };
+    private readonly List<(Rect Rect, int Index)> _rects = [];
+    private readonly List<(FrameworkElement Hit, int Page)> _dotHits = [];
+    private int _dragIndex = -1;
+    private Point _dragFrom;
+    private FrameworkElement? _dragEl;
+    private Border? _ghost, _hint;
+    private bool _dragging;
     private readonly Border _overlay = new() { Visibility = Visibility.Collapsed };
     private readonly StackPanel _dots = new() { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
     private readonly TextBlock _editLabel;
@@ -51,18 +65,20 @@ public sealed class DashboardView : IDisposable
         footer.Children.Add(_dots);
         footer.Children.Add(_edit);
 
-        var content = new Grid { Children = { _grid, _overlay } };
-        var root = new DockPanel { Margin = new Thickness(Pad, Pad, Pad, 0) };
+        // Pages: a two-finger sideways swipe (Swipe), the dots. The vertical wheel no longer pages (user 2026-11-19).
+        _viewport.Children.Add(_grid);
+        var content = new Grid { Children = { _viewport, _overlay, _dragLayer } };
+        var root = new DockPanel { Margin = new Thickness(Pad, Pad, Pad, 0), Background = Brushes.Transparent };
         DockPanel.SetDock(footer, System.Windows.Controls.Dock.Bottom);
         root.Children.Add(footer);
         root.Children.Add(content);
-        root.PreviewMouseWheel += (_, e) =>
+        root.MouseMove += (_, e) => DragMove(e);
+        root.PreviewMouseLeftButtonUp += (_, e) =>
         {
-            if (_overlay.Visibility == Visibility.Visible || _layout.Pages.Count < 2) return;
-            var next = Math.Clamp(_page + (e.Delta < 0 ? 1 : -1), 0, _layout.Pages.Count - 1);
-            if (next != _page) PageRequested?.Invoke(next);
-            e.Handled = true;
+            if (_dragging) { e.Handled = true; Drop(e.GetPosition(_viewport)); }
+            EndDrag();
         };
+        root.LostMouseCapture += (_, _) => { if (_dragging) EndDrag(); };
         Root = root;
     }
 
@@ -70,6 +86,23 @@ public sealed class DashboardView : IDisposable
 
     public event Action<int>? PageRequested;
     public event Action? EditToggled;
+
+    /// <summary>Edit mode: tile <c>a</c> was dropped on tile <c>b</c>.</summary>
+    public event Action<int, int>? SwapRequested;
+
+    /// <summary>Edit mode: the tile was dropped on blank space.</summary>
+    public event Action<int>? MoveToSpaceRequested;
+
+    /// <summary>Edit mode: the tile was dropped on another page's dot.</summary>
+    public event Action<int, int>? MoveToPageRequested;
+
+    /// <summary>A sideways two-finger swipe (or tilt wheel): +1 next page, -1 previous.</summary>
+    public void Swipe(int direction)
+    {
+        if (OverlayOpen || _dragging || _layout.Pages.Count < 2) return;
+        var next = Math.Clamp(_page + Math.Sign(direction), 0, _layout.Pages.Count - 1);
+        if (next != _page) PageRequested?.Invoke(next);
+    }
 
     public int Page => _page;
     public DashboardLayout Layout => _layout;
@@ -129,10 +162,12 @@ public sealed class DashboardView : IDisposable
     public void Show(DashboardLayout layout, int page, bool editing)
     {
         var before = Visible().ToHashSet();
+        var oldPage = _page;
         _layout = layout;
         _page = Math.Clamp(page, 0, layout.Pages.Count - 1);
         _editing = editing;
-        Render();
+        EndDrag();
+        Render(_open && _page != oldPage ? Math.Sign(_page - oldPage) : 0);
         if (_open) Switch(before, Visible().ToHashSet());
     }
 
@@ -152,7 +187,7 @@ public sealed class DashboardView : IDisposable
         _overlay.Child = content;
         _overlay.Height = rows * Cell + (rows - 1) * Gap;
         _overlay.Visibility = Visibility.Visible;
-        _grid.Visibility = Visibility.Hidden;
+        _viewport.Visibility = Visibility.Hidden;
         OverlayChanged?.Invoke();
     }
 
@@ -161,7 +196,7 @@ public sealed class DashboardView : IDisposable
         if (!OverlayOpen) return;
         _overlay.Child = null;
         _overlay.Visibility = Visibility.Collapsed;
-        _grid.Visibility = Visibility.Visible;
+        _viewport.Visibility = Visibility.Visible;
         OverlayChanged?.Invoke();
     }
 
@@ -180,9 +215,11 @@ public sealed class DashboardView : IDisposable
         foreach (var k in after.Except(before)) Safe(k, v => v.Opened());
     }
 
-    private void Render()
+    private void Render(int direction = 0)
     {
-        _grid.Children.Clear();
+        var old = _grid;
+        _grid = new Canvas();
+        _rects.Clear();
         var tiles = _layout.Pages[_page];
         var sizes = Sizes();
         var placed = GridPacker.Pack(sizes);
@@ -195,6 +232,7 @@ public sealed class DashboardView : IDisposable
             {
                 el = BuildSafe(tiles[i]);
                 if (_editing) el = Decorate(el, i, tiles[i]);
+                _rects.Add((new Rect(placed[i].Col * (Cell + Gap), placed[i].Row * (Cell + Gap), w * Cell + (w - 1) * Gap, h * Cell + (h - 1) * Gap), i));
             }
             else el = AddTile();
             el.Width = w * Cell + (w - 1) * Gap;
@@ -206,9 +244,126 @@ public sealed class DashboardView : IDisposable
             rows = Math.Max(rows, placed[i].Row + h);
         }
         rows = Math.Max(1, rows);
-        _grid.Width = GridPacker.Columns * Cell + (GridPacker.Columns - 1) * Gap;
+        _grid.Width = GridWidth;
         _grid.Height = rows * Cell + (rows - 1) * Gap;
+        _viewport.Children.Add(_grid);
+        if (direction == 0) _viewport.Children.Remove(old);
+        else Slide(old, _grid, direction);
         RenderFooter();
+    }
+
+    // The old page leaves towards one side while the new one arrives from the other (spec §5 motion: 280 ms ease).
+    private void Slide(Canvas old, Canvas fresh, int direction)
+    {
+        var shift = GridWidth + Gap * 2;
+        var outT = new TranslateTransform();
+        var inT = new TranslateTransform(direction * shift, 0);
+        old.RenderTransform = outT;
+        fresh.RenderTransform = inT;
+        old.IsHitTestVisible = false;
+        DoubleAnimationUsingKeyFrames Move(double to) => new()
+        {
+            KeyFrames = { new SplineDoubleKeyFrame(to, KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(280)), Ease) },
+        };
+        var leave = Move(-direction * shift);
+        leave.Completed += (_, _) => _viewport.Children.Remove(old);
+        outT.BeginAnimation(TranslateTransform.XProperty, leave);
+        inT.BeginAnimation(TranslateTransform.XProperty, Move(0));
+        old.BeginAnimation(UIElement.OpacityProperty, new DoubleAnimation(1, 0, TimeSpan.FromMilliseconds(220)));
+        fresh.BeginAnimation(UIElement.OpacityProperty, new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(220)) { BeginTime = TimeSpan.FromMilliseconds(40) });
+    }
+
+    // ---- edit-mode drag ----
+
+    private void BeginPress(FrameworkElement el, int index, MouseButtonEventArgs e)
+    {
+        _dragIndex = index;
+        _dragEl = el;
+        _dragFrom = e.GetPosition(_viewport);
+    }
+
+    private void DragMove(MouseEventArgs e)
+    {
+        if (_dragIndex < 0 || _dragEl is null) return;
+        if (e.LeftButton != MouseButtonState.Pressed) { EndDrag(); return; }
+        var p = e.GetPosition(_viewport);
+        if (!_dragging)
+        {
+            if ((p - _dragFrom).Length < 6) return;
+            _dragging = true;
+            Root.CaptureMouse();
+            _ghost = new Border
+            {
+                Width = _dragEl.ActualWidth, Height = _dragEl.ActualHeight, Opacity = 0.85, CornerRadius = new CornerRadius(22),
+                Background = new VisualBrush(_dragEl) { Stretch = Stretch.None, AlignmentX = AlignmentX.Left, AlignmentY = AlignmentY.Top },
+            };
+            _hint = new Border
+            {
+                BorderBrush = TileChrome.Text, BorderThickness = new Thickness(2), CornerRadius = new CornerRadius(22), Visibility = Visibility.Collapsed,
+            };
+            _dragLayer.Children.Add(_hint);
+            _dragLayer.Children.Add(_ghost);
+            _dragEl.Opacity = 0.25;
+        }
+        var origin = new Point(Canvas.GetLeft(_dragEl), Canvas.GetTop(_dragEl));
+        Canvas.SetLeft(_ghost, origin.X + p.X - _dragFrom.X);
+        Canvas.SetTop(_ghost, origin.Y + p.Y - _dragFrom.Y);
+        ShowHint(TargetAt(p));
+    }
+
+    private enum DropKind { None, Swap, Space, Page }
+
+    // What is under the pointer: another tile (swap), another page's dot (move there), blank grid space (move + fit).
+    private (DropKind Kind, int Value) TargetAt(Point p)
+    {
+        foreach (var (hit, page) in _dotHits)
+        {
+            if (page == _page || !hit.IsVisible) continue;
+            var box = hit.TransformToAncestor(_viewport).TransformBounds(new Rect(hit.RenderSize));
+            box.Inflate(8, 8);
+            if (box.Contains(p)) return (DropKind.Page, page);
+        }
+        foreach (var (rect, index) in _rects)
+            if (index != _dragIndex && rect.Contains(p)) return (DropKind.Swap, index);
+        var area = new Rect(0, 0, GridWidth, DashboardLayout.MaxRows * (Cell + Gap));
+        return area.Contains(p) ? (DropKind.Space, 0) : (DropKind.None, 0);
+    }
+
+    private void ShowHint((DropKind Kind, int Value) target)
+    {
+        if (_hint is null) return;
+        if (target.Kind != DropKind.Swap) { _hint.Visibility = Visibility.Collapsed; return; }
+        var rect = _rects.First(r => r.Index == target.Value).Rect;
+        Canvas.SetLeft(_hint, rect.X);
+        Canvas.SetTop(_hint, rect.Y);
+        _hint.Width = rect.Width;
+        _hint.Height = rect.Height;
+        _hint.Visibility = Visibility.Visible;
+    }
+
+    private void Drop(Point p)
+    {
+        var index = _dragIndex;
+        var target = TargetAt(p);
+        EndDrag();
+        switch (target.Kind)
+        {
+            case DropKind.Swap: SwapRequested?.Invoke(index, target.Value); break;
+            case DropKind.Space: MoveToSpaceRequested?.Invoke(index); break;
+            case DropKind.Page: MoveToPageRequested?.Invoke(index, target.Value); break;
+        }
+    }
+
+    private void EndDrag()
+    {
+        var wasDragging = _dragging;
+        _dragging = false;
+        _dragIndex = -1;
+        if (_dragEl is not null) _dragEl.Opacity = 1;
+        _dragEl = null;
+        _dragLayer.Children.Clear();
+        _ghost = _hint = null;
+        if (wasDragging && Root.IsMouseCaptured) Root.ReleaseMouseCapture();
     }
 
     /// <summary>Edit mode: the size chip on tile <c>index</c> was clicked (cycle its size).</summary>
@@ -225,6 +380,7 @@ public sealed class DashboardView : IDisposable
     private FrameworkElement Decorate(FrameworkElement tile, int index, TileSpec spec)
     {
         tile.IsHitTestVisible = false;
+        // A press on the tile body starts a drag (after 6 DIP of movement); chip and ✕ still take plain clicks.
         var outline = new Rectangle
         {
             Stroke = TileChrome.Dim, StrokeThickness = 1.5, StrokeDashArray = [3, 2], RadiusX = 22, RadiusY = 22,
@@ -251,7 +407,9 @@ public sealed class DashboardView : IDisposable
             },
         };
         x.MouseLeftButtonUp += (_, e) => { e.Handled = true; RemoveClicked?.Invoke(index); };
-        return new Grid { Children = { tile, outline, chip, x } };
+        var root = new Grid { Background = Brushes.Transparent, Cursor = Cursors.SizeAll, Children = { tile, outline, chip, x } };
+        root.PreviewMouseLeftButtonDown += (_, e) => BeginPress(root, index, e);
+        return root;
     }
 
     // "＋ ADD" (mockup .add): a dashed, transparent 1x1 that brings back the first removed tile.
@@ -289,6 +447,7 @@ public sealed class DashboardView : IDisposable
         _editLabel.Text = _editing ? "DONE" : "EDIT";
         _editLabel.Foreground = _editing ? TileChrome.Text : TileChrome.Dim;
         _dots.Children.Clear();
+        _dotHits.Clear();
         for (var p = 0; p < _layout.Pages.Count; p++)
         {
             var page = p;
@@ -301,6 +460,7 @@ public sealed class DashboardView : IDisposable
             var hit = new Border { Background = Brushes.Transparent, Padding = new Thickness(2, 5, 2, 5), Child = dot };
             hit.MouseLeftButtonUp += (_, e) => { e.Handled = true; PageRequested?.Invoke(page); };
             _dots.Children.Add(hit);
+            _dotHits.Add((hit, page));
         }
     }
 

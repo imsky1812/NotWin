@@ -54,6 +54,9 @@ public partial class NotchWindow : Window
     /// <summary>The window lost activation while typing (click elsewhere): the controller releases the "text" hold.</summary>
     public event Action? TypingEnded;
 
+    /// <summary>Sideways scrolling over the open notch (WM_MOUSEHWHEEL: two-finger touchpad swipe, tilt wheel).</summary>
+    public event Action<int>? HorizontalScroll;
+
     /// <summary>Files were dropped on the notch (WM_DROPFILES; works across UIPI from Explorer).</summary>
     public event Action<string[]>? FilesDropped;
 
@@ -306,6 +309,13 @@ public partial class NotchWindow : Window
 
     private nint DropHook(nint hwnd, int msg, nint wParam, nint lParam, ref bool handled)
     {
+        const int WmMouseHWheel = 0x020E;
+        if (msg == WmMouseHWheel)
+        {
+            if (_shown == NotchState.Open) HorizontalScroll?.Invoke((short)((long)wParam >> 16 & 0xFFFF));
+            handled = true;
+            return 0;
+        }
         if (msg != FileDropNative.WmDropFiles) return 0;
         handled = true;
         var paths = FileDropNative.Read(wParam);

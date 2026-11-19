@@ -103,6 +103,55 @@ public sealed record DashboardLayout(IReadOnlyList<IReadOnlyList<TileSpec>> Page
         return this;
     }
 
+    /// <summary>Edit-mode drag onto another tile: the two swap places (unchanged if the result would not fit).</summary>
+    public DashboardLayout Swap(int page, int a, int b)
+    {
+        if (a == b) return this;
+        var tiles = Pages[page].ToList();
+        (tiles[a], tiles[b]) = (tiles[b], tiles[a]);
+        return Fits(tiles) ? WithPage(page, tiles) : this;
+    }
+
+    /// <summary>
+    /// Edit-mode drag onto blank space: the tile moves to the end of the page and takes the largest allowed size that
+    /// still fits, so it grows into a half-empty page and shrinks into a nearly full one (user request 2026-11-19).
+    /// </summary>
+    public DashboardLayout MoveToSpace(int page, int index)
+    {
+        var tiles = Pages[page].ToList();
+        var tile = tiles[index];
+        tiles.RemoveAt(index);
+        return Placed(tiles, tile) is { } placed ? WithPage(page, placed) : this;
+    }
+
+    /// <summary>Edit-mode drag onto another page's dot: appended there at the largest size that fits; unchanged if none.</summary>
+    public DashboardLayout MoveToPage(int from, int index, int to)
+    {
+        if (from == to) return MoveToSpace(from, index);
+        var source = Pages[from].ToList();
+        var tile = source[index];
+        source.RemoveAt(index);
+        if (Placed(Pages[to].ToList(), tile) is not { } target) return this;
+        return WithPage(from, source).WithPage(to, target);
+    }
+
+    // The tile appended at its largest allowed size that fits, or null when none does.
+    private static List<TileSpec>? Placed(List<TileSpec> tiles, TileSpec tile)
+    {
+        foreach (var size in TileRules.Sizes(tile.Kind).OrderByDescending(Area))
+        {
+            var candidate = tiles.Append(tile with { Size = size }).ToList();
+            if (Fits(candidate)) return candidate;
+        }
+        return null;
+    }
+
+    private static int Area(TileSize s)
+    {
+        var (w, h) = TileRules.Cells(s);
+        return w * h;
+    }
+
     /// <summary>True when <see cref="AddBack"/> would bring a tile back (the dashboard shows "＋ Add" only then).</summary>
     public bool CanAddBack(int page) => !ReferenceEquals(AddBack(page), this);
 

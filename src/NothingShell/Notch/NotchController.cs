@@ -61,6 +61,19 @@ public sealed class NotchController : IDisposable, IDashboardHost
         _window.EscPressed += Close;
         _window.TypingEnded += () => Hold("text", false);
         _window.FilesDropped += OnFilesDropped;
+        _window.HorizontalScroll += OnHorizontalScroll;
+        _dash.SwapRequested += (a, b) => UpdateLayout(l => l.Swap(_page, a, b));
+        _dash.MoveToSpaceRequested += i => UpdateLayout(l => l.MoveToSpace(_page, i));
+        _dash.MoveToPageRequested += (i, page) =>
+        {
+            var before = Layout;
+            UpdateLayout(l => l.MoveToPage(_page, i, page));
+            if (!ReferenceEquals(Layout, before) && Layout.Pages[page].Count != before.Pages[page].Count)
+            {
+                _page = page; // follow the tile to its new page (slides there)
+                ShowDashboard();
+            }
+        };
         if (_mouse is not null) _mouse.Moved += OnMoved;
         _tray.PropertyChanged += OnTrayChanged;
         _tray.DefaultDeviceChanged += _window.RebindMeter;
@@ -134,6 +147,23 @@ public sealed class NotchController : IDisposable, IDashboardHost
         _hover.SetCovered(covered);
         if (wasOpen && !_hover.IsOpen) ApplyOpen();
         PumpHover();
+    }
+
+    // Two-finger sideways swipe: one page per gesture. Touchpads send many small deltas plus momentum, so the deltas
+    // add up to a notch (120) and further input is ignored for 450 ms after a page change.
+    private int _swipeSum;
+    private TimeSpan _swipeQuietUntil;
+
+    private void OnHorizontalScroll(int delta)
+    {
+        var now = _clock.Elapsed;
+        if (now < _swipeQuietUntil) { _swipeSum = 0; return; }
+        _swipeSum += delta;
+        if (Math.Abs(_swipeSum) < 120) return;
+        var direction = Math.Sign(_swipeSum); // positive = fingers swipe left / tilt right = next page
+        _swipeSum = 0;
+        _swipeQuietUntil = now + TimeSpan.FromMilliseconds(450);
+        _dash.Swipe(direction);
     }
 
     // Anything dropped on the notch goes to the shelf (spec §6.4 file shelf), whose page is then shown.

@@ -109,6 +109,53 @@ public sealed class DashboardTests
     }
 
     [Fact]
+    public void Swap_ExchangesTwoTilesOnAPage()
+    {
+        var l = Layout([T(TileKind.Timer, Big), T(Media, Big), T(Clipboard, Wide)]);
+        var after = l.Swap(0, 0, 2);
+        Assert.Equal([T(Clipboard, Wide), T(Media, Big), T(TileKind.Timer, Big)], after.Pages[0]);
+        Assert.Same(l, l.Swap(0, 1, 1));
+    }
+
+    [Fact]
+    public void MoveToSpace_GrowsToFillTheFreeSpace()
+    {
+        // Page 1 with two 2x2 tiles leaves half the page free; a 1x1-sized Notes dragged there grows to 2x2.
+        var l = Layout([T(TileKind.Timer, Big), T(Notes, One), T(Media, Big)]);
+        var after = l.MoveToSpace(0, 1);
+        Assert.Equal([T(TileKind.Timer, Big), T(Media, Big), T(Notes, Big)], after.Pages[0]);
+    }
+
+    [Fact]
+    public void MoveToSpace_ShrinksWhenOnlyLittleSpaceIsLeft()
+    {
+        // 3 rows: 4 Big + 3 Wide + the moving tile; only a 1x1 or 2x1 cell is free at the end.
+        var page = new List<TileSpec> { T(Media, Big), T(Clipboard, Big), T(Notes, Big), T(Shelf, Big),
+            T(TileKind.Timer, Big), T(KeepAwake, Wide), T(Weather, Wide), T(GrabText, Wide) };
+        var after = Layout(page).MoveToSpace(0, 4); // Timer: Big no longer fits at the end
+        Assert.Equal(T(TileKind.Timer, Wide), after.Pages[0][^1]);
+        Assert.True(DashboardLayout.Fits(after.Pages[0]));
+    }
+
+    [Fact]
+    public void MoveToPage_FitsTheTileIntoTheOtherPage()
+    {
+        var l = Layout([T(TileKind.Timer, Big), T(Media, Big)], [T(Shelf, Big)]);
+        var after = l.MoveToPage(0, 0, 1);
+        Assert.Equal([T(Media, Big)], after.Pages[0]);
+        Assert.Equal([T(Shelf, Big), T(TileKind.Timer, Big)], after.Pages[1]);
+    }
+
+    [Fact]
+    public void MoveToPage_RefusedWhenNothingFits()
+    {
+        var full = new List<TileSpec> { T(Media, Big), T(Clipboard, Big), T(Notes, Big), T(Shelf, Big),
+            T(KeepAwake, Wide), T(Weather, Wide), T(GrabText, Wide), T(Phone, Wide) };
+        var l = Layout([T(TileKind.Timer, Big)], full);
+        Assert.Same(l, l.MoveToPage(0, 0, 1));
+    }
+
+    [Fact]
     public void Sanitize_RepairsBadLayouts()
     {
         Assert.Equal(DashboardLayout.Default, DashboardLayout.Sanitize(null));
