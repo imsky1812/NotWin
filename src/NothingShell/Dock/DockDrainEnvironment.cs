@@ -17,7 +17,7 @@ public sealed class DockDrainEnvironment(Func<nint, IconLookup> lookup, Func<boo
     public bool Suppressed => suppressed();
     public RectI Monitor => DockWindowNative.GetPrimaryMonitor().Bounds;
     public double Scale => DockWindowNative.GetPrimaryMonitor().Dpi / 96.0;
-    public double Pitch => 14 * Scale;
+    public double Pitch => 10 * Scale; // colour dots read best a little finer (the preview the user picked)
 
     public RectI? IconRect(nint hwnd)
     {

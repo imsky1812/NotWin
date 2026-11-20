@@ -175,4 +175,36 @@ public sealed class DotDrainTests
         Assert.Equal(5, stats.Frames);
         Assert.Equal(37, stats.WorstGapMs, 6);
     }
+
+    // User picked "Colour dots" (2026-11-21): every dot has its spot's colour, muted 25 % toward grey, all the same size.
+    [Fact]
+    public void FromColors_MutedColours_EvenSize()
+    {
+        // two cells, BGR: pure red, then white
+        var dots = DotDrain.FromColors([0, 0, 255, 255, 255, 255], 2, 1, 0, 0, 14, 0, 500);
+        Assert.Equal(2, dots.Count);
+        Assert.All(dots, d => Assert.Equal(14 * DotDrain.ColourRadius, d.R, 6));
+        // red (255,0,0): luma 76 → 255·0.75 + 76·0.25 = 210, 0·0.75 + 19 = 19
+        Assert.Equal(0xFFD21313u, dots.Single(d => d.X == 7).Argb);
+        Assert.Equal(0xFFFFFFFFu, dots.Single(d => d.X == 21).Argb);
+    }
+
+    [Fact]
+    public void IsNearBlackColour_ReadsTheLuma()
+    {
+        Assert.True(DotDrain.IsNearBlackColour(new byte[300]));
+        var lit = new byte[300];
+        for (var i = 0; i < 30; i++) lit[i] = 255; // 10 white cells of 100
+        Assert.False(DotDrain.IsNearBlackColour(lit));
+    }
+
+    // The genie from the preview: soft start (nothing moves in the first instant) and soft landing.
+    [Fact]
+    public void Genie_SoftStart()
+    {
+        var g = DotDrain.Genie(Dot(0.5, 0.0), Win, Ix, Iy, Iw, 0.02);
+        Assert.True(Math.Abs(g.Y - 100) < 0.5);
+        Assert.Equal(620, DotDrain.GenieMs);
+        Assert.Equal(560, DotDrain.GenieRestoreMs);
+    }
 }

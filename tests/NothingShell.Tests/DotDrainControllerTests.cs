@@ -20,7 +20,7 @@ public sealed class DotDrainControllerTests
 
     private sealed class Overlay : IDrainOverlay
     {
-        public byte[]? Picture = Enumerable.Repeat((byte)255, 10 * 5).ToArray();
+        public byte[]? Picture = Enumerable.Repeat((byte)255, 10 * 5 * 3).ToArray(); // BGR per cell
         public readonly List<(IReadOnlyList<DrainDot> Dots, double Tx, double Ty, bool Restore, Action Done)> Plays = [];
         public RectI LastWindow;
         public int Closed;
@@ -48,8 +48,9 @@ public sealed class DotDrainControllerTests
         var play = Assert.Single(o.Plays);
         Assert.Equal((920.0, 1040.0), (play.Tx, play.Ty)); // the icon's centre
         Assert.False(play.Restore);
-        Assert.Equal(50, play.Dots.Count);                 // 10 × 5 bright cells
-        Assert.Equal(14 * DotDrain.RadiusFactor, play.Dots[0].R, 6);
+        Assert.Equal(50, play.Dots.Count);                 // 10 × 5 cells, one colour dot each
+        Assert.Equal(14 * DotDrain.ColourRadius, play.Dots[0].R, 6);
+        Assert.Equal(0xFFFFFFFFu, play.Dots[0].Argb);       // white cells stay white
     }
 
     [Fact]
@@ -65,7 +66,7 @@ public sealed class DotDrainControllerTests
     public void Controller_NearBlack_UsesFallback()
     {
         var (c, _, o) = Make();
-        o.Picture = new byte[50];
+        o.Picture = new byte[150];
         c.OnMinimize(1, true);
         var dots = Assert.Single(o.Plays).Dots;
         Assert.Equal(50, dots.Count);

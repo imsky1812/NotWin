@@ -37,7 +37,15 @@ public static class ScreenCaptureNative
     /// A screen region as grey values, one per <paramref name="stepPx"/> cell (sampled at the cell centre, row-major,
     /// (width / step) × (height / step)) — the dot drain's picture (Plan 7). Never kept; null on failure.
     /// </summary>
-    public static unsafe byte[]? CaptureGray(RectI screen, int stepPx)
+    public static byte[]? CaptureGray(RectI screen, int stepPx) => Capture(screen, stepPx, colour: false);
+
+    /// <summary>
+    /// A screen region as one BGR triple per <paramref name="stepPx"/> cell (cell centre, row-major) — the colour dot
+    /// drain's picture (user's pick, 2026-11-21). Never kept; null on failure.
+    /// </summary>
+    public static byte[]? CaptureColour(RectI screen, int stepPx) => Capture(screen, stepPx, colour: true);
+
+    private static unsafe byte[]? Capture(RectI screen, int stepPx, bool colour)
     {
         var w = screen.Right - screen.Left;
         var h = screen.Bottom - screen.Top;
@@ -57,16 +65,18 @@ public static class ScreenCaptureNative
             SelectObject(mem, old);
             if (!ok) return null;
             var px = (byte*)bits;
-            var gray = new byte[cols * rows];
+            var result = new byte[cols * rows * (colour ? 3 : 1)];
             for (var r = 0; r < rows; r++)
                 for (var c = 0; c < cols; c++)
                 {
                     var x = c * stepPx + stepPx / 2;
                     var y = r * stepPx + stepPx / 2;
                     var p = px + ((long)y * w + x) * 4; // BGRA
-                    gray[r * cols + c] = (byte)((p[2] * 299 + p[1] * 587 + p[0] * 114) / 1000);
+                    var i = r * cols + c;
+                    if (colour) { result[i * 3] = p[0]; result[i * 3 + 1] = p[1]; result[i * 3 + 2] = p[2]; }
+                    else result[i] = (byte)((p[2] * 299 + p[1] * 587 + p[0] * 114) / 1000);
                 }
-            return gray;
+            return result;
         }
         finally
         {

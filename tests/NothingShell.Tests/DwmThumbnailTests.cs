@@ -19,4 +19,13 @@ public sealed class DwmThumbnailTests
 
     [Fact]
     public void NormalRect_NoWindow_IsNull() => Assert.Null(WindowListNative.NormalRect(0));
+
+    // Colour dots: one BGR triple per 14 px cell (read-only grab of a small corner of the screen).
+    [Fact]
+    public void CaptureColour_SizeMatchesGrid()
+    {
+        var bgr = ScreenCaptureNative.CaptureColour(new RectI(0, 0, 140, 70), 14);
+        Assert.NotNull(bgr);
+        Assert.Equal(10 * 5 * 3, bgr.Length);
+    }
 }

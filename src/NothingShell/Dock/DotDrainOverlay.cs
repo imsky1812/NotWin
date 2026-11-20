@@ -21,6 +21,7 @@ public sealed class DotDrainOverlay : IDrainOverlay
     private static readonly Brush White = Freeze(new SolidColorBrush(Color.FromRgb(0xF2, 0xF2, 0xF2)));
     private static readonly Brush Red = Freeze(new SolidColorBrush(Color.FromRgb(0xE8, 0x23, 0x1F)));
     private readonly List<Anim> _finished = [];
+    private readonly Dictionary<uint, Brush> _brushes = []; // one frozen brush per (slightly rounded) colour
     private RectI _area; // what the overlay window covers now (screen px): only where animations move
     private readonly RectI _monitor;
     private readonly double _scale; // physical px per DIP
@@ -80,7 +81,7 @@ public sealed class DotDrainOverlay : IDrainOverlay
             {
                 DwmThumbnail.Flush();
                 DwmThumbnail.Flush();
-                gray = ScreenCaptureNative.CaptureGray(screen, stepPx);
+                gray = ScreenCaptureNative.CaptureColour(screen, stepPx);
             }
             catch (Exception e) { Log.Error("dot drain capture failed", e); }
             try { done(gray); }
@@ -177,7 +178,7 @@ public sealed class DotDrainOverlay : IDrainOverlay
                         var (x, y, s, visible) = DotDrain.Genie(d, a.Window, a.Tx, a.Ty, a.IconW, p);
                         if (!visible) continue;
                         var r = d.R * s / _scale;
-                        dc.DrawEllipse(White, null, Dip(x, y), r, r); // no outline: half the drawing work per dot
+                        dc.DrawEllipse(BrushFor(d.Argb), null, Dip(x, y), r, r); // no outline: half the drawing work per dot
                     }
                 }
                 else
@@ -198,6 +199,16 @@ public sealed class DotDrainOverlay : IDrainOverlay
             try { a.Done(); }
             catch (Exception ex) { Log.Error("dot drain completion failed", ex); }
         }
+    }
+
+    // Colours rounded to 4 bits per channel (≤ 4,096 brushes, made once and reused across frames).
+    private Brush BrushFor(uint argb)
+    {
+        var key = argb & 0xFFF0F0F0u;
+        if (_brushes.TryGetValue(key, out var b)) return b;
+        b = Freeze(new SolidColorBrush(Color.FromRgb((byte)(key >> 16), (byte)(key >> 8), (byte)key)));
+        _brushes[key] = b;
+        return b;
     }
 
     private Point Dip(double screenX, double screenY) => new((screenX - _area.Left) / _scale, (screenY - _area.Top) / _scale);

@@ -1,7 +1,7 @@
 namespace NothingShell.Core.Dock;
 
 /// <summary>One dot of a dot drain: its grid spot and radius (px) and when it starts moving (ms).</summary>
-public readonly record struct DrainDot(double X, double Y, double R, double Delay);
+public readonly record struct DrainDot(double X, double Y, double R, double Delay, uint Argb = 0xFFF2F2F2);
 
 /// <summary>
 /// Dot drain (design 2026-11-20): a minimizing window becomes a halftone dot grid made from its own picture; the dots
@@ -42,10 +42,48 @@ public static class DotDrain
     /// row-major), cells <paramref name="pitch"/> px apart from (<paramref name="originX"/>, <paramref name="originY"/>).
     /// Brighter = bigger; cells too dark for a visible dot are left out.
     /// </summary>
+    /// <summary>Colour dots (user's pick, 2026-11-21): radius as a share of the pitch, the same for every dot.</summary>
+    public const double ColourRadius = 0.42;
+
+    /// <summary>True when at least 97 % of the cells (BGR triples) are near-black: the picture was not captured.</summary>
+    public static bool IsNearBlackColour(byte[] bgr)
+    {
+        var cells = bgr.Length / 3;
+        if (cells == 0) return true;
+        var dark = 0;
+        for (var i = 0; i < cells; i++)
+            if (Luma(bgr[i * 3 + 2], bgr[i * 3 + 1], bgr[i * 3]) < 12) dark++;
+        return dark >= cells * 0.97;
+    }
+
+    /// <summary>
+    /// Colour dots from a picture given as one BGR triple per grid cell: every dot the same size, in its cell's colour
+    /// muted 25 % toward grey (the look the user picked in the preview).
+    /// </summary>
+    public static IReadOnlyList<DrainDot> FromColors(byte[] bgr, int cols, int rows, double originX, double originY, double pitch,
+        double targetX, double targetY)
+    {
+        var raw = new List<(double X, double Y, double R, uint Argb)>();
+        for (var y = 0; y < rows; y++)
+            for (var x = 0; x < cols; x++)
+            {
+                var i = (y * cols + x) * 3;
+                if (i + 2 >= bgr.Length) break;
+                byte b = bgr[i], g = bgr[i + 1], r = bgr[i + 2];
+                var luma = Luma(r, g, b);
+                byte Mute(byte c) => (byte)Math.Clamp(Math.Round(c * 0.75 + luma * 0.25), 0, 255);
+                var argb = 0xFF000000u | ((uint)Mute(r) << 16) | ((uint)Mute(g) << 8) | Mute(b);
+                raw.Add((originX + x * pitch + pitch / 2, originY + y * pitch + pitch / 2, pitch * ColourRadius, argb));
+            }
+        return Staggered(raw, targetX, targetY);
+    }
+
+    private static double Luma(byte r, byte g, byte b) => (r * 299 + g * 587 + b * 114) / 1000.0;
+
     public static IReadOnlyList<DrainDot> FromImage(byte[] gray, int cols, int rows, double originX, double originY, double pitch,
         double targetX, double targetY)
     {
-        var raw = new List<(double X, double Y, double R)>();
+        var raw = new List<(double X, double Y, double R, uint Argb)>();
         for (var y = 0; y < rows; y++)
             for (var x = 0; x < cols; x++)
             {
@@ -53,7 +91,7 @@ public static class DotDrain
                 if (i >= gray.Length) break;
                 var r = pitch * RadiusFactor * gray[i] / 255.0;
                 if (r < MinRadius) continue;
-                raw.Add((originX + x * pitch + pitch / 2, originY + y * pitch + pitch / 2, r));
+                raw.Add((originX + x * pitch + pitch / 2, originY + y * pitch + pitch / 2, r, 0xFFF2F2F2u));
             }
         return Staggered(raw, targetX, targetY);
     }
@@ -61,22 +99,22 @@ public static class DotDrain
     /// <summary>Fallback B: grey dots filling the window's outline, one per cell.</summary>
     public static IReadOnlyList<DrainDot> Outline(double x, double y, double w, double h, double pitch, double targetX, double targetY)
     {
-        var raw = new List<(double X, double Y, double R)>();
+        var raw = new List<(double X, double Y, double R, uint Argb)>();
         for (var cy = y + pitch / 2; cy < y + h; cy += pitch)
             for (var cx = x + pitch / 2; cx < x + w; cx += pitch)
-                raw.Add((cx, cy, pitch * OutlineFactor));
+                raw.Add((cx, cy, pitch * OutlineFactor, 0xFF8A8A8Au)); // grey: no picture
         return Staggered(raw, targetX, targetY);
     }
 
     // Nearest to the icon starts at 0 ms, the farthest at MaxStaggerMs.
-    private static IReadOnlyList<DrainDot> Staggered(List<(double X, double Y, double R)> raw, double tx, double ty)
+    private static IReadOnlyList<DrainDot> Staggered(List<(double X, double Y, double R, uint Argb)> raw, double tx, double ty)
     {
         if (raw.Count == 0) return [];
-        double Dist((double X, double Y, double R) d) => Math.Sqrt(Math.Pow(d.X - tx, 2) + Math.Pow(d.Y - ty, 2));
+        double Dist((double X, double Y, double R, uint Argb) d) => Math.Sqrt(Math.Pow(d.X - tx, 2) + Math.Pow(d.Y - ty, 2));
         var min = raw.Min(Dist);
         var max = raw.Max(Dist);
         var span = Math.Max(1e-9, max - min);
-        return raw.Select(d => new DrainDot(d.X, d.Y, d.R, (Dist(d) - min) / span * MaxStaggerMs)).ToList();
+        return raw.Select(d => new DrainDot(d.X, d.Y, d.R, (Dist(d) - min) / span * MaxStaggerMs, d.Argb)).ToList();
     }
 
     /// <summary>The area an animation moves through: the window and its icon, plus <paramref name="pad"/> px all round.</summary>
@@ -85,7 +123,7 @@ public static class DotDrain
         Math.Max(window.Right, icon.Right) + pad, Math.Max(window.Bottom, icon.Bottom) + pad);
 
     /// <summary>Genie timing (user, 2026-11-21): minimize and restore, and the share of it spent forming the funnel.</summary>
-    public const double GenieMs = 560, GenieRestoreMs = 500, BendShare = 0.35;
+    public const double GenieMs = 620, GenieRestoreMs = 560, BendShare = 0.4;
 
     /// <summary>
     /// The genie (user, 2026-11-21: "real physics of genie"): at progress <paramref name="p"/> (0 = the window, 1 = in the
@@ -98,19 +136,22 @@ public static class DotDrain
         p = Math.Clamp(p, 0, 1);
         double w = window.Right - window.Left, h = window.Bottom - window.Top;
         var u = w > 0 ? (d.X - window.Left) / w : 0.5;
-        var bend = Smooth(Math.Clamp(p / BendShare, 0, 1));               // the funnel forms
-        var fall = Math.Clamp((p - BendShare) / (1 - BendShare), 0, 1);
-        fall *= fall;                                                       // then it accelerates in, like a falling body
+        // The preview the user picked (2026-11-21): soft start and soft landing (smootherstep), the slide overlapping the
+        // end of the bend, and curved funnel sides that narrow quickly near the icon.
+        var bend = Smoother(Math.Clamp(p / BendShare, 0, 1));             // the funnel forms, bottom first
+        var fall = Smoother(Math.Clamp((p - 0.3) / 0.7, 0, 1));            // then the content slides in
         var y = d.Y + fall * (iconY - window.Top);                          // the top row ends exactly at the icon
-        if (y >= iconY) return (iconX, iconY, ArrivalScale, false);
+        if (y >= iconY - 1) return (iconX, iconY, 0.35, false);
         var depth = Math.Clamp((y - window.Top) / Math.Max(1, iconY - window.Top), 0, 1);
-        var pinch = bend * Smooth(depth);                                   // 0 = full width, 1 = the icon's width
+        var pinch = bend * Math.Pow(Smooth(depth), 0.85);                   // 0 = full width, 1 = the icon's width
         var centre = Lerp(window.Left + w / 2, iconX, pinch);
         var half = Lerp(w / 2, iconW / 2, pinch);
-        return (centre + (u - 0.5) * 2 * half, y, Lerp(1, ArrivalScale, pinch), true);
+        return (centre + (u - 0.5) * 2 * half, y, Lerp(1, 0.35, pinch), true);
     }
 
     private static double Smooth(double t) => t * t * (3 - 2 * t);
+
+    private static double Smoother(double t) => t * t * t * (t * (t * 6 - 15) + 10);
 
     private static double Lerp(double a, double b, double t) => a + (b - a) * t;
 
