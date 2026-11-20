@@ -374,7 +374,7 @@ public partial class App : Application
             // Plan 7: dot drain when windows minimize / restore, and dock window previews (both switchable in Settings).
             var dockCtl = _controller;
             dockCtl.PreviewsEnabled = dockCtl.Settings.WindowPreviews;
-            var drainEnv = new Dock.DockDrainEnvironment(_controller, () => dockCtl.Settings.DotDrain,
+            var drainEnv = new Dock.DockDrainEnvironment(dockCtl.IconForWindow, () => dockCtl.Settings.DotDrain,
                 () => _fullscreen?.IsFullscreen == true || _launcher?.IsOpen == true || _panel?.IsOpen == true);
             var drain = new Dock.DotDrainController(drainEnv, () => new Dock.DotDrainOverlay(drainEnv.Monitor, drainEnv.Scale));
             _minimizeHook = new MinimizeHook((hwnd, start) => drain.OnMinimize(hwnd, start));

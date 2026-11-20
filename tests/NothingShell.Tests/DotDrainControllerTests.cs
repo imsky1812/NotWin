@@ -15,7 +15,7 @@ public sealed class DotDrainControllerTests
         public RectI? Icon { get; set; } = new(900, 1020, 940, 1060);
         public RectI? Normal { get; set; } = new(100, 100, 100 + 140, 100 + 70);
         public RectI? IconRect(nint hwnd) => Icon;
-        public RectI? NormalRect(nint hwnd) => Normal;
+        public RectI? DrainRect(nint hwnd, bool restoring) => Normal;
     }
 
     private sealed class Overlay : IDrainOverlay
@@ -131,5 +131,37 @@ public sealed class DotDrainControllerTests
         var (c, _, o) = Make();
         c.OnMinimize(1, start: false);
         Assert.True(Assert.Single(o.Plays).Restore);
+    }
+
+    // Review (critical): with the dock auto-hidden, the window is still in the dock — aim at where it appears.
+    [Fact]
+    public void Environment_HiddenDock_AimsAtTheBottomCentre()
+    {
+        var env = new DockDrainEnvironment(_ => new IconLookup(InDock: true, Rect: null), () => true, () => false);
+        var icon = env.IconRect(1);
+        Assert.NotNull(icon);
+        var mon = env.Monitor;
+        Assert.Equal((mon.Left + mon.Right) / 2, icon.Value.Left);
+        Assert.True(icon.Value.Top < mon.Bottom && icon.Value.Top > mon.Bottom - 200);
+        var notInDock = new DockDrainEnvironment(_ => new IconLookup(false, null), () => true, () => false);
+        Assert.Null(notInDock.IconRect(1));
+    }
+
+    private sealed class ThrowingOverlay : IDrainOverlay
+    {
+        public int Plays;
+        public void Snapshot(nint hwnd, RectI screen, int stepPx, Action<byte[]?> done) => done(null);
+        public void Play(IReadOnlyList<DrainDot> dots, double tx, double ty, bool restore, Action done) { Plays++; throw new InvalidOperationException("boom"); }
+        public void Close() { }
+    }
+
+    // Review (important): a failure after the snapshot (it runs later, from a timer) must not escape and must free the slot.
+    [Fact]
+    public void Controller_PlayThrows_IsContainedAndFreesTheSlot()
+    {
+        var overlay = new ThrowingOverlay();
+        var c = new DotDrainController(new Env(), () => overlay);
+        for (var i = 1; i <= 6; i++) c.OnMinimize(i, true); // would stop at 4 if slots leaked
+        Assert.Equal(6, overlay.Plays);
     }
 }

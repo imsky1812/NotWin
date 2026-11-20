@@ -94,4 +94,18 @@ public sealed class PreviewRulesTests
         h.Pointer(null, false, Ms(600));
         Assert.Equal(Ms(900), h.NextCheckAt);
     }
+
+    // Review: after the card closed because its last window went away, hovering the app again must reopen it.
+    [Fact]
+    public void Reset_ForgetsEverything_HoverReopens()
+    {
+        var h = new PreviewHover();
+        h.Pointer("chrome", false, Ms(0));
+        h.Update(Ms(400));
+        h.Reset();
+        Assert.Null(h.OpenFor);
+        h.Pointer("chrome", false, Ms(1000));
+        h.Update(Ms(1400));
+        Assert.Equal("chrome", h.OpenFor);
+    }
 }

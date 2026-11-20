@@ -8,7 +8,10 @@ namespace NothingShell.Dock;
 /// at the bottom centre where the hidden dock appears), the window's normal rectangle, the switch and what covers the
 /// dock.
 /// </summary>
-public sealed class DockDrainEnvironment(DockController dock, Func<bool> enabled, Func<bool> suppressed) : IDrainEnvironment
+/// <summary>Whether a dock item owns the window, and its icon's rectangle when the dock is showing (null while hidden).</summary>
+public readonly record struct IconLookup(bool InDock, RectI? Rect);
+
+public sealed class DockDrainEnvironment(Func<nint, IconLookup> lookup, Func<bool> enabled, Func<bool> suppressed) : IDrainEnvironment
 {
     public bool Enabled => enabled();
     public bool Suppressed => suppressed();
@@ -18,15 +21,15 @@ public sealed class DockDrainEnvironment(DockController dock, Func<bool> enabled
 
     public RectI? IconRect(nint hwnd)
     {
-        if (dock.IconRectForWindow(hwnd) is not { } icon)
-            return null;
+        var found = lookup(hwnd);
+        if (!found.InDock) return null;
         var mon = Monitor;
-        if (icon.Top < mon.Bottom - 4 && icon.Bottom > mon.Top) return icon;
+        if (found.Rect is { } icon && icon.Top < mon.Bottom - 4 && icon.Bottom > mon.Top) return icon;
         // The dock is hidden below the screen: aim at the bottom centre, where it appears.
         var cx = (mon.Left + mon.Right) / 2;
         var y = mon.Bottom - (int)(30 * Scale);
         return new RectI(cx, y, cx, y);
     }
 
-    public RectI? NormalRect(nint hwnd) => WindowListNative.NormalRect(hwnd);
+    public RectI? DrainRect(nint hwnd, bool restoring) => WindowListNative.DrainRect(hwnd, restoring);
 }

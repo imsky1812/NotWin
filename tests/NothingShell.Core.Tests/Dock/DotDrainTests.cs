@@ -84,4 +84,23 @@ public sealed class DotDrainTests
         Assert.True(gate.TryStart());
         Assert.Equal(4, gate.Running);
     }
+
+    // Review: a bright 1920 × 1080 window at pitch 14 is ~10,000 dots; four at once stutter. Cap cells at ~4,000.
+    [Fact]
+    public void StepFor_CapsCellsAt4000()
+    {
+        var step = DotDrain.StepFor(1920, 1080, 14);
+        Assert.True((1920 / step) * (1080 / step) <= DotDrain.MaxCells);
+        Assert.Equal(14, DotDrain.StepFor(400, 300, 14)); // small windows keep the pitch
+    }
+
+    // Review: a maximized window's normal rectangle is its smaller restored size; it drains from the work area.
+    [Fact]
+    public void StartRect_MaximizedUsesTheWorkArea()
+    {
+        var normal = new NothingShell.Core.RectI(100, 100, 900, 700);
+        var work = new NothingShell.Core.RectI(0, 0, 1920, 1032);
+        Assert.Equal(work, DotDrain.StartRect(normal, maximized: true, work));
+        Assert.Equal(normal, DotDrain.StartRect(normal, maximized: false, work));
+    }
 }

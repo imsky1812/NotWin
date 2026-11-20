@@ -21,8 +21,9 @@ public interface IDrainEnvironment
     /// <summary>The window's app icon in the dock (screen px), null when the window is not in the dock.</summary>
     RectI? IconRect(nint hwnd);
 
-    /// <summary>Where the window sits when not minimized (screen px), null when unknown.</summary>
-    RectI? NormalRect(nint hwnd);
+    /// <summary>The window's rectangle for the animation (screen px): its frame when restoring, where it was (maximized
+    /// or normal) when minimizing; null when unknown.</summary>
+    RectI? DrainRect(nint hwnd, bool restoring);
 }
 
 /// <summary>The shared overlay the dots are drawn on.</summary>
@@ -49,7 +50,7 @@ public sealed class DotDrainController(IDrainEnvironment env, Func<IDrainOverlay
     public void OnMinimize(nint hwnd, bool start)
     {
         if (!env.Enabled || env.Suppressed) return;
-        if (env.IconRect(hwnd) is not { } icon || env.NormalRect(hwnd) is not { } normal) return;
+        if (env.IconRect(hwnd) is not { } icon || env.DrainRect(hwnd, !start) is not { } normal) return;
         var monitor = env.Monitor;
         var cx = (normal.Left + normal.Right) / 2;
         var cy = (normal.Top + normal.Bottom) / 2;
@@ -57,18 +58,26 @@ public sealed class DotDrainController(IDrainEnvironment env, Func<IDrainOverlay
         if (!_gate.TryStart()) return;
 
         var overlay = _overlay ??= makeOverlay();
-        var pitch = env.Pitch;
-        var step = Math.Max(4, (int)Math.Round(pitch));
+        var step = DotDrain.StepFor(normal.Right - normal.Left, normal.Bottom - normal.Top, env.Pitch);
         double tx = (icon.Left + icon.Right) / 2.0, ty = (icon.Top + icon.Bottom) / 2.0;
         try
         {
             overlay.Snapshot(hwnd, normal, step, gray =>
             {
-                int cols = (normal.Right - normal.Left) / step, rows = (normal.Bottom - normal.Top) / step;
-                var dots = gray is null || gray.Length != cols * rows || DotDrain.IsNearBlack(gray)
-                    ? DotDrain.Outline(normal.Left, normal.Top, normal.Right - normal.Left, normal.Bottom - normal.Top, step, tx, ty)
-                    : DotDrain.FromImage(gray, cols, rows, normal.Left, normal.Top, step, tx, ty);
-                overlay.Play(dots, tx, ty, !start, () => Ended(overlay));
+                // This runs later, from a timer: nothing may escape (an unhandled error ends the whole shell).
+                try
+                {
+                    int cols = (normal.Right - normal.Left) / step, rows = (normal.Bottom - normal.Top) / step;
+                    var dots = gray is null || gray.Length != cols * rows || DotDrain.IsNearBlack(gray)
+                        ? DotDrain.Outline(normal.Left, normal.Top, normal.Right - normal.Left, normal.Bottom - normal.Top, step, tx, ty)
+                        : DotDrain.FromImage(gray, cols, rows, normal.Left, normal.Top, step, tx, ty);
+                    overlay.Play(dots, tx, ty, !start, () => Ended(overlay));
+                }
+                catch (Exception e)
+                {
+                    Log.Error("dot drain failed", e);
+                    Ended(overlay);
+                }
             });
         }
         catch (Exception e)

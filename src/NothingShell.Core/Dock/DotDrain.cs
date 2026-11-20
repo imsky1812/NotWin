@@ -11,6 +11,20 @@ public readonly record struct DrainDot(double X, double Y, double R, double Dela
 public static class DotDrain
 {
     public const double TotalMs = 480, RestoreMs = 420, MaxStaggerMs = 180, ArrivalScale = 0.3, BlinkMs = 160;
+
+    /// <summary>At most this many cells per window (four at once stay smooth; review 2026-11-21).</summary>
+    public const int MaxCells = 4000;
+
+    /// <summary>The cell size for a window: the pitch, grown until the window has at most <see cref="MaxCells"/> cells.</summary>
+    public static int StepFor(int width, int height, double pitch)
+    {
+        var step = Math.Max(4, (int)Math.Round(pitch));
+        while ((width / step) * (height / step) > MaxCells) step++;
+        return step;
+    }
+
+    /// <summary>Where a minimizing window drains from: its work area when it was maximized, else its normal rectangle.</summary>
+    public static RectI StartRect(RectI normal, bool maximized, RectI workArea) => maximized ? workArea : normal;
     private const double RadiusFactor = 0.42, OutlineFactor = 0.30, MinRadius = 0.6;
 
     /// <summary>True when at least 97 % of the samples are near-black (luminance under 12): the picture was not captured.</summary>

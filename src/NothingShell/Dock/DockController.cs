@@ -44,7 +44,11 @@ public sealed class DockController : IDisposable
         _preview.Activate += hwnd => { ClosePreview(); _ = WindowListNative.Activate(hwnd); };
         _preview.CloseWindow += WindowListNative.RequestClose;
         _preview.PointerOver += over => { _previewHover.Pointer(_hoverItem, over, _previewClock.Elapsed); PumpPreview(); };
-        _preview.Closed += () => _reveal.SetPanelOpen("preview", false);
+        _preview.Closed += () =>
+        {
+            _reveal.SetPanelOpen("preview", false);
+            _previewHover.Reset(); // closed by itself (last window gone): hovering the app again reopens it
+        };
         _dock.ItemContext += OnItemContext;
         _dock.TrayClicked += OnTrayClicked;
         // A dock popup left open would sit on top of Windows' overflow flyout: close it first.
@@ -199,8 +203,8 @@ public sealed class DockController : IDisposable
 
     private void ClosePreview()
     {
-        _previewHover.Close();
         if (_preview.IsOpen) _preview.Close();
+        _previewHover.Close(); // after Close: a click keeps it shut until the pointer leaves the icon
     }
 
     private void OnItemClicked(DockItemViewModel vm, FrameworkElement el)
@@ -335,12 +339,12 @@ public sealed class DockController : IDisposable
         if (!ShellLinkNative.Open(path)) Log.Info($"launch failed for {item.AppId} ({path}) error={ShellLinkNative.LastError}");
     }
 
-    /// <summary>The dock icon of the app that owns <paramref name="hwnd"/> (screen px), null when not in the dock.</summary>
-    public RectI? IconRectForWindow(nint hwnd)
+    /// <summary>Whether a dock item owns <paramref name="hwnd"/>, and its icon on screen while the dock shows.</summary>
+    public IconLookup IconForWindow(nint hwnd)
     {
         foreach (var vm in _vm.Items)
-            if (vm.Item.Windows.Any(w => w.Handle == hwnd)) return _dock.IconRect(vm.AppId);
-        return null;
+            if (vm.Item.Windows.Any(w => w.Handle == hwnd)) return new IconLookup(true, _dock.IconRect(vm.AppId));
+        return new IconLookup(false, null);
     }
 
     private void Pin(DockItem item)

@@ -181,6 +181,32 @@ public static unsafe class WindowListNative
         return new RectI(r.left + dx, r.top + dy, r.right + dx, r.bottom + dy);
     }
 
+    /// <summary>
+    /// The dot drain's rectangle for a window (screen px): restoring → its real frame now (DWM extended frame bounds);
+    /// minimizing (already iconic) → its work area if it was maximized, else its normal rectangle. Null when unknown.
+    /// </summary>
+    public static RectI? DrainRect(nint hwnd, bool restoring)
+    {
+        if (hwnd == 0) return null;
+        if (restoring)
+        {
+            RECT frame;
+            if (PInvoke.DwmGetWindowAttribute((HWND)hwnd, DWMWINDOWATTRIBUTE.DWMWA_EXTENDED_FRAME_BOUNDS, &frame, (uint)sizeof(RECT)).Succeeded
+                && frame.right > frame.left && frame.bottom > frame.top)
+                return new RectI(frame.left, frame.top, frame.right, frame.bottom);
+            return null;
+        }
+        if (NormalRect(hwnd) is not { } normal) return null;
+        var placement = new WINDOWPLACEMENT { length = (uint)sizeof(WINDOWPLACEMENT) };
+        if (!PInvoke.GetWindowPlacement((HWND)hwnd, ref placement)) return normal;
+        var maximized = ((uint)placement.flags & 0x2 /* WPF_RESTORETOMAXIMIZED */) != 0;
+        var mon = PInvoke.MonitorFromWindow((HWND)hwnd, MONITOR_FROM_FLAGS.MONITOR_DEFAULTTONEAREST);
+        var info = new MONITORINFO { cbSize = (uint)sizeof(MONITORINFO) };
+        var work = PInvoke.GetMonitorInfo(mon, ref info)
+            ? new RectI(info.rcWork.left, info.rcWork.top, info.rcWork.right, info.rcWork.bottom) : normal;
+        return Core.Dock.DotDrain.StartRect(normal, maximized, work);
+    }
+
     public static void Minimize(nint hwnd) => PInvoke.ShowWindow((HWND)hwnd, SHOW_WINDOW_CMD.SW_MINIMIZE);
 
     public static void RequestClose(nint hwnd) => PInvoke.PostMessage((HWND)hwnd, 0x0010 /* WM_CLOSE */, 0, 0);

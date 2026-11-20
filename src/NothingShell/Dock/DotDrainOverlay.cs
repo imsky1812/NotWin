@@ -19,6 +19,9 @@ public sealed class DotDrainOverlay : IDrainOverlay
     private const int ExTransparent = 0x20, ExToolWindow = 0x80, ExNoActivate = 0x08000000;
     private static readonly Brush White = Freeze(new SolidColorBrush(Color.FromRgb(0xF2, 0xF2, 0xF2)));
     private static readonly Brush Red = Freeze(new SolidColorBrush(Color.FromRgb(0xE8, 0x23, 0x1F)));
+    private static readonly Brush RimBrush = Freeze(new SolidColorBrush(Color.FromArgb(0x59, 0, 0, 0)));
+    private readonly List<Anim> _finished = [];
+    private Pen? _rim;
     private readonly RectI _monitor;
     private readonly double _scale; // physical px per DIP
     private readonly List<Anim> _anims = [];
@@ -119,7 +122,26 @@ public sealed class DotDrainOverlay : IDrainOverlay
 
     private void OnRendering(object? sender, EventArgs e)
     {
-        var finished = new List<Anim>();
+        try { Frame(); }
+        catch (Exception ex)
+        {
+            // An error while drawing must never end the shell: finish every animation now.
+            Log.Error("dot drain frame failed", ex);
+            var all = _anims.ToList();
+            _anims.Clear();
+            foreach (var a in all)
+            {
+                try { a.Done(); } catch (Exception doneError) { Log.Error("dot drain completion failed", doneError); }
+            }
+        }
+    }
+
+    private void Frame()
+    {
+        var finished = _finished;
+        finished.Clear();
+        _rim ??= Freeze(new Pen(RimBrush, 0.8 / _scale));
+        var rim = _rim;
         using (var dc = _visual.RenderOpen())
         {
             foreach (var a in _anims)
@@ -129,7 +151,6 @@ public sealed class DotDrainOverlay : IDrainOverlay
                 if (t >= end) { finished.Add(a); continue; }
                 if (a.Restore || t < DotDrain.TotalMs)
                 {
-                    var rim = new Pen(new SolidColorBrush(Color.FromArgb(0x59, 0, 0, 0)), 0.8 / _scale);
                     foreach (var d in a.Dots)
                     {
                         var (x, y, s, _) = DotDrain.At(d, a.Tx, a.Ty, t, a.Restore);
@@ -148,7 +169,7 @@ public sealed class DotDrainOverlay : IDrainOverlay
                 }
             }
         }
-        foreach (var a in finished)
+        foreach (var a in finished.ToList())
         {
             _anims.Remove(a);
             try { a.Done(); }
@@ -158,10 +179,10 @@ public sealed class DotDrainOverlay : IDrainOverlay
 
     private Point Dip(double screenX, double screenY) => new((screenX - _monitor.Left) / _scale, (screenY - _monitor.Top) / _scale);
 
-    private static Brush Freeze(Brush b)
+    private static T Freeze<T>(T f) where T : Freezable
     {
-        b.Freeze();
-        return b;
+        f.Freeze();
+        return f;
     }
 
     private sealed class VisualHost : FrameworkElement

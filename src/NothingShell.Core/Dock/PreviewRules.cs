@@ -67,6 +67,15 @@ public sealed class PreviewHover
             ? _item is not null && _item != _suppressed ? _itemSince + OpenDelay : null
             : _leftAt is { } left ? left + CloseDelay : null;
 
+    /// <summary>The card went away by itself (its last window closed, the app's icon is gone): forget everything.</summary>
+    public void Reset()
+    {
+        OpenFor = null;
+        _item = null;
+        _suppressed = null;
+        _leftAt = null;
+    }
+
     /// <summary>A click on the dock: close now; the item under the pointer does not reopen it until left.</summary>
     public void Close()
     {
