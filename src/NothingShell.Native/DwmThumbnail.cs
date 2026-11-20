@@ -37,6 +37,13 @@ public sealed class DwmThumbnail : IDisposable
         return DwmUpdateThumbnailProperties(_id, ref props) == 0;
     }
 
+    /// <summary>Asks Windows 11 to round a window's corners (no effect on older Windows).</summary>
+    public static void RoundCorners(nint hwnd)
+    {
+        var round = 2; // DWMWCP_ROUND
+        DwmSetWindowAttribute(hwnd, 33 /* DWMWA_WINDOW_CORNER_PREFERENCE */, ref round, sizeof(int));
+    }
+
     public void Dispose()
     {
         if (_id == 0) return;
@@ -61,5 +68,6 @@ public sealed class DwmThumbnail : IDisposable
     [DllImport("dwmapi.dll")] private static extern int DwmRegisterThumbnail(nint destination, nint source, out nint thumbnail);
     [DllImport("dwmapi.dll")] private static extern int DwmUnregisterThumbnail(nint thumbnail);
     [DllImport("dwmapi.dll")] private static extern int DwmUpdateThumbnailProperties(nint thumbnail, ref Properties props);
+    [DllImport("dwmapi.dll")] private static extern int DwmSetWindowAttribute(nint hwnd, int attribute, ref int value, int size);
     [DllImport("dwmapi.dll")] private static extern int DwmQueryThumbnailSourceSize(nint thumbnail, out Size size);
 }
