@@ -1686,6 +1686,12 @@ try {
         [void](Ask-Check 'DW.10' 'Edit mode' 'Right-click a widget > Edit widgets. Drag one onto another (it should turn red and slide back), drag one to a free spot, click a size chip, then click Done.' `
             'Did the dot grid show, did dragging snap, did the overlap show red and refuse, did the chip resize, and did Done end it?' `
             -Measured @{ editOn = ((Get-LogSince $AppLog $o) -match 'widget edit mode on'); editOff = ((Get-LogSince $AppLog $o) -match 'widget edit mode off') })
+        [void](Ask-Check 'DW.13' 'Add and remove widgets' 'In edit mode click + Add: add a Photo frame and an App folder. Click the x on one widget to remove it, then open + Add again.' `
+            'Were the frame and folder placed on free spots, did x remove the widget, and does + Add now list the removed one again (and never a one-off widget that is still on the desktop)?')
+        [void](Ask-Check 'DW.14' 'Photo frame' 'Click Done. Click the empty frame and pick a few photos. In edit mode click its shape chip (square / circle). Wait a minute. Click the frame: remove one photo with x, add one with +.' `
+            'Did the photos appear inside the card, did the shape switch, did the slideshow change after a minute, and did removing / adding work?')
+        [void](Ask-Check 'DW.15' 'App folder' 'In edit mode click the folder once (its picture changes). Click Done. Click the folder: + adds apps (search one), click an icon to open it, right-click an icon > Remove from folder.' `
+            'Did the picture change, did the popup show the apps with +, did an icon open its app, and did Remove from folder work?')
         [void](Ask-Check 'DW.11' 'Settings: widget size S / M / L' 'Settings > Widgets: click S, then L, then M.' 'Did the widgets resize live each time?')
 
         Write-Do 'FULL SCREEN: open a YouTube video full screen (f) for a few seconds, then leave full screen.'
@@ -1698,6 +1704,8 @@ try {
         [void](Wait-Until { (Get-LogSince $AppLog $logOff) -match 'dock ready' } 15000 250)
         [void](Ask-Check 'DW.R' 'Saved across a restart' 'Nothing Shell was just restarted. Look at the desktop.' `
             'Are the widget positions and sizes, the widget scale, the wallpaper and the snake best score all still there?')
+        [void](Ask-Check 'DW.16' 'Frames, folders and removals survive a restart' 'Look at the photo frames, app folders and the widget you removed.' `
+            'Do frames keep their photos and shape, folders their picture and apps, and does the removed widget stay removed?')
         Complete-Quit 'DW.quit' $app 'widgets section (--quit)'
     }
 

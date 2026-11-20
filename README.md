@@ -90,6 +90,13 @@ notifications. `uninstall.ps1` removes it. Use `-NoTimestamp` to skip the signin
   - **Edit mode:** right-click any widget > **Edit widgets** (or Settings > Widgets > Edit widgets). Drag widgets
     (they snap to the dot grid; a spot that overlaps shows red and is refused), click a size chip to change size,
     then **Done** or Esc. Full screen also ends it. The layout is saved.
+  - **Add and remove:** in edit mode every widget has a **✕** (remove) and the top pill has **＋ Add**, which lists
+    the widgets you can add. Photo frames and app folders can be added as many times as you like; the others once.
+  - **Photo frame:** click an empty frame to pick photos (copies are kept in `%AppData%\NothingShell\frames`, up to
+    24 per frame); they change every minute. Click a frame with photos to remove or add some. In edit mode the
+    ■ / ● chip switches square and circle.
+  - **App folder:** shows a dot picture (click it in edit mode to change it). Click the folder to open its apps;
+    **＋** adds apps from a searchable list, right-click an icon > *Remove from folder*.
 - **Settings:** right-click the open notch, the Settings tile, or "Settings…" in the start button's right-click
   menu: weather city, widget size (**S / M / L**, applied live), **Edit widgets**, a **wallpaper** picker (four
   Nothing-style wallpapers; one is only applied when you click it), start with Windows, keep the dock visible, and
