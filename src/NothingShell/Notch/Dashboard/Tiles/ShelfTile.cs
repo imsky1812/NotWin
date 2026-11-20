@@ -12,8 +12,8 @@ using NothingShell.Dock;
 namespace NothingShell.Notch.Dashboard.Tiles;
 
 /// <summary>
-/// File shelf tile (mockup <c>NR.shelf</c>, spec §6.4): drop files to hold them (references, not copies), drag them
-/// out to use. 1×1 icon + "SHELF · N"; 2×1 / 2×2 header with the count, then a dashed drop area when empty or the
+/// File shelf tile (mockup <c>NR.shelf</c>, spec §6.4): drop files to hold them (references, not copies); click a
+/// file to copy it (then Ctrl+V in WhatsApp, a chat or a folder), or drag it out. 1×1 icon + "SHELF · N"; 2×1 / 2×2 header with the count, then a dashed drop area when empty or the
 /// file chips (icon + name, ✕ on hover). Saved to shelf.json; missing files are dropped on load. Names never logged.
 /// </summary>
 public sealed class ShelfTile : ITileView, IFileDropTarget
@@ -25,6 +25,7 @@ public sealed class ShelfTile : ITileView, IFileDropTarget
     private TileSize _size;
     private Border? _tile;
     private Point _down;
+    private bool _dragged;
 
     public ShelfTile(ShelfStore store, AppIconCache icons)
     {
@@ -82,7 +83,7 @@ public sealed class ShelfTile : ITileView, IFileDropTarget
         var line = TileChrome.Body("Drop files here", 12, FontWeights.Normal, TileChrome.Frozen(0xAA, 0xAA, 0xAA));
         line.HorizontalAlignment = HorizontalAlignment.Center;
         text.Children.Add(line);
-        var hint = TileChrome.Label("Drag out to use");
+        var hint = TileChrome.Label("Click to copy · drag out");
         hint.Margin = new Thickness(0, 4, 0, 0);
         hint.HorizontalAlignment = HorizontalAlignment.Center;
         text.Children.Add(hint);
@@ -118,12 +119,24 @@ public sealed class ShelfTile : ITileView, IFileDropTarget
         };
         chip.MouseEnter += (_, _) => x.Visibility = Visibility.Visible;
         chip.MouseLeave += (_, _) => x.Visibility = Visibility.Hidden;
-        chip.PreviewMouseLeftButtonDown += (_, e) => _down = e.GetPosition(chip);
+        chip.PreviewMouseLeftButtonDown += (_, e) => { _down = e.GetPosition(chip); _dragged = false; };
+        // A click (no drag) copies the file itself: Ctrl+V then pastes it into WhatsApp, a chat, a mail or a folder.
+        chip.MouseLeftButtonUp += (_, e) =>
+        {
+            if (_dragged) return;
+            e.Handled = true;
+            if (!ShelfClipboard.Copy([path])) return;
+            name.Text = "Copied ✓";
+            var back = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromSeconds(1.4) };
+            back.Tick += (_, _) => { back.Stop(); name.Text = Path.GetFileName(path.TrimEnd('\\')); };
+            back.Start();
+        };
         chip.MouseMove += (_, e) =>
         {
             if (e.LeftButton != MouseButtonState.Pressed) return;
             var d = e.GetPosition(chip) - _down;
             if (Math.Abs(d.X) < SystemParameters.MinimumHorizontalDragDistance && Math.Abs(d.Y) < SystemParameters.MinimumVerticalDragDistance) return;
+            _dragged = true;
             // Drag the reference out (Explorer copies on drop); the shelf keeps holding it.
             var data = new DataObject(DataFormats.FileDrop, new[] { path });
             DragDrop.DoDragDrop(chip, data, DragDropEffects.Copy | DragDropEffects.Link);
@@ -148,4 +161,35 @@ public sealed class ShelfTile : ITileView, IFileDropTarget
     public void Opened() => Fill();
     public void Closed() { }
     public void Dispose() { }
+}
+
+/// <summary>
+/// Puts shelf files on the clipboard as files (user, 2026-11-20: paste into WhatsApp and the like), marked as a copy
+/// so a paste in a folder never moves the original. Names are never logged.
+/// </summary>
+public static class ShelfClipboard
+{
+    public static DataObject Data(IReadOnlyList<string> paths)
+    {
+        var data = new DataObject();
+        data.SetData(DataFormats.FileDrop, paths.ToArray());
+        data.SetData("Preferred DropEffect", new MemoryStream(BitConverter.GetBytes(1))); // DROPEFFECT_COPY
+        return data;
+    }
+
+    /// <summary>Copies; false (logged without names) when the clipboard is busy.</summary>
+    public static bool Copy(IReadOnlyList<string> paths)
+    {
+        try
+        {
+            Clipboard.SetDataObject(Data(paths), copy: true);
+            Log.Info($"shelf: {paths.Count} copied to the clipboard");
+            return true;
+        }
+        catch (Exception e) when (e is System.Runtime.InteropServices.COMException or System.Runtime.InteropServices.ExternalException)
+        {
+            Log.Error("shelf: copying to the clipboard failed", e);
+            return false;
+        }
+    }
 }
