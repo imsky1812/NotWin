@@ -282,6 +282,8 @@ public partial class App : Application
             case Core.Widgets.WidgetKind.Battery:
                 // The Bluetooth watcher runs only while a battery widget is on the desktop (the widget owns it).
                 return _tray is null ? null : new Widgets.BatteryWidget(new Widgets.DeviceBatteryService(_tray), ownsSource: true);
+            case Core.Widgets.WidgetKind.Photo:
+                return new Widgets.PhotoFrameWidget(p.Id, p.Config, new Widgets.PhotoStore(Path.Combine(DataDir, "frames")), save);
             default: return null;
         }
     }
