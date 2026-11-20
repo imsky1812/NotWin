@@ -203,6 +203,9 @@ public static class ShelfClipboard
 /// </summary>
 public static class ShelfDragHandoff
 {
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern bool AllowSetForegroundWindow(int processId);
+
     public static string DefaultHelper => Path.Combine(AppContext.BaseDirectory, "NothingShell.DragHelper.exe");
 
     /// <summary>True when the helper was started (the shell must not drag itself); false = do the old in-process drag.</summary>
@@ -212,6 +215,8 @@ public static class ShelfDragHandoff
         if (!File.Exists(helper)) return false;
         from.ReleaseMouseCapture();
         Mouse.Capture(null); // the pointer is the helper's now
+        // The helper must become the foreground window to take the mouse; let the next process do so.
+        AllowSetForegroundWindow(-1 /* ASFW_ANY */);
         var ok = NothingShell.Native.UnelevatedShell.Open(helper, NothingShell.Core.DragArgs.CommandLine(paths), Path.GetDirectoryName(helper),
             (what, e) => Log.Error(what, e));
         Log.Info($"shelf: drag of {paths.Count} handed to the helper ok={ok}");
