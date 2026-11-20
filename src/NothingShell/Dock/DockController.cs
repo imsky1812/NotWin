@@ -250,6 +250,14 @@ public sealed class DockController : IDisposable
         if (!ShellLinkNative.Open(path)) Log.Info($"launch failed for {item.AppId} ({path}) error={ShellLinkNative.LastError}");
     }
 
+    /// <summary>The dock icon of the app that owns <paramref name="hwnd"/> (screen px), null when not in the dock.</summary>
+    public RectI? IconRectForWindow(nint hwnd)
+    {
+        foreach (var vm in _vm.Items)
+            if (vm.Item.Windows.Any(w => w.Handle == hwnd)) return _dock.IconRect(vm.AppId);
+        return null;
+    }
+
     private void Pin(DockItem item)
     {
         if (_settings.PinnedApps.Any(p => string.Equals(p.AppId, item.AppId, StringComparison.OrdinalIgnoreCase))) return;

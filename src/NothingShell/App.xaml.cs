@@ -21,6 +21,7 @@ public partial class App : Application
     private DockAppBar? _appBar;
     private HookThread? _hooks;
     private Launcher.WinKeyListener? _winKeys;
+    private MinimizeHook? _minimizeHook;
     private Widgets.SnakeWidget? _snake;
     private Launcher.LauncherController? _launcher;
     private Launcher.AppIndex? _index;
@@ -365,6 +366,16 @@ public partial class App : Application
         _dock.PlacementChanged += _reveal.Refresh;
 
         _controller = new DockController(_dock, vm, _reveal, store, settings, _appBar!, Shutdown, id => _index?.FindApp(id)?.Name);
+        try
+        {
+            // Plan 7: dot drain when windows minimize / restore (the switch arrives in Task 6).
+            var drainEnv = new Dock.DockDrainEnvironment(_controller, () => true,
+                () => _fullscreen?.IsFullscreen == true || _launcher?.IsOpen == true || _panel?.IsOpen == true);
+            var drain = new Dock.DotDrainController(drainEnv, () => new Dock.DotDrainOverlay(drainEnv.Monitor, drainEnv.Scale));
+            _minimizeHook = new MinimizeHook((hwnd, start) => drain.OnMinimize(hwnd, start));
+            if (!_minimizeHook.Installed) Log.Info("minimize hook not installed (no dot drain)");
+        }
+        catch (Exception e) { Log.Error("dot drain failed to start", e); }
         _controller.Start();
 
         _fullscreen = new FullscreenMonitor();
@@ -401,6 +412,7 @@ public partial class App : Application
         {
             _appBar?.Dispose();
             _winKeys?.Dispose();
+            _minimizeHook?.Dispose();
             _launcher?.Dispose();
             _media?.Dispose();
             _notifications?.Dispose();

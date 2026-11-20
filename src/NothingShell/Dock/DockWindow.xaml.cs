@@ -132,6 +132,20 @@ public partial class DockWindow : Window
 
     public DockPlacement Placement => _placement;
 
+    /// <summary>The app's icon slot on screen (physical px), or null when it is not shown (Plan 7 dot drain).</summary>
+    public RectI? IconRect(string appId)
+    {
+        foreach (var item in ItemsHost.Items)
+        {
+            if (item is not DockItemViewModel vm || vm.AppId != appId) continue;
+            if (ItemsHost.ItemContainerGenerator.ContainerFromItem(vm) is not FrameworkElement c || !c.IsVisible || c.ActualWidth <= 0) return null;
+            var a = c.PointToScreen(new Point(0, 0));
+            var b = c.PointToScreen(new Point(c.ActualWidth, c.ActualHeight));
+            return new RectI((int)Math.Round(a.X), (int)Math.Round(a.Y), (int)Math.Round(b.X), (int)Math.Round(b.Y));
+        }
+        return null;
+    }
+
     public nint Handle => _hwnd;
 
     /// <summary>Mouse entered (true) or left (false) the pill.</summary>
