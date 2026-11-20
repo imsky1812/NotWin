@@ -80,7 +80,17 @@ if (Test-Path $outApp) { Remove-Item $outApp -Recurse -Force }
 # The shelf's drag helper runs at normal level (no uiAccess), so drags reach normal apps. Published first: if the two
 # share a file (NothingShell.Core.dll, same source), the shell's own publish below is the copy that stays.
 Invoke-Native $dotnet @('publish', (Join-Path $repo 'src/NothingShell.DragHelper'), '-c', 'Release', '-o', $outApp)
+# A plain Release build (no UiAccess) leaves obj/bin output with the normal manifest that publish would reuse, and the
+# shell then starts without uiAccess (2026-11-20). Always publish from clean Release output, then check the manifest.
+foreach ($stale in 'src/NothingShell/obj/Release', 'src/NothingShell/bin/Release') {
+    $path = Join-Path $repo $stale
+    if (Test-Path $path) { Remove-Item $path -Recurse -Force }
+}
 Invoke-Native $dotnet @('publish', (Join-Path $repo 'src/NothingShell'), '-c', 'Release', '-p:UiAccess=true', '-o', $outApp)
+$builtExe = Join-Path $outApp 'NothingShell.exe'
+if (-not ([IO.File]::ReadAllText($builtExe, [Text.Encoding]::UTF8) -match 'uiAccess="true"')) {
+    throw "NothingShell.exe was built without uiAccess=""true"" in its manifest; not installing it."
+}
 try {
     Invoke-Native $dotnet @('publish', (Join-Path $repo 'src/NothingShell.Watchdog'), '-c', 'Release', '-o', $outApp)
 } catch {
