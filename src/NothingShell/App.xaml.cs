@@ -31,6 +31,7 @@ public partial class App : Application
     private Forecast.WeatherService? _weather;
     private Widgets.DesktopWidgets? _widgets;
     private readonly Core.Widgets.SnakeKeyGate _snakeGate = new(); // one gate for whichever snake is on the desktop
+    private Dock.AppIconCache? _folderIcons; // shared by every app folder
 
     private static string DataDir => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "NothingShell");
     private Media.MediaSessionService? _media;
@@ -284,6 +285,10 @@ public partial class App : Application
                 return _tray is null ? null : new Widgets.BatteryWidget(new Widgets.DeviceBatteryService(_tray), ownsSource: true);
             case Core.Widgets.WidgetKind.Photo:
                 return new Widgets.PhotoFrameWidget(p.Id, p.Config, new Widgets.PhotoStore(Path.Combine(DataDir, "frames")), save);
+            case Core.Widgets.WidgetKind.Folder:
+                if (_index is not { } index) return null;
+                _folderIcons ??= new Dock.AppIconCache();
+                return new Widgets.FolderWidget(p.Id, p.Config, () => index.Apps, index.FindApp, _folderIcons, save);
             default: return null;
         }
     }
