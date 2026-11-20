@@ -310,7 +310,10 @@ public partial class App : Application
                 scale => { if (_widgets is null) dock.UpdateSettings(s => s with { WidgetScale = scale }); else _widgets.SetScale(scale); },
                 Path.Combine(AppContext.BaseDirectory, "Wallpapers"),
                 () => _widgets?.BeginEdit(),
-                Path.Combine(DataDir, "wallpapers")));
+                Path.Combine(DataDir, "wallpapers")),
+            new Settings.SettingsWindow.DockEffects(
+                on => dock.UpdateSettings(s => s with { DotDrain = on }),
+                on => { dock.UpdateSettings(s => s with { WindowPreviews = on }); dock.PreviewsEnabled = on; }));
     }
 
     // Source app of a media session (AUMID or exe) as a short name for the media tile: the launcher index, else the
@@ -368,8 +371,10 @@ public partial class App : Application
         _controller = new DockController(_dock, vm, _reveal, store, settings, _appBar!, Shutdown, id => _index?.FindApp(id)?.Name);
         try
         {
-            // Plan 7: dot drain when windows minimize / restore (the switch arrives in Task 6).
-            var drainEnv = new Dock.DockDrainEnvironment(_controller, () => true,
+            // Plan 7: dot drain when windows minimize / restore, and dock window previews (both switchable in Settings).
+            var dockCtl = _controller;
+            dockCtl.PreviewsEnabled = dockCtl.Settings.WindowPreviews;
+            var drainEnv = new Dock.DockDrainEnvironment(_controller, () => dockCtl.Settings.DotDrain,
                 () => _fullscreen?.IsFullscreen == true || _launcher?.IsOpen == true || _panel?.IsOpen == true);
             var drain = new Dock.DotDrainController(drainEnv, () => new Dock.DotDrainOverlay(drainEnv.Monitor, drainEnv.Scale));
             _minimizeHook = new MinimizeHook((hwnd, start) => drain.OnMinimize(hwnd, start));

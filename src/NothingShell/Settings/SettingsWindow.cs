@@ -27,15 +27,20 @@ public sealed class SettingsWindow : Window
     private readonly WeatherService? _weather;
     private readonly TextBox _city;
     private readonly TextBlock _cityStatus;
-    private readonly Border _startToggle = new(), _keepToggle = new();
+    private readonly Border _startToggle = new(), _keepToggle = new(), _drainToggle = new(), _previewToggle = new();
+    private DockEffects? _effects;
 
     /// <summary>Plan 5 widget settings: widget size (S/M/L), the wallpapers folder, and entering widget edit mode.</summary>
     /// <param name="GeneratedDir">Where "✦ New" wallpapers are saved (the user's data folder).</param>
+    /// <summary>Plan 7 switches: dot drain when minimizing, window previews in the dock.</summary>
+    public sealed record DockEffects(Action<bool> SetDotDrain, Action<bool> SetPreviews);
+
     public sealed record WidgetOptions(Action<string> SetScale, string? WallpaperDir, Action EditWidgets, string? GeneratedDir = null);
 
     private SettingsWindow(Func<ShellSettings> settings, Action<bool> setStart, Action<bool> setKeep, WeatherService? weather,
-        Action<WeatherPlace> saveWeather, Action quit, WidgetOptions? widgets)
+        Action<WeatherPlace> saveWeather, Action quit, WidgetOptions? widgets, DockEffects? effects = null)
     {
+        _effects = effects;
         _settings = settings;
         _setStart = setStart;
         _setKeep = setKeep;
@@ -89,6 +94,15 @@ public sealed class SettingsWindow : Window
         stack.Children.Add(Section("Shell"));
         stack.Children.Add(ToggleRow("Start with Windows", _startToggle, () => _settings().StartWithWindows, _setStart));
         stack.Children.Add(ToggleRow("Keep dock visible", _keepToggle, () => _settings().KeepDockVisible, _setKeep));
+        if (_effects is { } fx)
+        {
+            stack.Children.Add(ToggleRow("Dot drain when minimizing", _drainToggle, () => _settings().DotDrain, fx.SetDotDrain));
+            var hint = TileChrome.Label("Turn off Windows' own minimize animation for the best look");
+            hint.Margin = new Thickness(0, -4, 0, 10);
+            hint.TextWrapping = TextWrapping.Wrap;
+            stack.Children.Add(hint);
+            stack.Children.Add(ToggleRow("Window previews in the dock", _previewToggle, () => _settings().WindowPreviews, fx.SetPreviews));
+        }
 
         var quitText = TileChrome.Body("Quit Nothing Shell", 13, FontWeights.SemiBold, TileChrome.Red);
         var quitRow = new Border { Background = Brushes.Transparent, Cursor = Cursors.Hand, Padding = new Thickness(0, 14, 0, 0), Child = quitText };
@@ -137,7 +151,7 @@ public sealed class SettingsWindow : Window
 
     /// <summary>Shows the settings window, or brings the open one to the front.</summary>
     public static void ShowOrActivate(Func<ShellSettings> settings, Action<bool> setStart, Action<bool> setKeep,
-        WeatherService? weather, Action<WeatherPlace> saveWeather, Action quit, WidgetOptions? widgets = null)
+        WeatherService? weather, Action<WeatherPlace> saveWeather, Action quit, WidgetOptions? widgets = null, DockEffects? effects = null)
     {
         if (s_open is not null)
         {
@@ -145,7 +159,7 @@ public sealed class SettingsWindow : Window
             ForegroundNative.Activate(new WindowInteropHelper(s_open).Handle);
             return;
         }
-        s_open = new SettingsWindow(settings, setStart, setKeep, weather, saveWeather, quit, widgets);
+        s_open = new SettingsWindow(settings, setStart, setKeep, weather, saveWeather, quit, widgets, effects);
         s_open.Show();
     }
 

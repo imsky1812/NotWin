@@ -188,4 +188,24 @@ public sealed class SettingsStoreTests : IDisposable
         store.Load();
         Assert.True(store.LastLoadSucceeded);
     }
+
+    // Plan 7: "Dot drain when minimizing" and "Window previews in the dock" are on by default, also for a settings
+    // file written before they existed.
+    [Fact]
+    public void Settings_DotDrainAndPreviews_DefaultOn()
+    {
+        Assert.True(new ShellSettings().DotDrain);
+        Assert.True(new ShellSettings().WindowPreviews);
+        var dir = Path.Combine(Path.GetTempPath(), "ns-plan7-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        try
+        {
+            File.WriteAllText(Path.Combine(dir, "settings.json"), "{ \"keepDockVisible\": true }");
+            var loaded = new SettingsStore(dir).Load();
+            Assert.True(loaded.KeepDockVisible);
+            Assert.True(loaded.DotDrain);
+            Assert.True(loaded.WindowPreviews);
+        }
+        finally { Directory.Delete(dir, true); }
+    }
 }
