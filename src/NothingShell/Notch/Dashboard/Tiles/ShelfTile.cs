@@ -133,10 +133,13 @@ public sealed class ShelfTile : ITileView, IFileDropTarget
         };
         chip.MouseMove += (_, e) =>
         {
-            if (e.LeftButton != MouseButtonState.Pressed) return;
+            if (_dragged || e.LeftButton != MouseButtonState.Pressed) return; // one drag per press
             var d = e.GetPosition(chip) - _down;
             if (Math.Abs(d.X) < SystemParameters.MinimumHorizontalDragDistance && Math.Abs(d.Y) < SystemParameters.MinimumVerticalDragDistance) return;
             _dragged = true;
+            // The shell runs raised and Windows refuses its drags into normal apps, so a helper at normal level takes
+            // the drag over (drops into WhatsApp, browser upload boxes, Explorer). Only without it (dev build): in-process.
+            if (ShelfDragHandoff.Start([path], chip)) return;
             // Drag the reference out (Explorer copies on drop); the shelf keeps holding it.
             var data = new DataObject(DataFormats.FileDrop, new[] { path });
             DragDrop.DoDragDrop(chip, data, DragDropEffects.Copy | DragDropEffects.Link);
@@ -191,5 +194,27 @@ public static class ShelfClipboard
             Log.Error("shelf: copying to the clipboard failed", e);
             return false;
         }
+    }
+}
+
+/// <summary>
+/// Hands a shelf drag to NothingShell.DragHelper (user, 2026-11-20): started through Explorer so it runs at normal
+/// level, while the button is still down; it then drags the files from the pointer. Names are never logged.
+/// </summary>
+public static class ShelfDragHandoff
+{
+    public static string DefaultHelper => Path.Combine(AppContext.BaseDirectory, "NothingShell.DragHelper.exe");
+
+    /// <summary>True when the helper was started (the shell must not drag itself); false = do the old in-process drag.</summary>
+    public static bool Start(IReadOnlyList<string> paths, UIElement from, string? helper = null)
+    {
+        helper ??= DefaultHelper;
+        if (!File.Exists(helper)) return false;
+        from.ReleaseMouseCapture();
+        Mouse.Capture(null); // the pointer is the helper's now
+        var ok = NothingShell.Native.UnelevatedShell.Open(helper, NothingShell.Core.DragArgs.CommandLine(paths), Path.GetDirectoryName(helper),
+            (what, e) => Log.Error(what, e));
+        Log.Info($"shelf: drag of {paths.Count} handed to the helper ok={ok}");
+        return ok;
     }
 }

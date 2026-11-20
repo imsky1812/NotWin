@@ -23,7 +23,16 @@ public static class UnelevatedShell
     /// <summary>Opens <paramref name="file"/> (exe, .lnk, shell: item, URI, document) through Explorer. False on any failure.</summary>
     [UnconditionalSuppressMessage("Trimming", "IL2072", Justification = "ShellWindows is a COM class created from its CLSID; nothing to trim.")]
     [UnconditionalSuppressMessage("Trimming", "IL2075", Justification = "IDispatch late binding on Explorer's COM objects (IShellFolderViewDual / IShellDispatch2); no managed members involved.")]
-    public static bool Open(string file, string? directory, Action<string, Exception?>? onError = null)
+    public static bool Open(string file, string? directory, Action<string, Exception?>? onError = null) =>
+        Open(file, "", directory, onError);
+
+    /// <summary>
+    /// Opens <paramref name="file"/> with <paramref name="args"/> through Explorer (so it runs at normal level, like a
+    /// double-click). False on any failure.
+    /// </summary>
+    [UnconditionalSuppressMessage("Trimming", "IL2072", Justification = "ShellWindows is a COM class created from its CLSID; nothing to trim.")]
+    [UnconditionalSuppressMessage("Trimming", "IL2075", Justification = "IDispatch late binding on Explorer's COM objects (IShellFolderViewDual / IShellDispatch2); no managed members involved.")]
+    public static bool Open(string file, string args, string? directory, Action<string, Exception?>? onError = null)
     {
         object? windows = null, desktop = null, browser = null, view = null, folderView = null;
         try
@@ -47,7 +56,7 @@ public static class UnelevatedShell
             try
             {
                 app.GetType().InvokeMember("ShellExecute", BindingFlags.InvokeMethod, null, app,
-                    [file, "", directory ?? "", "open", 1 /* SW_SHOWNORMAL */]);
+                    [file, args, directory ?? "", "open", 1 /* SW_SHOWNORMAL */]);
             }
             finally { if (Marshal.IsComObject(app)) Marshal.ReleaseComObject(app); }
             return true;

@@ -26,4 +26,12 @@ public sealed class ShelfClipboardTests
         var effect = Assert.IsType<MemoryStream>(data.GetData("Preferred DropEffect"));
         Assert.Equal(1, BitConverter.ToInt32(effect.ToArray(), 0)); // DROPEFFECT_COPY
     });
+
+    // Without the helper next to the shell (a dev build), the shelf keeps its old in-process drag.
+    [Fact]
+    public void Handoff_WithoutTheHelperExe_ReturnsFalse() => OnSta(() =>
+    {
+        var missing = Path.Combine(Path.GetTempPath(), "no-such-folder-" + Guid.NewGuid().ToString("N"), "NothingShell.DragHelper.exe");
+        Assert.False(ShelfDragHandoff.Start([Path.GetTempFileName()], new System.Windows.Controls.Border(), missing));
+    });
 }

@@ -77,6 +77,9 @@ if ($fromOut.Count -gt 0) {
     Start-Sleep -Milliseconds 500
 }
 if (Test-Path $outApp) { Remove-Item $outApp -Recurse -Force }
+# The shelf's drag helper runs at normal level (no uiAccess), so drags reach normal apps. Published first: if the two
+# share a file (NothingShell.Core.dll, same source), the shell's own publish below is the copy that stays.
+Invoke-Native $dotnet @('publish', (Join-Path $repo 'src/NothingShell.DragHelper'), '-c', 'Release', '-o', $outApp)
 Invoke-Native $dotnet @('publish', (Join-Path $repo 'src/NothingShell'), '-c', 'Release', '-p:UiAccess=true', '-o', $outApp)
 try {
     Invoke-Native $dotnet @('publish', (Join-Path $repo 'src/NothingShell.Watchdog'), '-c', 'Release', '-o', $outApp)
