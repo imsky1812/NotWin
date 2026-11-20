@@ -137,4 +137,47 @@ public sealed class PhotoStoreTests : IDisposable
         Assert.True(File.Exists(store.PhotoPath("aaaaaaaa", added[1])));
         store.Remove("aaaaaaaa", "..\\..\\x.jpg"); // path-like names are ignored
     }
+
+    // A JPEG whose pixels are w×h but whose EXIF Orientation says "rotate 90° clockwise" (6), as phones save portraits.
+    private string RotatedJpeg(string name, int w, int h)
+    {
+        var path = Path.Combine(_src, name);
+        OnSta(() =>
+        {
+            var pixels = new byte[w * h * 3];
+            var bmp = BitmapSource.Create(w, h, 96, 96, PixelFormats.Bgr24, null, pixels, w * 3);
+            var meta = new BitmapMetadata("jpg");
+            meta.SetQuery("/app1/ifd/{ushort=274}", (ushort)6);
+            var enc = new JpegBitmapEncoder();
+            enc.Frames.Add(BitmapFrame.Create(bmp, null, meta, null));
+            using var fs = File.Create(path);
+            enc.Save(fs);
+        });
+        return path;
+    }
+
+    [Fact]
+    public async Task Import_AppliesExifOrientation()
+    {
+        var store = new PhotoStore(_root);
+        var (added, _) = await store.ImportAsync("a1b2c3d4", [RotatedJpeg("phone.jpg", 400, 200)]);
+        Assert.Equal((200, 400), SizeOf(store.PhotoPath("a1b2c3d4", added[0])));
+    }
+
+    // The frame was removed (✕) while its photos were still being copied: nothing may be left behind.
+    [Fact]
+    public void Import_AfterTheFrameWasRemoved_LeavesNothing()
+    {
+        var file = Png("late.png", 2000, 1500);
+        var store = new PhotoStore(_root);
+        OnSta(() =>
+        {
+            var frame = new PhotoFrameWidget("cccc3333", null, store, _ => { });
+            var import = frame.AddFilesAsync([file]);
+            frame.Removed();
+            frame.Dispose();
+            import.GetAwaiter().GetResult();
+        });
+        Assert.False(Directory.Exists(Path.Combine(_root, "cccc3333")));
+    }
 }

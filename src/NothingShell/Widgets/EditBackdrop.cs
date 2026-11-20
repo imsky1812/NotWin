@@ -53,7 +53,12 @@ public static class EditBackdrop
                 Background = Brushes.Transparent,
                 Child = new TextBlock { Text = "＋ Add", FontFamily = TileChrome.Font, FontSize = 13, FontWeight = FontWeights.SemiBold, Foreground = TileChrome.Text },
             };
-            addButton.MouseLeftButtonUp += (_, e) => { e.Handled = true; add(addButton); };
+            addButton.MouseLeftButtonUp += (_, e) =>
+            {
+                e.Handled = true;
+                try { add(addButton); }
+                catch (Exception ex) { Log.Error("opening the widget picker failed", ex); } // never crash the shell
+            };
             row.Children.Add(addButton);
         }
         row.Children.Add(button);

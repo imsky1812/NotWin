@@ -68,13 +68,42 @@ public sealed class PhotoStore(string framesRoot)
         using (var fs = File.OpenRead(file))
         {
             var frame = BitmapDecoder.Create(fs, BitmapCreateOptions.IgnoreColorProfile | BitmapCreateOptions.PreservePixelFormat, BitmapCacheOption.OnLoad).Frames[0];
-            source = frame;
+            source = Oriented(frame, Orientation(frame));
             taken = DateTaken(frame) ?? File.GetLastWriteTime(file);
         }
         var name = RandomName() + ".jpg";
         Save(Scale(source, LongSide), Path.Combine(dir, name));
         Save(Scale(source, ThumbSide), Path.Combine(dir, Path.GetFileNameWithoutExtension(name) + ".thumb.jpg"));
         return (name, taken);
+    }
+
+    // EXIF Orientation (tag 274): phones save portraits as landscape pixels plus this tag, and the copy keeps no
+    // metadata, so the rotation is applied to the pixels here. 1 (or none) = as stored.
+    private static int Orientation(BitmapFrame frame)
+    {
+        try
+        {
+            if (frame.Metadata is BitmapMetadata m && m.GetQuery("/app1/ifd/{ushort=274}") is ushort o) return o;
+        }
+        catch (Exception) { } // formats without EXIF throw for the query
+        return 1;
+    }
+
+    private static BitmapSource Oriented(BitmapSource source, int orientation)
+    {
+        var t = new TransformGroup();
+        switch (orientation)
+        {
+            case 2: t.Children.Add(new ScaleTransform(-1, 1)); break;
+            case 3: t.Children.Add(new RotateTransform(180)); break;
+            case 4: t.Children.Add(new ScaleTransform(1, -1)); break;
+            case 5: t.Children.Add(new RotateTransform(90)); t.Children.Add(new ScaleTransform(-1, 1)); break;
+            case 6: t.Children.Add(new RotateTransform(90)); break;
+            case 7: t.Children.Add(new RotateTransform(270)); t.Children.Add(new ScaleTransform(-1, 1)); break;
+            case 8: t.Children.Add(new RotateTransform(270)); break;
+            default: return source;
+        }
+        return new TransformedBitmap(source, t);
     }
 
     private static DateTime? DateTaken(BitmapFrame frame)
@@ -119,13 +148,13 @@ public sealed class PhotoStore(string framesRoot)
         if (!ValidId(frameId)) return;
         var dir = Path.Combine(framesRoot, frameId);
         try { if (Directory.Exists(dir)) Directory.Delete(dir, true); }
-        catch (Exception e) { Log.Error("deleting a photo frame's folder failed", e); }
+        catch (Exception e) { Log.Info($"deleting a photo frame's folder failed: {e.GetType().Name}"); } // no paths in the log
     }
 
     private static void TryDelete(string path)
     {
         try { if (File.Exists(path)) File.Delete(path); }
-        catch (Exception e) { Log.Error("deleting a frame photo failed", e); }
+        catch (Exception e) { Log.Info($"deleting a frame photo failed: {e.GetType().Name}"); }
     }
 
     private static bool ValidId(string id) => id.Length is > 0 and <= 32 && id.All(char.IsAsciiLetterOrDigit);

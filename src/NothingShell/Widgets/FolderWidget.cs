@@ -57,7 +57,7 @@ public sealed class FolderWidget : IDesktopWidget
             HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center,
         };
         var root = new Grid { Background = Brushes.Transparent, Cursor = Cursors.Hand, Children = { art } };
-        root.MouseLeftButtonUp += (_, e) => { e.Handled = true; Open(); };
+        root.MouseLeftButtonUp += (_, e) => { e.Handled = true; Guard(Open); };
         return root;
     }
 
@@ -116,7 +116,7 @@ public sealed class FolderWidget : IDesktopWidget
     {
         ImageSource? icon = null;
         try { icon = icons.Get(item.Id, 40); }
-        catch (Exception e) { Log.Error("folder icon failed", e); }
+        catch (Exception e) { Log.Info($"folder icon failed: {e.GetType().Name}"); } // no app paths in the log
         var tile = new Border
         {
             Width = 52, Height = 52, CornerRadius = new CornerRadius(14), Background = Brushes.Transparent, Cursor = Cursors.Hand,
@@ -129,9 +129,12 @@ public sealed class FolderWidget : IDesktopWidget
         tile.MouseRightButtonUp += (_, e) =>
         {
             e.Handled = true;
-            if (DockWindowNative.GetCursorPos() is not { } c) return;
-            var (mon, _) = DockWindowNative.GetPrimaryMonitor();
-            new DockPopup([new PopupRow("Remove from folder", () => Guard(() => remove(item)))]).ShowAbove(0, c.X, c.Y - 4, mon);
+            Guard(() =>
+            {
+                if (DockWindowNative.GetCursorPos() is not { } c) return;
+                var (mon, _) = DockWindowNative.GetPrimaryMonitor();
+                new DockPopup([new PopupRow("Remove from folder", () => Guard(() => remove(item)))]).ShowAbove(0, c.X, c.Y - 4, mon);
+            });
         };
         return tile;
     }
@@ -151,7 +154,7 @@ public sealed class FolderWidget : IDesktopWidget
     internal static void Guard(Action a)
     {
         try { a(); }
-        catch (Exception e) { Log.Error("folder action failed", e); }
+        catch (Exception e) { Log.Info($"folder action failed: {e.GetType().Name}"); } // never crash the shell, no names
     }
 
     public void Dispose()
@@ -228,6 +231,16 @@ public sealed class FolderPopup : WidgetPopupWindow
 /// <summary>The folder's app chooser: a search box over the installed apps; a click adds one (the window stays open).</summary>
 public sealed class AppChooser : WidgetPopupWindow
 {
+    /// <summary>At most this many rows: each row loads an icon on the UI thread, so typing stays cheap.</summary>
+    public const int MaxRows = 40;
+
+    /// <summary>The apps whose name contains <paramref name="query"/> (case-insensitive), at most <see cref="MaxRows"/>.</summary>
+    public static IReadOnlyList<LaunchItem> Matches(IReadOnlyList<LaunchItem> apps, string query)
+    {
+        var q = query.Trim();
+        return apps.Where(a => q.Length == 0 || a.Name.Contains(q, StringComparison.OrdinalIgnoreCase)).Take(MaxRows).ToList();
+    }
+
     private readonly IReadOnlyList<LaunchItem> _apps;
     private readonly AppIconCache _icons;
     private readonly Action<LaunchItem> _pick;
@@ -276,12 +289,11 @@ public sealed class AppChooser : WidgetPopupWindow
     private void Fill()
     {
         _list.Children.Clear();
-        var q = _search.Text.Trim();
-        foreach (var app in _apps.Where(a => q.Length == 0 || a.Name.Contains(q, StringComparison.OrdinalIgnoreCase)).Take(200))
+        foreach (var app in Matches(_apps, _search.Text))
         {
             ImageSource? icon = null;
             try { icon = _icons.Get(app.Id, 24); }
-            catch (Exception e) { Log.Error("chooser icon failed", e); }
+            catch (Exception e) { Log.Info($"chooser icon failed: {e.GetType().Name}"); }
             var row = new Border
             {
                 Padding = new Thickness(8, 6, 8, 6), CornerRadius = new CornerRadius(10), Background = Brushes.Transparent, Cursor = Cursors.Hand,

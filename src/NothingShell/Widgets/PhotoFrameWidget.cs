@@ -38,6 +38,7 @@ public sealed class PhotoFrameWidget : IDesktopWidget
     private bool _paused;
     private RectI _screen;
     private PhotoManagePopup? _popup;
+    private bool _removed, _disposed, _importing;
 
     public PhotoFrameWidget(string id, WidgetConfig? config, PhotoStore store, Action<WidgetConfig> save)
     {
@@ -58,7 +59,7 @@ public sealed class PhotoFrameWidget : IDesktopWidget
     public FrameworkElement Build(WidgetSize size)
     {
         _host = new Grid { Background = Brushes.Transparent, Cursor = Cursors.Hand };
-        _host.MouseLeftButtonUp += (_, e) => { e.Handled = true; OnClick(); };
+        _host.MouseLeftButtonUp += (_, e) => { e.Handled = true; PhotoManagePopup.Guard(OnClick); };
         Fill();
         return _host;
     }
@@ -80,7 +81,11 @@ public sealed class PhotoFrameWidget : IDesktopWidget
         UpdateTimer();
     }
 
-    public void Removed() => _store.Delete(_id);
+    public void Removed()
+    {
+        _removed = true;
+        _store.Delete(_id);
+    }
 
     private void Fill()
     {
@@ -143,14 +148,14 @@ public sealed class PhotoFrameWidget : IDesktopWidget
         }
         catch (Exception e)
         {
-            Log.Error("a frame photo could not be shown", e);
+            Log.Info($"a frame photo could not be shown: {e.GetType().Name}"); // no paths in the log
             return null;
         }
     }
 
     private void UpdateTimer()
     {
-        if (Photos.Count > 1 && !_paused && _host is not null) _next.Start();
+        if (Photos.Count > 1 && !_paused && !_disposed && _host is not null) _next.Start();
         else _next.Stop();
     }
 
@@ -192,15 +197,29 @@ public sealed class PhotoFrameWidget : IDesktopWidget
                 Filter = "Images|*.jpg;*.jpeg;*.png;*.bmp;*.gif;*.webp;*.heic;*.heif|All files|*.*",
             };
             if (dialog.ShowDialog() != true || dialog.FileNames.Length == 0) return;
-            var (added, skipped) = await _store.ImportAsync(_id, dialog.FileNames, room);
-            Log.Info($"photo frame: {added.Count} added, {skipped} skipped");
-            if (added.Count == 0) return;
-            _config = _config with { Photos = [.. Photos, .. added] };
-            _save(_config);
-            Fill();
-            _popup?.Refresh(Photos);
+            await AddFilesAsync(dialog.FileNames);
         }
-        catch (Exception e) { Log.Error("adding photos failed", e); }
+        catch (Exception e) { Log.Info($"adding photos failed: {e.GetType().Name}"); }
+    }
+
+    /// <summary>Copies the files into this frame and shows them (the file picker's second half; public for tests).</summary>
+    public async Task AddFilesAsync(IReadOnlyList<string> files)
+    {
+        var room = PhotoList.Max - Photos.Count;
+        if (room <= 0 || _importing || _disposed) return;
+        _importing = true;
+        (IReadOnlyList<string> added, int skipped) result;
+        try { result = await _store.ImportAsync(_id, files, room); }
+        finally { _importing = false; }
+        var (added, skipped) = result;
+        if (_removed) { _store.Delete(_id); return; } // the frame went (✕) while copying: leave nothing behind
+        if (_disposed) return;
+        Log.Info($"photo frame: {added.Count} added, {skipped} skipped");
+        if (added.Count == 0) return;
+        _config = _config with { Photos = [.. Photos, .. added] };
+        _save(_config);
+        Fill();
+        _popup?.Refresh(Photos);
     }
 
     private void RemovePhoto(string name)
@@ -215,6 +234,7 @@ public sealed class PhotoFrameWidget : IDesktopWidget
 
     public void Dispose()
     {
+        _disposed = true;
         _next.Stop();
         _popup?.CloseIfOpen();
     }
@@ -302,7 +322,7 @@ public sealed class PhotoManagePopup : Window
                 source = bmp;
             }
         }
-        catch (Exception e) { Log.Error("a frame thumbnail could not be shown", e); }
+        catch (Exception e) { Log.Info($"a frame thumbnail could not be shown: {e.GetType().Name}"); }
         var image = new Border
         {
             Width = 72, Height = 72, CornerRadius = new CornerRadius(10), ClipToBounds = true,
@@ -331,10 +351,10 @@ public sealed class PhotoManagePopup : Window
         return tile;
     }
 
-    private static void Guard(Action a)
+    internal static void Guard(Action a)
     {
         try { a(); }
-        catch (Exception e) { Log.Error("photo frame popup action failed", e); }
+        catch (Exception e) { Log.Info($"photo frame action failed: {e.GetType().Name}"); } // never crash the shell, no paths
     }
 
     public void CloseIfOpen()

@@ -52,4 +52,15 @@ public sealed class FolderWidgetTests
         var tiles = Tiles(Build(0));
         Assert.Equal("add", Assert.Single(tiles).Tag);
     });
+
+    // Typing in the chooser must stay cheap: at most AppChooser.MaxRows rows (each loads an icon on the UI thread).
+    [Fact]
+    public void Chooser_ShowsAtMostMaxRows_AndFilters()
+    {
+        var apps = Enumerable.Range(0, 300).Select(i => new LaunchItem($"a{i}", i % 2 == 0 ? $"Note {i}" : $"Game {i}", LaunchKind.App, "x", [])).ToList();
+        Assert.Equal(AppChooser.MaxRows, AppChooser.Matches(apps, "").Count);
+        Assert.True(AppChooser.MaxRows <= 40);
+        Assert.All(AppChooser.Matches(apps, "game"), a => Assert.StartsWith("Game", a.Name));
+        Assert.Single(AppChooser.Matches(apps, "Note 10"), a => a.Name == "Note 10");
+    }
 }
