@@ -15,10 +15,19 @@ public interface IDesktopWidget : IDisposable
     /// <summary>The clock has no card (spec §6.5: drawn straight on the wallpaper).</summary>
     bool Bare => false;
 
+    /// <summary>The instance's own settings (Plan 5b), given before every <see cref="Build"/>.</summary>
+    void Configure(WidgetConfig? config) { }
+
     FrameworkElement Build(WidgetSize size);
 
     /// <summary>Where the widget now is on screen (physical px) and the monitor it is on (the clock samples the wallpaper).</summary>
     void Placed(RectI screen, RectI monitor) { }
+
+    /// <summary>A full-screen app came to the front (true) or left (false): stop / restart anything that animates.</summary>
+    void SetPaused(bool paused) { }
+
+    /// <summary>The user removed this widget (before <see cref="IDisposable.Dispose"/>): delete what belongs only to it.</summary>
+    void Removed() { }
 }
 
 /// <summary>

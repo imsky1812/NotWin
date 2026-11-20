@@ -22,8 +22,8 @@ public sealed class DesktopWidgets : IDisposable
     private const double OriginX = 80, OriginY = 56;
     private readonly Func<ShellSettings> _get;
     private readonly Action<Func<ShellSettings, ShellSettings>> _update;
-    private readonly IReadOnlyDictionary<WidgetKind, IDesktopWidget> _widgets;
-    private readonly Dictionary<WidgetKind, (WidgetHost Host, Grid Root)> _hosts = [];
+    private readonly Func<WidgetPlacement, Action<WidgetConfig>, IDesktopWidget?> _factory;
+    private readonly Dictionary<string, Slot> _slots = [];
     private readonly DispatcherTimer _reattach = new() { Interval = TimeSpan.FromMilliseconds(250) };
     private readonly Stopwatch _lostFor = new();
     private readonly DispatcherTimer _dpiDebounce = new() { Interval = TimeSpan.FromMilliseconds(200) };
@@ -35,15 +35,27 @@ public sealed class DesktopWidgets : IDisposable
     private int _failedRebuilds;
     private WidgetHost? _backdrop;
     private Dock.DockPopup? _popup;
-    private (WidgetKind Kind, PointI Cursor, RectI Start, EditChrome Chrome)? _drag;
+    private (string Id, PointI Cursor, RectI Start, EditChrome Chrome)? _drag;
     private DispatcherTimer? _settle;
+    private AddPicker? _picker;
+    private bool _paused;
 
+    // One widget instance on the desktop: its window, the window's root, and the widget object (Plan 5b).
+    private sealed class Slot(WidgetHost host, Grid root, IDesktopWidget widget)
+    {
+        public WidgetHost Host { get; } = host;
+        public Grid Root { get; } = root;
+        public IDesktopWidget Widget { get; } = widget;
+    }
+
+    /// <param name="factory">Makes the widget object for a new instance (null = this kind is unavailable); the second
+    /// argument saves the instance's own settings.</param>
     public DesktopWidgets(Func<ShellSettings> get, Action<Func<ShellSettings, ShellSettings>> update,
-        IReadOnlyDictionary<WidgetKind, IDesktopWidget> widgets)
+        Func<WidgetPlacement, Action<WidgetConfig>, IDesktopWidget?> factory)
     {
         _get = get;
         _update = update;
-        _widgets = widgets;
+        _factory = factory;
         _reattach.Tick += (_, _) => TryReattach();
         _dpiDebounce.Tick += (_, _) => { _dpiDebounce.Stop(); Rebuild(); };
         SystemEvents.DisplaySettingsChanged += OnDisplayChanged;
@@ -113,13 +125,41 @@ public sealed class DesktopWidgets : IDisposable
             var converted = _layout;
             _update(s => s with { WidgetList = converted });
         }
+        // Instances that left the layout (removed in edit mode): their windows and widget objects go.
+        foreach (var gone in _slots.Keys.Where(id => _layout.IndexOf(id) < 0).ToList())
+        {
+            var slot = _slots[gone];
+            _slots.Remove(gone);
+            DisposeSlot(slot);
+        }
         var host = DesktopAttach.FindHost();
         foreach (var p in _layout.Widgets)
         {
-            if (!_widgets.TryGetValue(p.Kind, out var widget)) continue;
+            if (!_slots.TryGetValue(p.Id, out var slot))
+            {
+                var id = p.Id;
+                IDesktopWidget? made;
+                try { made = _factory(p, config => SaveConfig(id, config)); }
+                catch (Exception e)
+                {
+                    Log.Error($"widget {p.Kind} could not be created", e);
+                    continue;
+                }
+                if (made is null) continue;
+                var root = WidgetRoots.Fill(null, new Grid(), p.Size, _scale);
+                root.MouseRightButtonUp += (_, e) => OnContext(e);
+                var wh = new WidgetHost(root);
+                wh.Lost += OnLost;
+                wh.DpiChanged += OnDpiChanged;
+                slot = new Slot(wh, root, made);
+                _slots[id] = slot;
+                if (_paused) Safe(() => made.SetPaused(true));
+            }
+            var widget = slot.Widget;
             FrameworkElement card;
             try
             {
+                widget.Configure(p.Config);
                 card = WidgetCard.Wrap(widget.Build(p.Size), widget.Bare);
                 if (Editing) card = EditFrame(p, card);
             }
@@ -128,21 +168,11 @@ public sealed class DesktopWidgets : IDisposable
                 Log.Error($"widget {p.Kind} failed to build", e);
                 continue;
             }
-            if (_hosts.TryGetValue(p.Kind, out var h)) WidgetRoots.Fill(h.Root, card, p.Size, _scale);
-            else
-            {
-                var root = WidgetRoots.Fill(null, card, p.Size, _scale);
-                root.MouseRightButtonUp += (_, e) => OnContext(e);
-                var wh = new WidgetHost(root);
-                wh.Lost += OnLost;
-                wh.DpiChanged += OnDpiChanged;
-                h = (wh, root);
-                _hosts[p.Kind] = h;
-            }
+            WidgetRoots.Fill(slot.Root, card, p.Size, _scale);
             var rect = ScreenRect(p);
             if (host != 0)
             {
-                try { h.Host.Attach(host, rect); }
+                try { slot.Host.Attach(host, rect); }
                 catch (Exception e)
                 {
                     Log.Error($"widget {p.Kind} could not attach to the desktop", e);
@@ -172,7 +202,29 @@ public sealed class DesktopWidgets : IDisposable
     public double PxPerUnit => _px;
     public RectI Monitor => _monitor;
 
-    internal IReadOnlyDictionary<WidgetKind, (WidgetHost Host, Grid Root)> Hosts => _hosts;
+    /// <summary>A full-screen app came to the front or left: every widget pauses / resumes its animation.</summary>
+    public void SetFullscreen(bool fullscreen)
+    {
+        _paused = fullscreen;
+        foreach (var slot in _slots.Values) Safe(() => slot.Widget.SetPaused(fullscreen));
+        if (fullscreen) EndEdit();
+    }
+
+    // A widget's own settings changed (photos, apps): saved without a rebuild (the widget already shows it).
+    private void SaveConfig(string id, WidgetConfig config)
+    {
+        if (_layout.IndexOf(id) < 0) return;
+        _layout = _layout.WithConfig(id, config);
+        var saved = _layout;
+        _update(s => s with { WidgetList = saved });
+    }
+
+    private void DisposeSlot(Slot slot)
+    {
+        try { slot.Host.Dispose(); }
+        catch (Exception e) { Log.Error("widget window dispose failed", e); }
+        Safe(slot.Widget.Dispose);
+    }
 
     /// <summary>Applies a layout change (edit mode) and saves it.</summary>
     public void Apply(DesktopLayout layout)
@@ -204,6 +256,7 @@ public sealed class DesktopWidgets : IDisposable
         Editing = false;
         _drag = null;
         _settle?.Stop();
+        ClosePicker();
         _backdrop?.Dispose();
         _backdrop = null;
         Log.Info("widget edit mode off");
@@ -223,18 +276,45 @@ public sealed class DesktopWidgets : IDisposable
         if (host == 0) return;
         var dpi = _px / _scale;
         var content = EditBackdrop.Build((_monitor.Right - _monitor.Left) / dpi, (_monitor.Bottom - _monitor.Top) / dpi,
-            new Point(OriginX * _scale, OriginY * _scale), _scale, EndEdit);
+            new Point(OriginX * _scale, OriginY * _scale), _scale, EndEdit, ShowPicker);
         _backdrop = new WidgetHost(content);
         _backdrop.Attach(host, _monitor);
-        foreach (var (h, _) in _hosts.Values) h.Raise(); // the widgets above the backdrop
+        foreach (var slot in _slots.Values) slot.Host.Raise(); // the widgets above the backdrop
+    }
+
+    // ＋ Add: the picker under the button; a pick places the widget in the first free spot (a new folder gets a
+    // random picture).
+    private void ShowPicker(FrameworkElement button)
+    {
+        ClosePicker();
+        var kinds = _layout.Addable();
+        if (kinds.Count == 0) return;
+        var a = button.PointToScreen(new Point(0, 0));
+        var b = button.PointToScreen(new Point(button.ActualWidth, button.ActualHeight));
+        var below = new RectI((int)a.X, (int)a.Y, (int)b.X, (int)b.Y);
+        _picker = AddPicker.Show(kinds, below, kind =>
+        {
+            var config = kind == WidgetKind.Folder ? new WidgetConfig(Picture: DotArt.Random(Random.Shared)) : null;
+            var (layout, _) = _layout.Add(kind, Area.W, Area.H, () => DesktopLayout.NewId(Random.Shared), config);
+            Log.Info($"widget added: {kind}");
+            Apply(layout);
+        });
+    }
+
+    private void ClosePicker()
+    {
+        var picker = _picker;
+        _picker = null;
+        try { picker?.Close(); }
+        catch (InvalidOperationException) { } // already closing
     }
 
     private FrameworkElement EditFrame(WidgetPlacement p, FrameworkElement card)
     {
-        var index = IndexOf(p.Kind);
+        var index = _layout.IndexOf(p.Id);
         var chrome = new EditChrome(card, p, index >= 0 && _layout.Overlaps(index), _scale);
-        var kind = p.Kind;
-        chrome.Grab.MouseLeftButtonDown += (_, e) => { e.Handled = true; StartDrag(kind, chrome); };
+        var id = p.Id;
+        chrome.Grab.MouseLeftButtonDown += (_, e) => { e.Handled = true; StartDrag(id, chrome); };
         chrome.Grab.MouseMove += (_, _) => DragMove();
         chrome.Grab.MouseLeftButtonUp += (_, e) => { e.Handled = true; EndDrag(); };
         chrome.Grab.LostMouseCapture += (_, _) => EndDrag();
@@ -242,33 +322,42 @@ public sealed class DesktopWidgets : IDisposable
             chip.MouseLeftButtonUp += (_, e) =>
             {
                 e.Handled = true;
-                var i = IndexOf(kind);
+                var i = _layout.IndexOf(id);
                 if (i >= 0) Apply(_layout.CycleSize(i)); // may overlap: the outline stays until it is moved
             };
+        if (chrome.ShapeChip is { } shape)
+            shape.MouseLeftButtonUp += (_, e) =>
+            {
+                e.Handled = true;
+                var i = _layout.IndexOf(id);
+                if (i < 0) return;
+                var config = _layout.Widgets[i].Config ?? new WidgetConfig();
+                Apply(_layout.WithConfig(id, config with { Shape = config.Shape == "circle" ? "square" : "circle" }));
+            };
+        chrome.Close.MouseLeftButtonUp += (_, e) =>
+        {
+            e.Handled = true;
+            if (_slots.TryGetValue(id, out var slot)) Safe(slot.Widget.Removed);
+            Log.Info($"widget removed: {p.Kind}");
+            Apply(_layout.Remove(id));
+        };
         return chrome.Root;
     }
 
-    private int IndexOf(WidgetKind kind)
+    private void StartDrag(string id, EditChrome chrome)
     {
-        for (var i = 0; i < _layout.Widgets.Count; i++)
-            if (_layout.Widgets[i].Kind == kind) return i;
-        return -1;
-    }
-
-    private void StartDrag(WidgetKind kind, EditChrome chrome)
-    {
-        var i = IndexOf(kind);
-        if (i < 0 || !_hosts.TryGetValue(kind, out var h) || DockWindowNative.GetCursorPos() is not { } cursor) return;
+        var i = _layout.IndexOf(id);
+        if (i < 0 || !_slots.TryGetValue(id, out var slot) || DockWindowNative.GetCursorPos() is not { } cursor) return;
         _settle?.Stop();
-        _drag = (kind, cursor, ScreenRect(_layout.Widgets[i]), chrome);
-        h.Host.Raise();
+        _drag = (id, cursor, ScreenRect(_layout.Widgets[i]), chrome);
+        slot.Host.Raise();
         chrome.Grab.CaptureMouse();
     }
 
     private (RectI Rect, DesktopLayout Layout, bool Moved)? DragTarget()
     {
         if (_drag is not { } d || DockWindowNative.GetCursorPos() is not { } c) return null;
-        var i = IndexOf(d.Kind);
+        var i = _layout.IndexOf(d.Id);
         if (i < 0) return null;
         var dx = c.X - d.Cursor.X;
         var dy = c.Y - d.Cursor.Y;
@@ -280,7 +369,7 @@ public sealed class DesktopWidgets : IDisposable
 
     private void DragMove()
     {
-        if (_drag is not { } d || DragTarget() is not { } t || !_hosts.TryGetValue(d.Kind, out var h)) return;
+        if (_drag is not { } d || DragTarget() is not { } t || !_slots.TryGetValue(d.Id, out var h)) return;
         h.Host.Place(t.Rect); // follows the pointer; the snapped spot is taken on release
         d.Chrome.ShowOverlap(!t.Moved);
     }
@@ -291,8 +380,17 @@ public sealed class DesktopWidgets : IDisposable
         var target = DragTarget();
         _drag = null;
         if (d.Chrome.Grab.IsMouseCaptured) d.Chrome.Grab.ReleaseMouseCapture();
-        if (!_hosts.TryGetValue(d.Kind, out var h)) return;
-        var i = IndexOf(d.Kind);
+        if (!_slots.TryGetValue(d.Id, out var h)) return;
+        var i = _layout.IndexOf(d.Id);
+        // A click without movement on a folder steps to its next picture (spec §5.4).
+        if (i >= 0 && _layout.Widgets[i].Kind == WidgetKind.Folder && target is { } still
+            && Math.Abs(still.Rect.Left - d.Start.Left) < 4 && Math.Abs(still.Rect.Top - d.Start.Top) < 4)
+        {
+            h.Host.Place(d.Start);
+            var config = _layout.Widgets[i].Config ?? new WidgetConfig();
+            Apply(_layout.WithConfig(d.Id, config with { Picture = DotArt.Next(config.Picture) }));
+            return;
+        }
         if (target is { Moved: true } t && i >= 0)
         {
             _layout = t.Layout;
@@ -301,7 +399,7 @@ public sealed class DesktopWidgets : IDisposable
             var rect = ScreenRect(_layout.Widgets[i]);
             Animate(h.Host, t.Rect, rect);
             d.Chrome.ShowOverlap(_layout.Overlaps(i));
-            if (_widgets.TryGetValue(d.Kind, out var w)) Safe(() => w.Placed(rect, _monitor));
+            Safe(() => h.Widget.Placed(rect, _monitor));
             return;
         }
         // Refused (overlap) or cancelled: back to where it was.
@@ -393,10 +491,11 @@ public sealed class DesktopWidgets : IDisposable
         _dpiDebounce.Stop();
         _settle?.Stop();
         _popup?.CloseIfOpen();
+        ClosePicker();
         _backdrop?.Dispose();
         SystemEvents.DisplaySettingsChanged -= OnDisplayChanged;
-        foreach (var (host, _) in _hosts.Values) host.Dispose();
-        foreach (var w in _widgets.Values) w.Dispose();
+        foreach (var slot in _slots.Values) DisposeSlot(slot);
+        _slots.Clear();
     }
 }
 

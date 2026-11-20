@@ -18,14 +18,17 @@ namespace NothingShell.Widgets;
 public sealed class BatteryWidget : IDesktopWidget
 {
     private readonly IBatterySource _devices;
+    private readonly bool _ownsSource;
     private readonly BatteryPages _pages = new();
     private Grid? _host;
     private WidgetSize _size;
     private int _shown = -1;
 
-    public BatteryWidget(IBatterySource devices)
+    /// <param name="ownsSource">True: the widget disposes <paramref name="devices"/> with itself (Plan 5b).</param>
+    public BatteryWidget(IBatterySource devices, bool ownsSource = false)
     {
         _devices = devices;
+        _ownsSource = ownsSource;
         _devices.Changed += OnChanged;
         _pages.Update(devices.Devices);
     }
@@ -144,5 +147,9 @@ public sealed class BatteryWidget : IDesktopWidget
         return stack;
     }
 
-    public void Dispose() => _devices.Changed -= OnChanged;
+    public void Dispose()
+    {
+        _devices.Changed -= OnChanged;
+        if (_ownsSource && _devices is IDisposable owned) owned.Dispose();
+    }
 }

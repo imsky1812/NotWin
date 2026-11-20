@@ -27,4 +27,27 @@ public sealed class EditChromeTests
         var brush = Assert.IsType<SolidColorBrush>(chrome.Grab.Background);
         Assert.True(brush.Color.A > 0);
     });
+
+    [Fact]
+    public void EveryWidget_HasACloseButton_TopLeft() => OnSta(() =>
+    {
+        foreach (var kind in Enum.GetValues<WidgetKind>())
+        {
+            var p = new WidgetPlacement(kind, WidgetRules.Sizes(kind)[0], 0, 0, "x");
+            var chrome = new EditChrome(new Grid(), p, false, 0.65);
+            Assert.Equal(HorizontalAlignment.Left, chrome.Close.HorizontalAlignment);
+            Assert.Equal(VerticalAlignment.Top, chrome.Close.VerticalAlignment);
+        }
+    });
+
+    [Fact]
+    public void PhotoOnly_HasAShapeChip() => OnSta(() =>
+    {
+        var photo = new EditChrome(new Grid(), new WidgetPlacement(WidgetKind.Photo, new(2, 2), 0, 0, "p"), false, 0.65);
+        Assert.Equal("■ ▸", ((TextBlock)photo.ShapeChip!.Child).Text);
+        var circle = new EditChrome(new Grid(), new WidgetPlacement(WidgetKind.Photo, new(2, 2), 0, 0, "p", new WidgetConfig("circle")), false, 0.65);
+        Assert.Equal("● ▸", ((TextBlock)circle.ShapeChip!.Child).Text);
+        var clock = new EditChrome(new Grid(), new WidgetPlacement(WidgetKind.Clock, new(3, 1), 0, 0, "c"), false, 0.65);
+        Assert.Null(clock.ShapeChip);
+    });
 }

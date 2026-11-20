@@ -30,7 +30,7 @@ public partial class App : Application
     private readonly Power.KeepAwakeService _awake = new();
     private Forecast.WeatherService? _weather;
     private Widgets.DesktopWidgets? _widgets;
-    private Widgets.DeviceBatteryService? _deviceBatteries;
+    private readonly Core.Widgets.SnakeKeyGate _snakeGate = new(); // one gate for whichever snake is on the desktop
 
     private static string DataDir => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "NothingShell");
     private Media.MediaSessionService? _media;
@@ -232,12 +232,9 @@ public partial class App : Application
             _winKeys.LauncherRequested += _launcher.Toggle;
             _winKeys.PanelRequested += () => _panel?.Toggle();
             _winKeys.EscapePressed += () => _widgets?.EndEdit();
-            if (_snake is { } snake)
-            {
-                _winKeys.SnakeGate = snake.Gate;
-                _winKeys.SnakeKeyPressed += snake.OnKey;
-                _winKeys.SnakeReleased += snake.Release;
-            }
+            _winKeys.SnakeGate = _snakeGate;
+            _winKeys.SnakeKeyPressed += key => _snake?.OnKey(key);
+            _winKeys.SnakeReleased += () => _snake?.Release();
         }
         catch (Exception e)
         {
@@ -254,30 +251,39 @@ public partial class App : Application
     {
         var dock = _controller;
         if (dock is null || _timer is null) return;
-        var widgets = new Dictionary<Core.Widgets.WidgetKind, Widgets.IDesktopWidget>
-        {
-            [Core.Widgets.WidgetKind.Clock] = new Widgets.ClockWidget(),
-            [Core.Widgets.WidgetKind.Timer] = new Widgets.TimerWidget(_timer),
-            [Core.Widgets.WidgetKind.Calendar] = new Widgets.CalendarWidget(),
-        };
-        _snake = new Widgets.SnakeWidget(new Core.Widgets.SnakeKeyGate(), dock.Settings.SnakeBest,
-            best => dock.UpdateSettings(s => s with { SnakeBest = Math.Max(s.SnakeBest, best) }));
-        widgets[Core.Widgets.WidgetKind.Snake] = _snake;
-        if (_weather is not null) widgets[Core.Widgets.WidgetKind.Weather] = new Widgets.WeatherWidget(_weather);
-        if (_media is not null) widgets[Core.Widgets.WidgetKind.Media] = new Widgets.MediaWidget(_media);
-        if (_tray is not null)
-        {
-            _deviceBatteries = new Widgets.DeviceBatteryService(_tray);
-            widgets[Core.Widgets.WidgetKind.Battery] = new Widgets.BatteryWidget(_deviceBatteries);
-        }
-        _widgets = new Widgets.DesktopWidgets(() => dock.Settings, dock.UpdateSettings, widgets);
+        var widgets = new Widgets.DesktopWidgets(() => dock.Settings, dock.UpdateSettings, (p, save) => CreateWidget(p, save, dock));
+        _widgets = widgets;
         _widgets.EditingChanged += editing =>
         {
             if (_winKeys is not null) _winKeys.EscapeWanted = editing; // Esc ends edit mode
             if (editing) _snake?.Release();                            // the snake never keeps the keys while editing
         };
-        if (_fullscreen is not null) _fullscreen.Changed += fs => { if (fs) _widgets?.EndEdit(); };
-        _widgets.Start();
+        if (_fullscreen is not null)
+        {
+            _fullscreen.Changed += fs => _widgets?.SetFullscreen(fs);
+            if (_fullscreen.IsFullscreen) widgets.SetFullscreen(true);
+        }
+        widgets.Start();
+    }
+
+    // One widget object per desktop instance (Plan 5b); a removed instance's object is disposed by DesktopWidgets.
+    private Widgets.IDesktopWidget? CreateWidget(Core.Widgets.WidgetPlacement p, Action<Core.Widgets.WidgetConfig> save, Dock.DockController dock)
+    {
+        switch (p.Kind)
+        {
+            case Core.Widgets.WidgetKind.Clock: return new Widgets.ClockWidget();
+            case Core.Widgets.WidgetKind.Timer: return _timer is null ? null : new Widgets.TimerWidget(_timer);
+            case Core.Widgets.WidgetKind.Calendar: return new Widgets.CalendarWidget();
+            case Core.Widgets.WidgetKind.Snake:
+                return _snake = new Widgets.SnakeWidget(_snakeGate, dock.Settings.SnakeBest,
+                    best => dock.UpdateSettings(s => s with { SnakeBest = Math.Max(s.SnakeBest, best) }));
+            case Core.Widgets.WidgetKind.Weather: return _weather is null ? null : new Widgets.WeatherWidget(_weather);
+            case Core.Widgets.WidgetKind.Media: return _media is null ? null : new Widgets.MediaWidget(_media);
+            case Core.Widgets.WidgetKind.Battery:
+                // The Bluetooth watcher runs only while a battery widget is on the desktop (the widget owns it).
+                return _tray is null ? null : new Widgets.BatteryWidget(new Widgets.DeviceBatteryService(_tray), ownsSource: true);
+            default: return null;
+        }
     }
 
     // Settings window (spec §6.7): the dock controller is the one settings writer.
@@ -397,7 +403,6 @@ public partial class App : Application
             _awake.Dispose(); // keep awake never outlives the shell
             _weather?.Dispose();
             _widgets?.Dispose();
-            _deviceBatteries?.Dispose();
             _controller?.Dispose();
             _tray?.Dispose();
             _mouse?.Dispose();
