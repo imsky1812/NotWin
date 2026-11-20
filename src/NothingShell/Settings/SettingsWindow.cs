@@ -27,13 +27,13 @@ public sealed class SettingsWindow : Window
     private readonly WeatherService? _weather;
     private readonly TextBox _city;
     private readonly TextBlock _cityStatus;
-    private readonly Border _startToggle = new(), _keepToggle = new(), _drainToggle = new(), _previewToggle = new();
+    private readonly Border _startToggle = new(), _keepToggle = new(), _previewToggle = new();
     private DockEffects? _effects;
 
     /// <summary>Plan 5 widget settings: widget size (S/M/L), the wallpapers folder, and entering widget edit mode.</summary>
     /// <param name="GeneratedDir">Where "✦ New" wallpapers are saved (the user's data folder).</param>
-    /// <summary>Plan 7 switches: the minimize animation, window previews in the dock.</summary>
-    public sealed record DockEffects(Action<bool> SetDotDrain, Action<bool> SetPreviews);
+    /// <summary>Plan 7 switch: window previews in the dock.</summary>
+    public sealed record DockEffects(Action<bool> SetPreviews);
 
     public sealed record WidgetOptions(Action<string> SetScale, string? WallpaperDir, Action EditWidgets, string? GeneratedDir = null);
 
@@ -96,11 +96,6 @@ public sealed class SettingsWindow : Window
         stack.Children.Add(ToggleRow("Keep dock visible", _keepToggle, () => _settings().KeepDockVisible, _setKeep));
         if (_effects is { } fx)
         {
-            stack.Children.Add(ToggleRow("Minimize animation", _drainToggle, () => _settings().DotDrain, fx.SetDotDrain));
-            var hint = TileChrome.Label("Turn off Windows' own minimize animation for the best look");
-            hint.Margin = new Thickness(0, -4, 0, 10);
-            hint.TextWrapping = TextWrapping.Wrap;
-            stack.Children.Add(hint);
             stack.Children.Add(ToggleRow("Window previews in the dock", _previewToggle, () => _settings().WindowPreviews, fx.SetPreviews));
         }
 

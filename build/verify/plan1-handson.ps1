@@ -1710,21 +1710,14 @@ try {
     }
 
     if (Test-Section 'Widgets') {
-        Write-Step 'DOCK EFFECTS (Plan 7): minimize animation, window previews'
+        Write-Step 'DOCK PREVIEWS (Plan 7): window previews'
         $logOff = Get-LogLength $AppLog
         $app = Start-App
         [void](Wait-Until { (Get-LogSince $AppLog $logOff) -match 'dock ready' } 15000 250)
-        Write-Do 'For the best look, turn off Windows'' own animation first: System > Advanced > Performance > "Animate windows when minimizing and maximizing" (your choice; the shell never changes it).'
-        [void](Ask-Check 'DD.1' 'Shrinks into the dock icon' 'Minimize a normal app window (e.g. Notepad) with its _ button.' `
-            'Did the window shrink smoothly into its dock icon (no stutter)?')
-        [void](Ask-Check 'DD.2' 'Restore is plain' 'Click that app in the dock to restore it.' 'Did the window come back normally, with nothing doubled on screen?')
-        [void](Ask-Check 'DD.3' 'A video or game window' 'Minimize a full-screen-capable video player or a game window, if you have one (else answer s).' `
-            'Did it shrink into the icon (or just minimize) without anything left on screen?')
-        [void](Ask-Check 'DD.4' 'Win+M animates at most four' 'Open 6 windows, press Win+M.' 'Did at most four animate, the rest just minimize, with nothing left on screen?')
         [void](Ask-Check 'DD.5' 'Window previews' 'Rest the mouse on a running app with 2+ windows (e.g. two File Explorer windows), click a preview, then reopen it and press a preview''s x.' `
             'Did live previews with titles appear, did clicking switch to that window, and did x close it?')
-        [void](Ask-Check 'DD.6' 'Both switches off' 'Settings > Shell: turn off "Minimize animation" and "Window previews in the dock", minimize a window and hover a running app. Turn both back on afterwards.' `
-            'With both off, was minimizing plain and did hovering show just the name?')
+        [void](Ask-Check 'DD.6' 'Previews switch off' 'Settings > Shell: turn off "Window previews in the dock", hover a running app, then turn it back on.' `
+            'With it off, did hovering show just the name?')
         Complete-Quit 'DD.quit' $app 'dock effects section (--quit)'
     }
 

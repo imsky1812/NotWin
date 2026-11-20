@@ -108,11 +108,8 @@ notifications. `uninstall.ps1` removes it. Use `-NoTimestamp` to skip the signin
 - Right-click the start button (left-most) for **Keep taskbar visible**, **Start with Windows** and
   **Quit Nothing Shell**. Quitting always gives the Windows taskbar back.
 - Right-click an app for pin/unpin and its windows.
-- **Minimize animation:** minimizing a window shrinks its live picture into its dock icon (smooth: Windows draws it).
-  For the best look turn off Windows' own animation (System > Advanced > Performance > "Animate windows when minimizing
-  and maximizing"); Nothing Shell never changes that setting. Restoring is not animated.
 - **Window previews:** rest the mouse on a running app in the dock to see a live preview of each of its windows; click
-  one to switch to it, ✕ to close it. Both effects can be switched off in Settings > Shell.
+  one to switch to it, the red ✕ to close it. It can be switched off in Settings > Shell.
 
 If Fenn (another taskbar app) is running, Nothing Shell asks before taking over.
 

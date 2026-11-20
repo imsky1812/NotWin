@@ -37,20 +37,6 @@ public sealed class DwmThumbnail : IDisposable
         return DwmUpdateThumbnailProperties(_id, ref props) == 0;
     }
 
-    /// <summary>
-    /// Extends a window's frame over its whole client area: a non-layered window then shows what is behind it wherever
-    /// it draws nothing — the minimize animation's see-through overlay that can still host DWM pictures.
-    /// </summary>
-    public static void ExtendFrame(nint hwnd)
-    {
-        var all = new Margins { Left = -1, Right = -1, Top = -1, Bottom = -1 };
-        DwmExtendFrameIntoClientArea(hwnd, ref all);
-    }
-
-    [StructLayout(LayoutKind.Sequential)] private struct Margins { public int Left, Right, Top, Bottom; }
-
-    [DllImport("dwmapi.dll")] private static extern int DwmExtendFrameIntoClientArea(nint hwnd, ref Margins margins);
-
     /// <summary>Asks Windows 11 to round a window's corners (no effect on older Windows).</summary>
     public static void RoundCorners(nint hwnd)
     {

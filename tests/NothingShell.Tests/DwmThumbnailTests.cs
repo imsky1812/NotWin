@@ -9,8 +9,5 @@ public sealed class DwmThumbnailTests
     public void Register_BadHandles_ReturnsNull() => Assert.Null(DwmThumbnail.Register(0, 0));
 
 
-    [Fact]
-    public void NormalRect_NoWindow_IsNull() => Assert.Null(WindowListNative.NormalRect(0));
-
 
 }

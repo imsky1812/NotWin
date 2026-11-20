@@ -21,7 +21,6 @@ public partial class App : Application
     private DockAppBar? _appBar;
     private HookThread? _hooks;
     private Launcher.WinKeyListener? _winKeys;
-    private MinimizeHook? _minimizeHook;
     private Widgets.SnakeWidget? _snake;
     private Launcher.LauncherController? _launcher;
     private Launcher.AppIndex? _index;
@@ -312,7 +311,6 @@ public partial class App : Application
                 () => _widgets?.BeginEdit(),
                 Path.Combine(DataDir, "wallpapers")),
             new Settings.SettingsWindow.DockEffects(
-                on => dock.UpdateSettings(s => s with { DotDrain = on }),
                 on => { dock.UpdateSettings(s => s with { WindowPreviews = on }); dock.PreviewsEnabled = on; }));
     }
 
@@ -369,18 +367,8 @@ public partial class App : Application
         _dock.PlacementChanged += _reveal.Refresh;
 
         _controller = new DockController(_dock, vm, _reveal, store, settings, _appBar!, Shutdown, id => _index?.FindApp(id)?.Name);
-        try
-        {
-            // Plan 7: the minimize animation (shrink into the dock icon) and dock window previews (both switchable in Settings).
-            var dockCtl = _controller;
-            dockCtl.PreviewsEnabled = dockCtl.Settings.WindowPreviews;
-            var drainEnv = new Dock.DockDrainEnvironment(dockCtl.IconForWindow, () => dockCtl.Settings.DotDrain,
-                () => _fullscreen?.IsFullscreen == true || _launcher?.IsOpen == true || _panel?.IsOpen == true);
-            var drain = new Dock.DotDrainController(drainEnv, () => new Dock.DotDrainOverlay(drainEnv.Monitor, drainEnv.Scale));
-            _minimizeHook = new MinimizeHook((hwnd, start) => drain.OnMinimize(hwnd, start));
-            if (!_minimizeHook.Installed) Log.Info("minimize hook not installed (no minimize animation)");
-        }
-        catch (Exception e) { Log.Error("minimize animation failed to start", e); }
+        // Plan 7: dock window previews (switchable in Settings). Minimizing uses Windows' own animation (user, 2026-11-21).
+        _controller.PreviewsEnabled = _controller.Settings.WindowPreviews;
         _controller.Start();
 
         _fullscreen = new FullscreenMonitor();
@@ -417,7 +405,6 @@ public partial class App : Application
         {
             _appBar?.Dispose();
             _winKeys?.Dispose();
-            _minimizeHook?.Dispose();
             _launcher?.Dispose();
             _media?.Dispose();
             _notifications?.Dispose();

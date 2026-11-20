@@ -156,57 +156,6 @@ public static unsafe class WindowListNative
         return PInvoke.SetForegroundWindow(h);
     }
 
-    /// <summary>
-    /// Where the window sits when not minimized (GetWindowPlacement's normal rectangle) in screen pixels — the dot
-    /// drain's start for a window that is already minimized (Plan 7). Null when unknown.
-    /// </summary>
-    public static RectI? NormalRect(nint hwnd)
-    {
-        if (hwnd == 0) return null;
-        var placement = new WINDOWPLACEMENT { length = (uint)sizeof(WINDOWPLACEMENT) };
-        if (!PInvoke.GetWindowPlacement((HWND)hwnd, ref placement)) return null;
-        var r = placement.rcNormalPosition;
-        // The normal rectangle is in work-area coordinates (unless the window is a tool window): shift by the work
-        // area's offset on its monitor.
-        var mon = PInvoke.MonitorFromWindow((HWND)hwnd, MONITOR_FROM_FLAGS.MONITOR_DEFAULTTONEAREST);
-        var info = new MONITORINFO { cbSize = (uint)sizeof(MONITORINFO) };
-        int dx = 0, dy = 0;
-        var ex = (nint)PInvoke.GetWindowLongPtr((HWND)hwnd, WINDOW_LONG_PTR_INDEX.GWL_EXSTYLE);
-        if ((ex & 0x80 /* WS_EX_TOOLWINDOW */) == 0 && PInvoke.GetMonitorInfo(mon, ref info))
-        {
-            dx = info.rcWork.left - info.rcMonitor.left;
-            dy = info.rcWork.top - info.rcMonitor.top;
-        }
-        if (r.right <= r.left || r.bottom <= r.top) return null;
-        return new RectI(r.left + dx, r.top + dy, r.right + dx, r.bottom + dy);
-    }
-
-    /// <summary>
-    /// The dot drain's rectangle for a window (screen px): restoring → its real frame now (DWM extended frame bounds);
-    /// minimizing (already iconic) → its work area if it was maximized, else its normal rectangle. Null when unknown.
-    /// </summary>
-    public static RectI? DrainRect(nint hwnd, bool restoring)
-    {
-        if (hwnd == 0) return null;
-        if (restoring)
-        {
-            RECT frame;
-            if (PInvoke.DwmGetWindowAttribute((HWND)hwnd, DWMWINDOWATTRIBUTE.DWMWA_EXTENDED_FRAME_BOUNDS, &frame, (uint)sizeof(RECT)).Succeeded
-                && frame.right > frame.left && frame.bottom > frame.top)
-                return new RectI(frame.left, frame.top, frame.right, frame.bottom);
-            return null;
-        }
-        if (NormalRect(hwnd) is not { } normal) return null;
-        var placement = new WINDOWPLACEMENT { length = (uint)sizeof(WINDOWPLACEMENT) };
-        if (!PInvoke.GetWindowPlacement((HWND)hwnd, ref placement)) return normal;
-        var maximized = ((uint)placement.flags & 0x2 /* WPF_RESTORETOMAXIMIZED */) != 0;
-        var mon = PInvoke.MonitorFromWindow((HWND)hwnd, MONITOR_FROM_FLAGS.MONITOR_DEFAULTTONEAREST);
-        var info = new MONITORINFO { cbSize = (uint)sizeof(MONITORINFO) };
-        var work = PInvoke.GetMonitorInfo(mon, ref info)
-            ? new RectI(info.rcWork.left, info.rcWork.top, info.rcWork.right, info.rcWork.bottom) : normal;
-        return Core.Dock.DotDrain.StartRect(normal, maximized, work);
-    }
-
     public static void Minimize(nint hwnd) => PInvoke.ShowWindow((HWND)hwnd, SHOW_WINDOW_CMD.SW_MINIMIZE);
 
     public static void RequestClose(nint hwnd) => PInvoke.PostMessage((HWND)hwnd, 0x0010 /* WM_CLOSE */, 0, 0);

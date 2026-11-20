@@ -32,9 +32,6 @@ public sealed record ShellSettings
     /// <summary>The desktop widget instances (Plan 5b): null = not converted yet. Sanitized on use.</summary>
     public Widgets.DesktopLayout? WidgetList { get; init; }
 
-    /// <summary>Plan 7: the dot drain animation when a window minimizes / restores.</summary>
-    public bool DotDrain { get; init; } = true;
-
     /// <summary>Plan 7: live window previews when hovering a running app in the dock.</summary>
     public bool WindowPreviews { get; init; } = true;
 
