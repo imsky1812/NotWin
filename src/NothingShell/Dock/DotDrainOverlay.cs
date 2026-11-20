@@ -32,7 +32,7 @@ public sealed class DotDrainOverlay : IDrainOverlay
     private Window? _window;
     private bool _rendering;
 
-    private sealed record Anim(BitmapSource?[] Strips, RectI Window, double Tx, double Ty, double IconW, bool Restore, Action Done, Stopwatch Clock)
+    private sealed record Anim(Brush?[] Strips, RectI Window, double Tx, double Ty, double IconW, bool Restore, Action Done, Stopwatch Clock)
     {
         public FrameStats Stats { get; } = new();
     }
@@ -129,21 +129,26 @@ public sealed class DotDrainOverlay : IDrainOverlay
         EnsureWindow();
         DockWindowNative.PlaceTopmost(new WindowInteropHelper(_window!).Handle, _area);
 
+        // Every strip is a brush onto the SAME picture (its rows as the viewbox), so the picture goes to the graphics card
+        // once — 120 separate cropped bitmaps were 120 uploads and a ~0.1 s stall on the first frame (live log 2026-11-21).
         var count = GenieStrips.CountFor(window.Bottom - window.Top);
-        var strips = new BitmapSource?[count];
+        var strips = new Brush?[count];
         if (picture is BitmapSource bmp)
             for (var i = 0; i < count; i++)
             {
-                var y0 = (int)Math.Floor((double)i / count * bmp.PixelHeight);
-                var y1 = (int)Math.Floor((double)(i + 1) / count * bmp.PixelHeight);
-                if (y1 <= y0) continue;
-                var crop = new CroppedBitmap(bmp, new Int32Rect(0, y0, bmp.PixelWidth, y1 - y0));
-                crop.Freeze();
-                strips[i] = crop;
+                var y0 = (double)i / count * bmp.PixelHeight;
+                var y1 = (double)(i + 1) / count * bmp.PixelHeight;
+                var brush = new ImageBrush(bmp)
+                {
+                    ViewboxUnits = BrushMappingMode.Absolute, Viewbox = new Rect(0, y0 * 96 / bmp.DpiY, bmp.Width, (y1 - y0) * 96 / bmp.DpiY),
+                    Stretch = Stretch.Fill,
+                };
+                brush.Freeze();
+                strips[i] = brush;
             }
         var iconW = Math.Max(icon.Right - icon.Left, 24 * _scale);
-        _anims.Add(new Anim(picture is BitmapSource ? strips : new BitmapSource?[count], window,
-            (icon.Left + icon.Right) / 2.0, (icon.Top + icon.Bottom) / 2.0, iconW, restore, done, Stopwatch.StartNew()));
+        // The clock starts on the first drawn frame (Frame), so a slow first frame never makes the window jump ahead.
+        _anims.Add(new Anim(strips, window, (icon.Left + icon.Right) / 2.0, (icon.Top + icon.Bottom) / 2.0, iconW, restore, done, new Stopwatch()));
         if (!_rendering)
         {
             CompositionTarget.Rendering += OnRendering;
@@ -200,6 +205,7 @@ public sealed class DotDrainOverlay : IDrainOverlay
         {
             foreach (var a in _anims)
             {
+                if (!a.Clock.IsRunning) a.Clock.Start();
                 var t = a.Clock.Elapsed.TotalMilliseconds;
                 var duration = a.Restore ? DotDrain.GenieRestoreMs : DotDrain.GenieMs;
                 if (t >= duration) { finished.Add(a); continue; }
@@ -211,8 +217,7 @@ public sealed class DotDrainOverlay : IDrainOverlay
                     if (rects[i] is not { } r || r.Width < 0.5 || r.Height < 0.1) continue;
                     // A hair of overlap hides seams between strips.
                     var dest = new Rect((r.X - _area.Left) / _scale, (r.Y - _area.Top) / _scale, r.Width / _scale, r.Height / _scale + 0.6);
-                    if (a.Strips[i] is { } strip) dc.DrawImage(strip, dest);
-                    else dc.DrawRectangle(Card, null, dest);
+                    dc.DrawRectangle(a.Strips[i] ?? Card, null, dest);
                 }
             }
         }
