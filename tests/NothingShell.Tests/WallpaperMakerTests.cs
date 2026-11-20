@@ -60,4 +60,21 @@ public sealed class WallpaperMakerTests : IDisposable
         Assert.DoesNotContain(made[1], left);
         Assert.False(File.Exists(WallpaperMaker.PreviewOf(made[1]))); // its preview went with it
     });
+
+    // User, 2026-11-20: delete unwanted wallpapers they made (with the preview); never anything outside the folder.
+    [Fact]
+    public void Delete_RemovesTheWallpaperAndItsPreview_OnlyInsideTheFolder() => OnSta(() =>
+    {
+        var a = WallpaperMaker.Make(new WallRecipe(WallStyle.Grid, 1), 320, 180, _dir);
+        var b = WallpaperMaker.Make(new WallRecipe(WallStyle.Grid, 2), 320, 180, _dir);
+        Assert.True(WallpaperMaker.Delete(_dir, a));
+        Assert.False(File.Exists(a));
+        Assert.False(File.Exists(WallpaperMaker.PreviewOf(a)));
+        Assert.True(File.Exists(b));
+
+        var outside = Path.Combine(Path.GetTempPath(), "nothing_new_outside_" + Guid.NewGuid().ToString("N") + ".png");
+        File.WriteAllText(outside, "x");
+        try { Assert.False(WallpaperMaker.Delete(_dir, outside)); Assert.True(File.Exists(outside)); }
+        finally { File.Delete(outside); }
+    });
 }

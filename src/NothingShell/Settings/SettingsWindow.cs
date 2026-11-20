@@ -56,12 +56,12 @@ public sealed class SettingsWindow : Window
 
         var stack = new StackPanel();
         var head = new DockPanel { Margin = new Thickness(0, 0, 0, 18) };
+        DockPanel.SetDock(head, System.Windows.Controls.Dock.Top);
         var close = new TextBlock { Text = "✕", FontSize = 13, Foreground = TileChrome.Dim, Cursor = Cursors.Hand, Background = Brushes.Transparent, VerticalAlignment = VerticalAlignment.Center };
         close.MouseLeftButtonUp += (_, _) => Close();
         DockPanel.SetDock(close, System.Windows.Controls.Dock.Right);
         head.Children.Add(close);
         head.Children.Add(TileChrome.Body("Settings", 20, FontWeights.SemiBold));
-        stack.Children.Add(head);
 
         // Weather city (spec §6.5: a city the user types in Settings).
         stack.Children.Add(Section("Weather"));
@@ -99,15 +99,40 @@ public sealed class SettingsWindow : Window
         {
             Background = (Brush)Application.Current.FindResource("Brush.GlassDense"),
             BorderBrush = (Brush)Application.Current.FindResource("Brush.Line"),
-            BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(28), Padding = new Thickness(24), Child = stack,
+            BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(28), Padding = new Thickness(24),
+            // The header (with ✕) stays put; everything below scrolls once the window reaches the screen's height
+            // (user report 2026-11-20: many wallpapers pushed the window and its ✕ above the screen).
+            Child = new DockPanel
+            {
+                LastChildFill = true,
+                Children =
+                {
+                    head,
+                    new ScrollViewer
+                    {
+                        Content = stack, VerticalScrollBarVisibility = ScrollBarVisibility.Hidden,
+                        HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled, PanningMode = PanningMode.VerticalOnly,
+                    },
+                },
+            },
         };
+        SizeChanged += (_, _) => Fit();
         PreviewKeyDown += (_, e) => { if (e.Key == Key.Escape) { e.Handled = true; Close(); } };
         Closed += (_, _) => s_open = null;
         Loaded += (_, _) =>
         {
+            Fit();
             ForegroundNative.Activate(new WindowInteropHelper(this).Handle);
             Activate();
         };
+    }
+
+    // Never taller than the screen's work area, and kept inside it (re-centred when the content changes size).
+    private void Fit()
+    {
+        var (top, maxHeight) = SettingsLayout.Fit(ActualHeight, SystemParameters.WorkArea);
+        if (Math.Abs(MaxHeight - maxHeight) > 0.5) MaxHeight = maxHeight;
+        if (Math.Abs(Top - top) > 0.5) Top = top;
     }
 
     /// <summary>Shows the settings window, or brings the open one to the front.</summary>
@@ -174,6 +199,7 @@ public sealed class SettingsWindow : Window
             var files = new List<(string Full, string Preview, string Tip)>();
             if (w.GeneratedDir is { } g)
                 files.AddRange(WallpaperMaker.List(g).Select(f => (f, WallpaperMaker.PreviewOf(f), "made by you")));
+            var mine = files.Select(f => f.Full).ToHashSet(StringComparer.OrdinalIgnoreCase);
             if (bundledDir is not null)
                 foreach (var name in new[] { "nothing_halftone_light", "nothing_halftone_dark", "nothing_glyph_dark", "nothing_grid_light" })
                     files.Add((System.IO.Path.Combine(bundledDir, name + ".png"), System.IO.Path.Combine(bundledDir, name + "_preview.jpg"),
@@ -192,6 +218,28 @@ public sealed class SettingsWindow : Window
                     ToolTip = tip,
                 };
                 var path = full;
+                if (mine.Contains(full) && w.GeneratedDir is { } genDir)
+                {
+                    // ✕ (on hover) deletes a wallpaper you made; the bundled four cannot be deleted.
+                    var delete = new Border
+                    {
+                        Width = 24, Height = 24, CornerRadius = new CornerRadius(12), Margin = new Thickness(6),
+                        Background = TileChrome.FrozenArgb(0xCC, 0x11, 0x11, 0x11), Cursor = Cursors.Hand,
+                        HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Top,
+                        Visibility = Visibility.Hidden, ToolTip = "Delete",
+                        Child = new TextBlock { Text = "✕", FontSize = 11, Foreground = TileChrome.Text, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center },
+                    };
+                    delete.MouseLeftButtonUp += (_, e) =>
+                    {
+                        e.Handled = true; // not a click on the wallpaper
+                        var ok = WallpaperMaker.Delete(genDir, path);
+                        Log.Info($"wallpaper deleted ok={ok}");
+                        Fill();
+                    };
+                    thumb.Child = new Grid { Children = { delete } };
+                    thumb.MouseEnter += (_, _) => delete.Visibility = Visibility.Visible;
+                    thumb.MouseLeave += (_, _) => delete.Visibility = Visibility.Hidden;
+                }
                 thumb.MouseLeftButtonUp += (_, _) =>
                 {
                     var ok = WallpaperNative.Apply(path);
@@ -302,5 +350,19 @@ public sealed class SettingsWindow : Window
         row.Children.Add(text);
         row.MouseLeftButtonUp += (_, _) => { set(!get()); Paint(); };
         return row;
+    }
+}
+
+/// <summary>Where the settings window sits: never taller than the work area minus a margin, kept inside it.</summary>
+public static class SettingsLayout
+{
+    public const double Margin = 24;
+
+    public static (double Top, double MaxHeight) Fit(double actualHeight, Rect workArea)
+    {
+        var maxHeight = Math.Max(200, workArea.Height - 2 * Margin);
+        var height = Math.Min(actualHeight, maxHeight);
+        var top = workArea.Top + (workArea.Height - height) / 2;
+        return (Math.Max(workArea.Top + Margin, top), maxHeight);
     }
 }

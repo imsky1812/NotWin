@@ -74,6 +74,29 @@ public static class WallpaperMaker
         }
     }
 
+    /// <summary>
+    /// Deletes a wallpaper the user made, with its preview (user, 2026-11-20). Only a <c>nothing_new_*.png</c> directly
+    /// inside <paramref name="dir"/>; anything else is refused (false).
+    /// </summary>
+    public static bool Delete(string dir, string png)
+    {
+        try
+        {
+            var full = Path.GetFullPath(png);
+            var folder = Path.GetFullPath(dir).TrimEnd(Path.DirectorySeparatorChar);
+            if (!string.Equals(Path.GetDirectoryName(full), folder, StringComparison.OrdinalIgnoreCase)) return false;
+            var name = Path.GetFileName(full);
+            if (!name.StartsWith(Prefix, StringComparison.OrdinalIgnoreCase) || !name.EndsWith(".png", StringComparison.OrdinalIgnoreCase)) return false;
+            File.Delete(full);
+            File.Delete(PreviewOf(full));
+            return true;
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException or ArgumentException)
+        {
+            return false;
+        }
+    }
+
     private static Brush Freeze(Brush b)
     {
         b.Freeze();
