@@ -7,8 +7,14 @@ namespace NothingShell.DragHelper;
 /// <summary>
 /// <c>NothingShell.DragHelper.exe --drag "C:\path\file" …</c>: drags the files from where the mouse is, at normal level,
 /// so they drop into WhatsApp, browser upload boxes (Google Forms, Drive) and Explorer like a drag from Explorer.
-/// The shell starts it while the user is already dragging a shelf chip. If the button is no longer down by then, it
-/// does nothing: a drag that starts with the button up would drop at once wherever the pointer happens to be.
+/// The shell starts it while the user is already dragging a shelf chip.
+/// <para>
+/// Windows sends a drag's mouse movement to the window where the button went down — the shell's notch — so a drag
+/// started here from a background window never sees the pointer move and drops back where it began (live log
+/// 2026-11-20). So the helper puts a tiny "grip" window under the pointer, brings it to the front, and re-sends a
+/// release and a press of the held button: the press now belongs to the grip, and the drag starts from it exactly
+/// as if the user had pressed there. If the button is no longer held, nothing is sent and nothing is dropped.
+/// </para>
 /// </summary>
 internal static class Program
 {
@@ -24,23 +30,46 @@ internal static class Program
         if (!PrimaryButtonDown()) return Done(4, "button already released", clock); // never drop blindly
 
         Application.SetHighDpiMode(HighDpiMode.PerMonitorV2); // drop positions in real screen pixels on every monitor
-
         var data = new DataObject();
         data.SetData(DataFormats.FileDrop, paths);
         data.SetData("Preferred DropEffect", new MemoryStream(BitConverter.GetBytes(1))); // DROPEFFECT_COPY
 
-        // Only the foreground window can take the mouse (SetCapture), and the drag loop needs it: a helper left in
-        // the background never sees the pointer move or the button go up (live report 2026-11-20: nothing dropped).
-        // The shell allows the next foreground change before starting us; this tiny off-screen window takes it.
-        using var source = new Form
+        var outcome = (Code: 5, What: "no press reached the grip");
+        var cursor = Cursor.Position;
+        using var grip = new Form
         {
             FormBorderStyle = FormBorderStyle.None, ShowInTaskbar = false, TopMost = true, StartPosition = FormStartPosition.Manual,
-            Location = new System.Drawing.Point(-200, -200), Size = new System.Drawing.Size(1, 1), Opacity = 0.01,
+            Location = new System.Drawing.Point(cursor.X - 24, cursor.Y - 24), Size = new System.Drawing.Size(48, 48),
+            BackColor = System.Drawing.Color.Black, Opacity = 0.02, // invisible, yet it still takes the press
         };
-        source.Show();
-        var foreground = SetForegroundWindow(source.Handle);
-        var result = source.DoDragDrop(data, DragDropEffects.Copy | DragDropEffects.Link);
-        return Done(0, $"dragged {paths.Length} foreground={foreground} result={result}", clock);
+        var started = false;
+        grip.MouseDown += (_, _) =>
+        {
+            if (started) return;
+            started = true;
+            var result = grip.DoDragDrop(data, DragDropEffects.Copy | DragDropEffects.Link);
+            outcome = (0, $"dragged {paths.Length} result={result}");
+            grip.Close();
+        };
+        grip.Shown += (_, _) =>
+        {
+            var foreground = SetForegroundWindow(grip.Handle);
+            // Re-check right before re-sending: if the user let go meanwhile, send nothing (a press with no release
+            // to follow would leave a drag hanging).
+            if (!PrimaryButtonDown())
+            {
+                outcome = (4, $"button released before the grip was ready foreground={foreground}");
+                grip.Close();
+                return;
+            }
+            var sent = Repress();
+            outcome = (5, $"no press reached the grip foreground={foreground} sent={sent}");
+        };
+        var giveUp = new System.Windows.Forms.Timer { Interval = 2000 };
+        giveUp.Tick += (_, _) => { giveUp.Stop(); if (!started) grip.Close(); };
+        giveUp.Start();
+        Application.Run(grip);
+        return Done(outcome.Code, outcome.What, clock);
     }
 
     // One line per run in %AppData%\NothingShell\draghelper.log (never file names), kept under 64 KB.
@@ -60,13 +89,38 @@ internal static class Program
     }
 
     // The physical button that acts as the primary one (left, unless the user swapped the buttons).
-    private static bool PrimaryButtonDown()
+    private static bool Swapped => GetSystemMetrics(SmSwapButton) != 0;
+
+    private static bool PrimaryButtonDown() => (GetAsyncKeyState(Swapped ? VkRButton : VkLButton) & 0x8000) != 0;
+
+    // A release then a press of the primary button where the pointer is (which is now over the grip).
+    private static uint Repress()
     {
-        var vk = GetSystemMetrics(SmSwapButton) != 0 ? VkRButton : VkLButton;
-        return (GetAsyncKeyState(vk) & 0x8000) != 0;
+        const uint leftDown = 0x0002, leftUp = 0x0004, rightDown = 0x0008, rightUp = 0x0010;
+        var (up, down) = Swapped ? (rightUp, rightDown) : (leftUp, leftDown);
+        var inputs = new[] { MouseInput(up), MouseInput(down) };
+        return SendInput((uint)inputs.Length, inputs, Marshal.SizeOf<Input>());
+    }
+
+    private static Input MouseInput(uint flags) => new() { Type = 0 /* INPUT_MOUSE */, Mouse = new MouseData { Flags = flags } };
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct MouseData
+    {
+        public int Dx, Dy;
+        public uint MouseInfo, Flags, Time;
+        public nint ExtraInfo;
+    }
+
+    [StructLayout(LayoutKind.Explicit)]
+    private struct Input
+    {
+        [FieldOffset(0)] public uint Type;
+        [FieldOffset(8)] public MouseData Mouse; // 8 on 64-bit (the union starts after the padded type field)
     }
 
     [DllImport("user32.dll")] private static extern short GetAsyncKeyState(int vk);
-    [DllImport("user32.dll")] private static extern bool SetForegroundWindow(nint hwnd);
     [DllImport("user32.dll")] private static extern int GetSystemMetrics(int index);
+    [DllImport("user32.dll")] private static extern bool SetForegroundWindow(nint hwnd);
+    [DllImport("user32.dll", SetLastError = true)] private static extern uint SendInput(uint count, Input[] inputs, int size);
 }
