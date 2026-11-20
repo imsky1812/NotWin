@@ -98,7 +98,10 @@ public sealed class EditChrome
     {
         Outline = new Rectangle
         {
-            Stroke = TileChrome.Red, StrokeThickness = 2 / scale, StrokeDashArray = [4, 3], RadiusX = 26, RadiusY = 26,
+            Stroke = TileChrome.Red, StrokeThickness = 2 / scale, StrokeDashArray = [4, 3],
+            // A circle photo frame is round, so its overlap outline is too.
+            RadiusX = p.Kind == WidgetKind.Photo && p.Config?.Shape == "circle" ? p.Size.PxW / 2.0 : 26,
+            RadiusY = p.Kind == WidgetKind.Photo && p.Config?.Shape == "circle" ? p.Size.PxH / 2.0 : 26,
             IsHitTestVisible = false, Visibility = overlaps ? Visibility.Visible : Visibility.Collapsed,
         };
         // Alpha 1, not 0: fully transparent pixels of a per-pixel-transparent window pass clicks through (the bare clock).

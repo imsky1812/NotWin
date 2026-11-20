@@ -56,12 +56,21 @@ public sealed class PhotoFrameWidget : IDesktopWidget
 
     public void Configure(WidgetConfig? config) => _config = config ?? new WidgetConfig();
 
+    /// <summary>A circle frame draws its own round card (user, 2026-11-20), so no square card goes around it.</summary>
+    public bool Bare => Circle;
+
     public FrameworkElement Build(WidgetSize size)
     {
         _host = new Grid { Background = Brushes.Transparent, Cursor = Cursors.Hand };
         _host.MouseLeftButtonUp += (_, e) => { e.Handled = true; PhotoManagePopup.Guard(OnClick); };
         Fill();
-        return _host;
+        if (!Circle) return _host;
+        // The normal card's black, edge and 16 px padding, but round (frame sizes are always square).
+        return new Border
+        {
+            Background = WidgetCard.CardBrush, BorderBrush = WidgetCard.EdgeBrush, BorderThickness = new Thickness(1.5),
+            CornerRadius = new CornerRadius(size.PxW / 2.0), Padding = new Thickness(16), Child = _host,
+        };
     }
 
     public void Placed(RectI screen, RectI monitor)
@@ -116,10 +125,9 @@ public sealed class PhotoFrameWidget : IDesktopWidget
 
     private FrameworkElement EmptyState()
     {
-        var outline = new Rectangle
-        {
-            Stroke = DashBrush, StrokeThickness = 1.5, StrokeDashArray = [4, 4], RadiusX = 14, RadiusY = 14,
-        };
+        Shape outline = Circle
+            ? new Ellipse { Stroke = DashBrush, StrokeThickness = 1.5, StrokeDashArray = [4, 4] }
+            : new Rectangle { Stroke = DashBrush, StrokeThickness = 1.5, StrokeDashArray = [4, 4], RadiusX = 14, RadiusY = 14 };
         var label = TileChrome.Label("Add photos");
         label.HorizontalAlignment = HorizontalAlignment.Center;
         label.Margin = new Thickness(0, 10, 0, 0);
