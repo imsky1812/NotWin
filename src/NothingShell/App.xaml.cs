@@ -308,7 +308,8 @@ public partial class App : Application
             new Settings.SettingsWindow.WidgetOptions(
                 scale => { if (_widgets is null) dock.UpdateSettings(s => s with { WidgetScale = scale }); else _widgets.SetScale(scale); },
                 Path.Combine(AppContext.BaseDirectory, "Wallpapers"),
-                () => _widgets?.BeginEdit()));
+                () => _widgets?.BeginEdit(),
+                Path.Combine(DataDir, "wallpapers")));
     }
 
     // Source app of a media session (AUMID or exe) as a short name for the media tile: the launcher index, else the

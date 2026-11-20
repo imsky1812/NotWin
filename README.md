@@ -99,7 +99,8 @@ notifications. `uninstall.ps1` removes it. Use `-NoTimestamp` to skip the signin
     **＋** adds apps from a searchable list, right-click an icon > *Remove from folder*.
 - **Settings:** right-click the open notch, the Settings tile, or "Settings…" in the start button's right-click
   menu: weather city, widget size (**S / M / L**, applied live), **Edit widgets**, a **wallpaper** picker (four
-  Nothing-style wallpapers; one is only applied when you click it), start with Windows, keep the dock visible, and
+  Nothing-style wallpapers, plus **✦ New**, which draws a fresh random one at your screen size and applies it; the last 12
+  you made stay in the list; one is only applied when you click it), start with Windows, keep the dock visible, and
   Quit.
 - **Windows' own notification pop-ups:** Nothing Shell never changes your notification settings. A one-time tip in
   the panel offers to open Windows' settings so you can turn on *Do not disturb*, or turn off banners for chatty apps.

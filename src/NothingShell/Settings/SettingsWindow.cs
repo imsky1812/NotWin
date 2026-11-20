@@ -3,8 +3,10 @@ using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Interop;
 using System.Windows.Media;
+using System.Windows.Threading;
 using NothingShell.Core;
 using NothingShell.Core.Forecast;
+using NothingShell.Core.Wallpapers;
 using NothingShell.Forecast;
 using NothingShell.Native;
 using NothingShell.Notch.Dashboard;
@@ -28,7 +30,8 @@ public sealed class SettingsWindow : Window
     private readonly Border _startToggle = new(), _keepToggle = new();
 
     /// <summary>Plan 5 widget settings: widget size (S/M/L), the wallpapers folder, and entering widget edit mode.</summary>
-    public sealed record WidgetOptions(Action<string> SetScale, string? WallpaperDir, Action EditWidgets);
+    /// <param name="GeneratedDir">Where "✦ New" wallpapers are saved (the user's data folder).</param>
+    public sealed record WidgetOptions(Action<string> SetScale, string? WallpaperDir, Action EditWidgets, string? GeneratedDir = null);
 
     private SettingsWindow(Func<ShellSettings> settings, Action<bool> setStart, Action<bool> setKeep, WeatherService? weather,
         Action<WeatherPlace> saveWeather, Action quit, WidgetOptions? widgets)
@@ -155,35 +158,90 @@ public sealed class SettingsWindow : Window
         edit.MouseLeftButtonUp += (_, _) => { Close(); w.EditWidgets(); };
         stack.Children.Add(edit);
 
-        if (w.WallpaperDir is not { } dir || !System.IO.Directory.Exists(dir)) return;
+        var bundledDir = w.WallpaperDir is { } d && System.IO.Directory.Exists(d) ? d : null;
+        if (bundledDir is null && w.GeneratedDir is null) return;
         stack.Children.Add(Section("Wallpaper"));
         var grid = new System.Windows.Controls.Primitives.UniformGrid { Columns = 2, Margin = new Thickness(0, 0, 0, 18) };
-        var current = WallpaperNative.Current();
-        foreach (var name in new[] { "nothing_halftone_light", "nothing_halftone_dark", "nothing_glyph_dark", "nothing_grid_light" })
+        stack.Children.Add(grid);
+
+        // ✦ New first (user, 2026-11-20: a fresh Nothing-style wallpaper whenever they like), then the ones made
+        // before (newest first), then the four bundled ones. A click on New makes one and applies it.
+        void Fill()
         {
-            var full = System.IO.Path.Combine(dir, name + ".png");
-            var preview = System.IO.Path.Combine(dir, name + "_preview.jpg");
-            if (!System.IO.File.Exists(full)) continue;
-            var selected = string.Equals(current, full, StringComparison.OrdinalIgnoreCase);
-            var thumb = new Border
+            grid.Children.Clear();
+            var current = WallpaperNative.Current();
+            if (w.GeneratedDir is { } gen) grid.Children.Add(NewTile(gen));
+            var files = new List<(string Full, string Preview, string Tip)>();
+            if (w.GeneratedDir is { } g)
+                files.AddRange(WallpaperMaker.List(g).Select(f => (f, WallpaperMaker.PreviewOf(f), "made by you")));
+            if (bundledDir is not null)
+                foreach (var name in new[] { "nothing_halftone_light", "nothing_halftone_dark", "nothing_glyph_dark", "nothing_grid_light" })
+                    files.Add((System.IO.Path.Combine(bundledDir, name + ".png"), System.IO.Path.Combine(bundledDir, name + "_preview.jpg"),
+                        name.Replace("nothing_", "").Replace('_', ' ')));
+            foreach (var (full, preview, tip) in files)
+            {
+                if (!System.IO.File.Exists(full)) continue;
+                var selected = string.Equals(current, full, StringComparison.OrdinalIgnoreCase);
+                var thumb = new Border
+                {
+                    Height = 96, CornerRadius = new CornerRadius(10), Margin = new Thickness(0, 0, 8, 8), Cursor = Cursors.Hand,
+                    BorderBrush = selected ? TileChrome.Text : Brushes.Transparent, BorderThickness = new Thickness(2),
+                    Background = System.IO.File.Exists(preview)
+                        ? new ImageBrush(Thumb(preview)) { Stretch = Stretch.UniformToFill }
+                        : TileChrome.Frozen(0x33, 0x33, 0x33),
+                    ToolTip = tip,
+                };
+                var path = full;
+                thumb.MouseLeftButtonUp += (_, _) =>
+                {
+                    var ok = WallpaperNative.Apply(path);
+                    Log.Info($"wallpaper applied ok={ok}");
+                    foreach (var t in grid.Children.OfType<Border>()) t.BorderBrush = Brushes.Transparent;
+                    if (ok) thumb.BorderBrush = TileChrome.Text;
+                };
+                grid.Children.Add(thumb);
+            }
+        }
+
+        Border NewTile(string gen)
+        {
+            var label = new TextBlock
+            {
+                Text = "✦ New", FontFamily = TileChrome.Font, FontSize = 14, FontWeight = FontWeights.SemiBold, Foreground = TileChrome.Text,
+                HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center,
+            };
+            var tile = new Border
             {
                 Height = 96, CornerRadius = new CornerRadius(10), Margin = new Thickness(0, 0, 8, 8), Cursor = Cursors.Hand,
-                BorderBrush = selected ? TileChrome.Text : Brushes.Transparent, BorderThickness = new Thickness(2),
-                Background = System.IO.File.Exists(preview)
-                    ? new ImageBrush(Thumb(preview)) { Stretch = Stretch.UniformToFill }
-                    : TileChrome.Frozen(0x33, 0x33, 0x33),
-                ToolTip = name.Replace("nothing_", "").Replace('_', ' '),
+                Background = TileChrome.Frozen(0x22, 0x22, 0x22), BorderBrush = TileChrome.FrozenArgb(0x55, 0xF2, 0xF2, 0xF2),
+                BorderThickness = new Thickness(1.5), ToolTip = "Make a new Nothing-style wallpaper", Child = label,
             };
-            thumb.MouseLeftButtonUp += (_, _) =>
+            var busy = false;
+            tile.MouseLeftButtonUp += (_, _) =>
             {
-                var ok = WallpaperNative.Apply(full);
-                Log.Info($"wallpaper applied ok={ok} ({name})");
-                foreach (var t in grid.Children.OfType<Border>()) t.BorderBrush = Brushes.Transparent;
-                if (ok) thumb.BorderBrush = TileChrome.Text;
+                if (busy) return;
+                busy = true;
+                label.Text = "MAKING…";
+                // Let "MAKING…" paint first; drawing a full-screen wallpaper takes about a second.
+                Dispatcher.BeginInvoke(DispatcherPriority.Background, () =>
+                {
+                    try
+                    {
+                        var (monitor, _) = DockWindowNative.GetPrimaryMonitor();
+                        var recipe = WallpaperArt.Random(System.Random.Shared);
+                        var png = WallpaperMaker.Make(recipe, Math.Max(640, monitor.Right - monitor.Left), Math.Max(360, monitor.Bottom - monitor.Top), gen);
+                        var ok = WallpaperNative.Apply(png);
+                        Log.Info($"wallpaper made ({recipe.Style}) applied ok={ok}");
+                        WallpaperMaker.Prune(gen, keep: png);
+                    }
+                    catch (Exception e) { Log.Error("making a wallpaper failed", e); }
+                    Fill();
+                });
             };
-            grid.Children.Add(thumb);
+            return tile;
         }
-        stack.Children.Add(grid);
+
+        Fill();
     }
 
     private static ImageSource Thumb(string path)
