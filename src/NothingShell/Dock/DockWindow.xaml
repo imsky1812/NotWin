@@ -124,7 +124,7 @@
                 Height="60"
                 VerticalAlignment="Top"
                 CornerRadius="{StaticResource Radius.Dock}"
-                Background="{StaticResource Brush.Glass}"
+                Background="#FF000000"
                 BorderBrush="{StaticResource Brush.Line}"
                 BorderThickness="1"
                 Padding="10,0"

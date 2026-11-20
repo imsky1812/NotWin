@@ -79,4 +79,19 @@ public sealed class PackagedAppsTests
             """;
         Assert.Equal("Spotify", PackagedApps.AppId(spotify, "Spotify.exe"));
     }
+
+    // Live, 2026-11-21: Spotify updated itself (1.309 → 1.310); the pinned exe's folder no longer exists. The app is
+    // found again through its current install folder (asked for by family name).
+    [Fact]
+    public void Resolve_PackageUpdated_UsesTheCurrentInstall()
+    {
+        const string oldExe = @"C:\Program Files\WindowsApps\SpotifyAB.SpotifyMusic_1.309.2055.0_x64__zpdnekdrzrea0\Spotify.exe";
+        const string newRoot = @"C:\Program Files\WindowsApps\SpotifyAB.SpotifyMusic_1.310.2586.0_x64__zpdnekdrzrea0";
+        string? asked = null;
+        var launch = PackagedApps.Resolve(oldExe,
+            path => path == newRoot + @"\AppxManifest.xml" ? Manifest : null, // only the new folder exists
+            family => { asked = family; return newRoot; });
+        Assert.Equal("SpotifyAB.SpotifyMusic_zpdnekdrzrea0", asked);
+        Assert.Equal(@"shell:AppsFolder\SpotifyAB.SpotifyMusic_zpdnekdrzrea0!Spotify", launch);
+    }
 }

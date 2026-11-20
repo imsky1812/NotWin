@@ -184,4 +184,16 @@ public sealed class SnakeGameTests
         Assert.False(gate.Armed);
         Assert.False(gate.Filter(0x57, down: false, foreground: 200, modifierDown: false));
     }
+
+    // User, 2026-11-21: on the idle screen the snake's body sat on top of "CLICK · ARROWS / WASD". It is hidden until play.
+    [Fact]
+    public void BodyHiddenUntilPlay()
+    {
+        var game = new SnakeGame(14, new Random(1));
+        Assert.False(game.BodyVisible);
+        game.Click();
+        Assert.True(game.BodyVisible);
+        game.Pause();
+        Assert.True(game.BodyVisible);
+    }
 }

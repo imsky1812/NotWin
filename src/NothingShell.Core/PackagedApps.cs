@@ -57,10 +57,14 @@ public static class PackagedApps
     /// The <c>shell:AppsFolder</c> launch path for a packaged app's exe, reading its manifest through
     /// <paramref name="readText"/> (null when unreadable); null when the path is not inside a package.
     /// </summary>
-    public static string? Resolve(string? exePath, Func<string, string?> readText)
+    /// <param name="currentRoot">Where the package with this family name is installed now (null if unknown): used when
+    /// the app has updated itself and the exe's old version folder is gone (live, 2026-11-21: Spotify 1.309 → 1.310).</param>
+    public static string? Resolve(string? exePath, Func<string, string?> readText, Func<string, string?>? currentRoot = null)
     {
         if (FromExePath(exePath) is not { } p) return null;
         var xml = readText(Path.Combine(p.Root, "AppxManifest.xml"));
+        if (xml is null && currentRoot?.Invoke(p.Family) is { } now && !string.Equals(now, p.Root, StringComparison.OrdinalIgnoreCase))
+            xml = readText(Path.Combine(now, "AppxManifest.xml"));
         return xml is not null && AppId(xml, p.RelativeExe) is { } id ? LaunchPath(p.Family, id) : null;
     }
 }

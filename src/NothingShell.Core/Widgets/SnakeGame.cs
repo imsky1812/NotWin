@@ -30,6 +30,9 @@ public sealed class SnakeGame
     public int Best { get; private set; }
     public SnakeState State { get; private set; } = SnakeState.Idle;
 
+    /// <summary>The snake is drawn once a game has started (on the idle screen it would cover the title).</summary>
+    public bool BodyVisible => State != SnakeState.Idle;
+
     /// <summary>Queues a turn; reversing onto the snake's own neck is ignored.</summary>
     public void Turn(int dx, int dy)
     {

@@ -218,8 +218,8 @@ public sealed class SnakeWidget : IDesktopWidget
                     var p = (x, y);
                     Brush b = Unlit;
                     var rr = r;
-                    if (body.Contains(p)) b = over ? Dead : TileChrome.Text;
-                    if (p == head) { b = over ? TileChrome.Red : Brushes.White; if (!over) rr = r * 1.12; }
+                    if (game.BodyVisible && body.Contains(p)) b = over ? Dead : TileChrome.Text;
+                    if (game.BodyVisible && p == head) { b = over ? TileChrome.Red : Brushes.White; if (!over) rr = r * 1.12; }
                     if (p == game.Food) b = TileChrome.Red;
                     dc.DrawEllipse(b, null, new Point(ox + x * pitch + pitch / 2, oy + y * pitch + pitch / 2), rr, rr);
                 }

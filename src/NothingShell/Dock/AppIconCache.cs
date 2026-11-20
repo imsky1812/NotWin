@@ -87,9 +87,10 @@ public sealed class AppIconCache
 
     private static ImageSource? Load(string exePathOrAumid, int sizePx)
     {
-        var rooted = Path.IsPathRooted(exePathOrAumid);
-        if (rooted && !File.Exists(exePathOrAumid)) return null;
-        var icon = IconNative.GetIcon(ParsingName(exePathOrAumid, ReadText), sizePx);
+        // A Store app's exe resolves to its app id even when its version folder is gone (the app updated itself).
+        var parsing = ParsingName(exePathOrAumid, StoreApps.ReadText, StoreApps.CurrentRoot);
+        if (Path.IsPathRooted(parsing) && !File.Exists(parsing)) return null;
+        var icon = IconNative.GetIcon(parsing, sizePx);
         return icon is { } i ? ToBitmap(i.Bgra, i.Size) : null;
     }
 
@@ -98,16 +99,10 @@ public sealed class AppIconCache
     /// WindowsApps becomes its app id too (user report 2026-11-20: WhatsApp's exe has no real icon of its own, its
     /// package does); any other path is used as it is.
     /// </summary>
-    public static string ParsingName(string exePathOrAumid, Func<string, string?> readText)
+    public static string ParsingName(string exePathOrAumid, Func<string, string?> readText, Func<string, string?>? currentRoot = null)
     {
         if (!Path.IsPathRooted(exePathOrAumid)) return @"shell:AppsFolder\" + exePathOrAumid;
-        return NothingShell.Core.PackagedApps.Resolve(exePathOrAumid, readText) ?? exePathOrAumid;
-    }
-
-    private static string? ReadText(string path)
-    {
-        try { return File.ReadAllText(path); }
-        catch (Exception e) when (e is IOException or UnauthorizedAccessException) { return null; }
+        return NothingShell.Core.PackagedApps.Resolve(exePathOrAumid, readText, currentRoot) ?? exePathOrAumid;
     }
 
     private static BitmapSource ToBitmap(byte[] bgra, int size)
