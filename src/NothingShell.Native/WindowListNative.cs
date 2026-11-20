@@ -1,6 +1,7 @@
 using NothingShell.Core;
 using Windows.Win32;
 using Windows.Win32.Foundation;
+using Windows.Win32.Graphics.Gdi;
 using Windows.Win32.Graphics.Dwm;
 using Windows.Win32.UI.Shell.PropertiesSystem;
 using Windows.Win32.UI.WindowsAndMessaging;
@@ -153,6 +154,31 @@ public static unsafe class WindowListNative
         var h = (HWND)hwnd;
         if (PInvoke.IsIconic(h)) PInvoke.ShowWindow(h, SHOW_WINDOW_CMD.SW_RESTORE);
         return PInvoke.SetForegroundWindow(h);
+    }
+
+    /// <summary>
+    /// Where the window sits when not minimized (GetWindowPlacement's normal rectangle) in screen pixels — the dot
+    /// drain's start for a window that is already minimized (Plan 7). Null when unknown.
+    /// </summary>
+    public static RectI? NormalRect(nint hwnd)
+    {
+        if (hwnd == 0) return null;
+        var placement = new WINDOWPLACEMENT { length = (uint)sizeof(WINDOWPLACEMENT) };
+        if (!PInvoke.GetWindowPlacement((HWND)hwnd, ref placement)) return null;
+        var r = placement.rcNormalPosition;
+        // The normal rectangle is in work-area coordinates (unless the window is a tool window): shift by the work
+        // area's offset on its monitor.
+        var mon = PInvoke.MonitorFromWindow((HWND)hwnd, MONITOR_FROM_FLAGS.MONITOR_DEFAULTTONEAREST);
+        var info = new MONITORINFO { cbSize = (uint)sizeof(MONITORINFO) };
+        int dx = 0, dy = 0;
+        var ex = (nint)PInvoke.GetWindowLongPtr((HWND)hwnd, WINDOW_LONG_PTR_INDEX.GWL_EXSTYLE);
+        if ((ex & 0x80 /* WS_EX_TOOLWINDOW */) == 0 && PInvoke.GetMonitorInfo(mon, ref info))
+        {
+            dx = info.rcWork.left - info.rcMonitor.left;
+            dy = info.rcWork.top - info.rcMonitor.top;
+        }
+        if (r.right <= r.left || r.bottom <= r.top) return null;
+        return new RectI(r.left + dx, r.top + dy, r.right + dx, r.bottom + dy);
     }
 
     public static void Minimize(nint hwnd) => PInvoke.ShowWindow((HWND)hwnd, SHOW_WINDOW_CMD.SW_MINIMIZE);

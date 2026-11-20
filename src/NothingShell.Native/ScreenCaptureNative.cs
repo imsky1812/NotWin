@@ -33,6 +33,60 @@ public static class ScreenCaptureNative
         }
     }
 
+    /// <summary>
+    /// A screen region as grey values, one per <paramref name="stepPx"/> cell (sampled at the cell centre, row-major,
+    /// (width / step) × (height / step)) — the dot drain's picture (Plan 7). Never kept; null on failure.
+    /// </summary>
+    public static unsafe byte[]? CaptureGray(RectI screen, int stepPx)
+    {
+        var w = screen.Right - screen.Left;
+        var h = screen.Bottom - screen.Top;
+        if (w <= 0 || h <= 0 || stepPx <= 0) return null;
+        int cols = w / stepPx, rows = h / stepPx;
+        if (cols == 0 || rows == 0) return [];
+        var dc = GetDC(0);
+        if (dc == 0) return null;
+        var mem = CreateCompatibleDC(dc);
+        var info = new BitmapInfo { Size = 40, Width = w, Height = -h, Planes = 1, BitCount = 32 };
+        var dib = CreateDIBSection(dc, ref info, 0, out var bits, 0, 0);
+        try
+        {
+            if (dib == 0 || bits == 0) return null;
+            var old = SelectObject(mem, dib);
+            var ok = BitBlt(mem, 0, 0, w, h, dc, screen.Left, screen.Top, SrcCopy | CaptureBlt);
+            SelectObject(mem, old);
+            if (!ok) return null;
+            var px = (byte*)bits;
+            var gray = new byte[cols * rows];
+            for (var r = 0; r < rows; r++)
+                for (var c = 0; c < cols; c++)
+                {
+                    var x = c * stepPx + stepPx / 2;
+                    var y = r * stepPx + stepPx / 2;
+                    var p = px + ((long)y * w + x) * 4; // BGRA
+                    gray[r * cols + c] = (byte)((p[2] * 299 + p[1] * 587 + p[0] * 114) / 1000);
+                }
+            return gray;
+        }
+        finally
+        {
+            if (dib != 0) DeleteObject(dib);
+            DeleteDC(mem);
+            ReleaseDC(0, dc);
+        }
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct BitmapInfo
+    {
+        public int Size, Width, Height;
+        public short Planes, BitCount;
+        public int Compression, SizeImage, XPelsPerMeter, YPelsPerMeter, ClrUsed, ClrImportant;
+        public int Colors; // one RGBQUAD slot (unused for 32 bpp)
+    }
+
+    [DllImport("gdi32.dll")] private static extern nint CreateDIBSection(nint dc, ref BitmapInfo info, uint usage, out nint bits, nint section, uint offset);
+
     public static void Delete(nint hBitmap)
     {
         if (hBitmap != 0) DeleteObject(hBitmap);
