@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Windows;
 using System.Windows.Interop;
 using System.Windows.Media;
+using System.Windows.Media.Imaging;
 using System.Windows.Threading;
 using NothingShell.Core;
 using NothingShell.Core.Dock;
@@ -10,27 +11,28 @@ using NothingShell.Native;
 namespace NothingShell.Dock;
 
 /// <summary>
-/// The dot drain's overlay (design 2026-11-20): a transparent, topmost, click-through window over the dock's monitor,
-/// shared by every running animation and closed by <see cref="DotDrainController"/> when the last ends. Snapshots use a
-/// tiny non-layered window at the window's spot that shows the window's live DWM picture for a couple of frames; that
-/// region of the screen is then read as grey cells (never kept).
+/// The minimize genie's overlay (user, 2026-11-21: the window's own picture bends into the dock icon, no dots): a
+/// transparent, topmost, click-through window over only the window-to-icon area, shared by every running animation and
+/// closed by <see cref="DotDrainController"/> when the last ends. The picture is cut once into horizontal strips that
+/// are placed along the genie funnel each frame (<see cref="GenieStrips"/>) — a few dozen draws per frame.
+/// Snapshots use a tiny non-layered stand-in window at the window's spot that shows the window's live DWM picture for
+/// a frame; that region of the screen is copied (never kept beyond the animation).
 /// </summary>
 public sealed class DotDrainOverlay : IDrainOverlay
 {
     private const int ExTransparent = 0x20, ExToolWindow = 0x80, ExNoActivate = 0x08000000;
-    private static readonly Brush White = Freeze(new SolidColorBrush(Color.FromRgb(0xF2, 0xF2, 0xF2)));
-    private static readonly Brush Red = Freeze(new SolidColorBrush(Color.FromRgb(0xE8, 0x23, 0x1F)));
-    private readonly List<Anim> _finished = [];
-    private readonly Dictionary<uint, Brush> _brushes = []; // one frozen brush per (slightly rounded) colour
-    private RectI _area; // what the overlay window covers now (screen px): only where animations move
+    private const int MaxPictureWidth = 1600; // larger windows are scaled down (enough for a half-second shrink)
+    private static readonly Brush Card = Freeze(new SolidColorBrush(Color.FromRgb(0x1A, 0x1A, 0x1A)));
     private readonly RectI _monitor;
     private readonly double _scale; // physical px per DIP
     private readonly List<Anim> _anims = [];
+    private readonly List<Anim> _finished = [];
     private readonly DrawingVisual _visual = new();
+    private RectI _area;
     private Window? _window;
     private bool _rendering;
 
-    private sealed record Anim(IReadOnlyList<DrainDot> Dots, RectI Window, double Tx, double Ty, double IconW, bool Restore, Action Done, Stopwatch Clock, double DotR)
+    private sealed record Anim(BitmapSource?[] Strips, RectI Window, double Tx, double Ty, double IconW, bool Restore, Action Done, Stopwatch Clock)
     {
         public FrameStats Stats { get; } = new();
     }
@@ -41,19 +43,19 @@ public sealed class DotDrainOverlay : IDrainOverlay
         _scale = dpiScale;
     }
 
-    public void Snapshot(nint hwnd, RectI screen, int stepPx, Action<byte[]?> done)
+    public void Snapshot(nint hwnd, RectI screen, Action<object?> done)
     {
         var shot = new Window
         {
             WindowStyle = WindowStyle.None, ResizeMode = ResizeMode.NoResize, ShowInTaskbar = false, ShowActivated = false,
             Topmost = true, Background = Brushes.Black, Width = 1, Height = 1, Left = -32000, Top = -32000,
         };
+        shot.SourceInitialized += (_, _) => DockWindowNative.AddExStyle(new WindowInteropHelper(shot).Handle, ExTransparent | ExToolWindow | ExNoActivate);
         DwmThumbnail? thumb = null;
         try
         {
             shot.Show();
             var h = new WindowInteropHelper(shot).Handle;
-            DockWindowNative.AddExStyle(h, ExTransparent | ExToolWindow | ExNoActivate);
             DockWindowNative.PlaceTopmost(h, screen);
             thumb = DwmThumbnail.Register(h, hwnd);
             if (thumb is null || !thumb.Place(new RectI(0, 0, screen.Right - screen.Left, screen.Bottom - screen.Top)))
@@ -66,28 +68,28 @@ public sealed class DotDrainOverlay : IDrainOverlay
         }
         catch (Exception e)
         {
-            Log.Error("dot drain snapshot failed", e);
+            Log.Error("minimize genie snapshot failed", e);
             thumb?.Dispose();
             try { shot.Close(); } catch (InvalidOperationException) { }
             done(null);
             return;
         }
-        // Wait until DWM has composed the picture (no dark flash), read it, hand it on — the dots start on this same
-        // frame — and only then take the stand-in away, so the window turns straight into dots.
-        Dispatcher.CurrentDispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Render, () =>
+        // Wait until DWM has composed the picture, copy it, hand it on (the genie's first frame), and only then take the
+        // stand-in away, so the window turns straight into the animation.
+        Dispatcher.CurrentDispatcher.BeginInvoke(DispatcherPriority.Render, () =>
         {
-            byte[]? gray = null;
+            BitmapSource? picture = null;
             try
             {
                 DwmThumbnail.Flush();
                 DwmThumbnail.Flush();
-                gray = ScreenCaptureNative.CaptureColour(screen, stepPx);
+                picture = Copy(screen);
             }
-            catch (Exception e) { Log.Error("dot drain capture failed", e); }
-            try { done(gray); }
+            catch (Exception e) { Log.Error("minimize genie capture failed", e); }
+            try { done(picture); }
             finally
             {
-                Dispatcher.CurrentDispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Background, () =>
+                Dispatcher.CurrentDispatcher.BeginInvoke(DispatcherPriority.Background, () =>
                 {
                     thumb.Dispose();
                     try { shot.Close(); } catch (InvalidOperationException) { }
@@ -96,10 +98,29 @@ public sealed class DotDrainOverlay : IDrainOverlay
         });
     }
 
-    public void Play(IReadOnlyList<DrainDot> dots, RectI window, RectI icon, bool restore, Action done)
+    // The screen region as a frozen bitmap, scaled down when very wide.
+    private static BitmapSource? Copy(RectI screen)
     {
-        // Smoothness (user, 2026-11-21: "choppy"): a see-through window is redrawn whole every frame, so it covers only
-        // the window-to-icon area (grown when another animation joins), never the whole screen.
+        var hbmp = ScreenCaptureNative.CaptureRegion(screen);
+        if (hbmp == 0) return null;
+        try
+        {
+            BitmapSource bmp = Imaging.CreateBitmapSourceFromHBitmap(hbmp, 0, Int32Rect.Empty, BitmapSizeOptions.FromEmptyOptions());
+            if (bmp.PixelWidth > MaxPictureWidth)
+            {
+                var k = (double)MaxPictureWidth / bmp.PixelWidth;
+                bmp = new TransformedBitmap(bmp, new ScaleTransform(k, k));
+            }
+            bmp = new WriteableBitmap(bmp); // materialise once: strips crop from memory, not from a transform chain
+            bmp.Freeze();
+            return bmp;
+        }
+        finally { ScreenCaptureNative.Delete(hbmp); }
+    }
+
+    public void Play(object? picture, RectI window, RectI icon, bool restore, Action done)
+    {
+        // Only the window-to-icon area: a see-through window is redrawn whole every frame (user, 2026-11-21: "choppy").
         var needed = DotDrain.Area(window, icon, (int)Math.Ceiling(24 * _scale));
         needed = new RectI(Math.Max(needed.Left, _monitor.Left), Math.Max(needed.Top, _monitor.Top),
             Math.Min(needed.Right, _monitor.Right), Math.Min(needed.Bottom, _monitor.Bottom));
@@ -107,9 +128,22 @@ public sealed class DotDrainOverlay : IDrainOverlay
             Math.Max(_area.Right, needed.Right), Math.Max(_area.Bottom, needed.Bottom));
         EnsureWindow();
         DockWindowNative.PlaceTopmost(new WindowInteropHelper(_window!).Handle, _area);
-        var dotR = dots.Count > 0 ? dots.Max(d => d.R) : 6;
+
+        var count = GenieStrips.CountFor(window.Bottom - window.Top);
+        var strips = new BitmapSource?[count];
+        if (picture is BitmapSource bmp)
+            for (var i = 0; i < count; i++)
+            {
+                var y0 = (int)Math.Floor((double)i / count * bmp.PixelHeight);
+                var y1 = (int)Math.Floor((double)(i + 1) / count * bmp.PixelHeight);
+                if (y1 <= y0) continue;
+                var crop = new CroppedBitmap(bmp, new Int32Rect(0, y0, bmp.PixelWidth, y1 - y0));
+                crop.Freeze();
+                strips[i] = crop;
+            }
         var iconW = Math.Max(icon.Right - icon.Left, 24 * _scale);
-        _anims.Add(new Anim(dots, window, (icon.Left + icon.Right) / 2.0, (icon.Top + icon.Bottom) / 2.0, iconW, restore, done, Stopwatch.StartNew(), dotR));
+        _anims.Add(new Anim(picture is BitmapSource ? strips : new BitmapSource?[count], window,
+            (icon.Left + icon.Right) / 2.0, (icon.Top + icon.Bottom) / 2.0, iconW, restore, done, Stopwatch.StartNew()));
         if (!_rendering)
         {
             CompositionTarget.Rendering += OnRendering;
@@ -136,6 +170,7 @@ public sealed class DotDrainOverlay : IDrainOverlay
             WindowStyle = WindowStyle.None, AllowsTransparency = true, Background = Brushes.Transparent, ResizeMode = ResizeMode.NoResize,
             ShowInTaskbar = false, ShowActivated = false, Topmost = true, Content = host, Left = -32000, Top = -32000, Width = 1, Height = 1,
         };
+        RenderOptions.SetBitmapScalingMode(host, BitmapScalingMode.Linear);
         w.SourceInitialized += (_, _) => DockWindowNative.AddExStyle(new WindowInteropHelper(w).Handle, ExTransparent | ExToolWindow | ExNoActivate);
         w.Show();
         _window = w;
@@ -147,12 +182,12 @@ public sealed class DotDrainOverlay : IDrainOverlay
         catch (Exception ex)
         {
             // An error while drawing must never end the shell: finish every animation now.
-            Log.Error("dot drain frame failed", ex);
+            Log.Error("minimize genie frame failed", ex);
             var all = _anims.ToList();
             _anims.Clear();
             foreach (var a in all)
             {
-                try { a.Done(); } catch (Exception doneError) { Log.Error("dot drain completion failed", doneError); }
+                try { a.Done(); } catch (Exception doneError) { Log.Error("minimize genie completion failed", doneError); }
             }
         }
     }
@@ -167,51 +202,28 @@ public sealed class DotDrainOverlay : IDrainOverlay
             {
                 var t = a.Clock.Elapsed.TotalMilliseconds;
                 var duration = a.Restore ? DotDrain.GenieRestoreMs : DotDrain.GenieMs;
-                var end = a.Restore ? duration : duration + DotDrain.BlinkMs;
-                if (t >= end) { finished.Add(a); continue; }
+                if (t >= duration) { finished.Add(a); continue; }
                 a.Stats.At(t);
-                if (t < duration)
+                var p = a.Restore ? 1 - t / duration : t / duration;
+                var rects = GenieStrips.Layout(a.Window, a.Tx, a.Ty, a.IconW, p, a.Strips.Length);
+                for (var i = 0; i < rects.Count; i++)
                 {
-                    var p = a.Restore ? 1 - t / duration : t / duration;
-                    foreach (var d in a.Dots)
-                    {
-                        var (x, y, s, visible) = DotDrain.Genie(d, a.Window, a.Tx, a.Ty, a.IconW, p);
-                        if (!visible) continue;
-                        var r = d.R * s / _scale;
-                        dc.DrawEllipse(BrushFor(d.Argb), null, Dip(x, y), r, r); // no outline: half the drawing work per dot
-                    }
-                }
-                else
-                {
-                    // Landed: one red dot blinks on the icon.
-                    var k = 1 - (t - DotDrain.GenieMs) / DotDrain.BlinkMs;
-                    var r = a.DotR / _scale;
-                    dc.PushOpacity(Math.Clamp(k, 0, 1));
-                    dc.DrawEllipse(Red, null, Dip(a.Tx, a.Ty), r, r);
-                    dc.Pop();
+                    if (rects[i] is not { } r || r.Width < 0.5 || r.Height < 0.1) continue;
+                    // A hair of overlap hides seams between strips.
+                    var dest = new Rect((r.X - _area.Left) / _scale, (r.Y - _area.Top) / _scale, r.Width / _scale, r.Height / _scale + 0.6);
+                    if (a.Strips[i] is { } strip) dc.DrawImage(strip, dest);
+                    else dc.DrawRectangle(Card, null, dest);
                 }
             }
         }
         foreach (var a in finished.ToList())
         {
             _anims.Remove(a);
-            Log.Info($"dot drain: {a.Stats.Frames} frames, worst gap {a.Stats.WorstGapMs:F0} ms, {a.Dots.Count} dots, area {_area.Right - _area.Left}x{_area.Bottom - _area.Top}");
+            Log.Info($"minimize genie: {a.Stats.Frames} frames, worst gap {a.Stats.WorstGapMs:F0} ms, {a.Strips.Length} strips, area {_area.Right - _area.Left}x{_area.Bottom - _area.Top}");
             try { a.Done(); }
-            catch (Exception ex) { Log.Error("dot drain completion failed", ex); }
+            catch (Exception ex) { Log.Error("minimize genie completion failed", ex); }
         }
     }
-
-    // Colours rounded to 4 bits per channel (≤ 4,096 brushes, made once and reused across frames).
-    private Brush BrushFor(uint argb)
-    {
-        var key = argb & 0xFFF0F0F0u;
-        if (_brushes.TryGetValue(key, out var b)) return b;
-        b = Freeze(new SolidColorBrush(Color.FromRgb((byte)(key >> 16), (byte)(key >> 8), (byte)key)));
-        _brushes[key] = b;
-        return b;
-    }
-
-    private Point Dip(double screenX, double screenY) => new((screenX - _area.Left) / _scale, (screenY - _area.Top) / _scale);
 
     private static T Freeze<T>(T f) where T : Freezable
     {

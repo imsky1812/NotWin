@@ -1710,20 +1710,20 @@ try {
     }
 
     if (Test-Section 'Widgets') {
-        Write-Step 'DOCK EFFECTS (Plan 7): dot drain when minimizing, window previews'
+        Write-Step 'DOCK EFFECTS (Plan 7): genie when minimizing, window previews'
         $logOff = Get-LogLength $AppLog
         $app = Start-App
         [void](Wait-Until { (Get-LogSince $AppLog $logOff) -match 'dock ready' } 15000 250)
         Write-Do 'For the best look, turn off Windows'' own animation first: System > Advanced > Performance > "Animate windows when minimizing and maximizing" (your choice; the shell never changes it).'
-        [void](Ask-Check 'DD.1' 'Dot drain into the dock icon' 'Minimize a normal app window (e.g. Notepad) with its _ button.' `
-            'Did the window turn into white dots that streamed into its dock icon, with a red dot blink at the end?')
-        [void](Ask-Check 'DD.2' 'Restore plays it in reverse' 'Click that app in the dock to restore it.' 'Did dots flow out of the icon and form the window again?')
-        [void](Ask-Check 'DD.3' 'A window without a picture gets grey dots' 'Minimize a full-screen-capable video player or a game window, if you have one (else answer s).' `
-            'Did it drain as grey dots (or normal white dots) without any stuck overlay?')
-        [void](Ask-Check 'DD.4' 'Win+M animates at most four' 'Open 6 windows, press Win+M.' 'Did at most four drain, the rest just minimize, with nothing left on screen?')
+        [void](Ask-Check 'DD.1' 'Genie into the dock icon' 'Minimize a normal app window (e.g. Notepad) with its _ button.' `
+            'Did the window bend into a funnel and slide smoothly into its dock icon?')
+        [void](Ask-Check 'DD.2' 'Restore plays it in reverse' 'Click that app in the dock to restore it.' 'Did the window flow back out of the icon?')
+        [void](Ask-Check 'DD.3' 'A window without a picture still genies' 'Minimize a full-screen-capable video player or a game window, if you have one (else answer s).' `
+            'Did it genie (as its picture or a plain black card) without anything left on screen?')
+        [void](Ask-Check 'DD.4' 'Win+M animates at most four' 'Open 6 windows, press Win+M.' 'Did at most four genie, the rest just minimize, with nothing left on screen?')
         [void](Ask-Check 'DD.5' 'Window previews' 'Rest the mouse on a running app with 2+ windows (e.g. two File Explorer windows), click a preview, then reopen it and press a preview''s x.' `
             'Did live previews with titles appear, did clicking switch to that window, and did x close it?')
-        [void](Ask-Check 'DD.6' 'Both switches off' 'Settings > Shell: turn off "Dot drain when minimizing" and "Window previews in the dock", minimize a window and hover a running app. Turn both back on afterwards.' `
+        [void](Ask-Check 'DD.6' 'Both switches off' 'Settings > Shell: turn off "Genie when minimizing" and "Window previews in the dock", minimize a window and hover a running app. Turn both back on afterwards.' `
             'With both off, was minimizing plain and did hovering show just the name?')
         Complete-Quit 'DD.quit' $app 'dock effects section (--quit)'
     }

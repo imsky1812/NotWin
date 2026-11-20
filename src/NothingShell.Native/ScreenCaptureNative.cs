@@ -34,68 +34,34 @@ public static class ScreenCaptureNative
     }
 
     /// <summary>
-    /// A screen region as grey values, one per <paramref name="stepPx"/> cell (sampled at the cell centre, row-major,
-    /// (width / step) × (height / step)) — the dot drain's picture (Plan 7). Never kept; null on failure.
+    /// A screen region as an HBITMAP (the caller frees it with <see cref="Delete"/>) — the minimize genie's picture
+    /// (user, 2026-11-21: the window itself, no dots). Never kept; 0 on failure.
     /// </summary>
-    public static byte[]? CaptureGray(RectI screen, int stepPx) => Capture(screen, stepPx, colour: false);
-
-    /// <summary>
-    /// A screen region as one BGR triple per <paramref name="stepPx"/> cell (cell centre, row-major) — the colour dot
-    /// drain's picture (user's pick, 2026-11-21). Never kept; null on failure.
-    /// </summary>
-    public static byte[]? CaptureColour(RectI screen, int stepPx) => Capture(screen, stepPx, colour: true);
-
-    private static unsafe byte[]? Capture(RectI screen, int stepPx, bool colour)
+    public static nint CaptureRegion(RectI screen)
     {
         var w = screen.Right - screen.Left;
         var h = screen.Bottom - screen.Top;
-        if (w <= 0 || h <= 0 || stepPx <= 0) return null;
-        int cols = w / stepPx, rows = h / stepPx;
-        if (cols == 0 || rows == 0) return [];
+        if (w <= 0 || h <= 0) return 0;
         var dc = GetDC(0);
-        if (dc == 0) return null;
+        if (dc == 0) return 0;
         var mem = CreateCompatibleDC(dc);
-        var info = new BitmapInfo { Size = 40, Width = w, Height = -h, Planes = 1, BitCount = 32 };
-        var dib = CreateDIBSection(dc, ref info, 0, out var bits, 0, 0);
+        var bmp = CreateCompatibleBitmap(dc, w, h);
         try
         {
-            if (dib == 0 || bits == 0) return null;
-            var old = SelectObject(mem, dib);
+            if (bmp == 0) return 0;
+            var old = SelectObject(mem, bmp);
             var ok = BitBlt(mem, 0, 0, w, h, dc, screen.Left, screen.Top, SrcCopy | CaptureBlt);
             SelectObject(mem, old);
-            if (!ok) return null;
-            var px = (byte*)bits;
-            var result = new byte[cols * rows * (colour ? 3 : 1)];
-            for (var r = 0; r < rows; r++)
-                for (var c = 0; c < cols; c++)
-                {
-                    var x = c * stepPx + stepPx / 2;
-                    var y = r * stepPx + stepPx / 2;
-                    var p = px + ((long)y * w + x) * 4; // BGRA
-                    var i = r * cols + c;
-                    if (colour) { result[i * 3] = p[0]; result[i * 3 + 1] = p[1]; result[i * 3 + 2] = p[2]; }
-                    else result[i] = (byte)((p[2] * 299 + p[1] * 587 + p[0] * 114) / 1000);
-                }
-            return result;
+            if (ok) return bmp;
+            DeleteObject(bmp);
+            return 0;
         }
         finally
         {
-            if (dib != 0) DeleteObject(dib);
             DeleteDC(mem);
             ReleaseDC(0, dc);
         }
     }
-
-    [StructLayout(LayoutKind.Sequential)]
-    private struct BitmapInfo
-    {
-        public int Size, Width, Height;
-        public short Planes, BitCount;
-        public int Compression, SizeImage, XPelsPerMeter, YPelsPerMeter, ClrUsed, ClrImportant;
-        public int Colors; // one RGBQUAD slot (unused for 32 bpp)
-    }
-
-    [DllImport("gdi32.dll")] private static extern nint CreateDIBSection(nint dc, ref BitmapInfo info, uint usage, out nint bits, nint section, uint offset);
 
     public static void Delete(nint hBitmap)
     {

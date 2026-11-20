@@ -1,5 +1,4 @@
 using NothingShell.Core;
-using NothingShell.Core.Dock;
 using NothingShell.Dock;
 
 namespace NothingShell.Tests;
@@ -11,25 +10,20 @@ public sealed class DotDrainControllerTests
         public bool Enabled { get; set; } = true;
         public bool Suppressed { get; set; }
         public RectI Monitor { get; set; } = new(0, 0, 1920, 1080);
-        public double Pitch { get; set; } = 14;
         public RectI? Icon { get; set; } = new(900, 1020, 940, 1060);
-        public RectI? Normal { get; set; } = new(100, 100, 100 + 140, 100 + 70);
+        public RectI? Window { get; set; } = new(100, 100, 100 + 140, 100 + 70);
         public RectI? IconRect(nint hwnd) => Icon;
-        public RectI? DrainRect(nint hwnd, bool restoring) => Normal;
+        public RectI? DrainRect(nint hwnd, bool restoring) => Window;
     }
 
     private sealed class Overlay : IDrainOverlay
     {
-        public byte[]? Picture = Enumerable.Repeat((byte)255, 10 * 5 * 3).ToArray(); // BGR per cell
-        public readonly List<(IReadOnlyList<DrainDot> Dots, double Tx, double Ty, bool Restore, Action Done)> Plays = [];
-        public RectI LastWindow;
+        public object? Picture = new();
+        public readonly List<(object? Picture, RectI Window, double Tx, double Ty, bool Restore, Action Done)> Plays = [];
         public int Closed;
-        public void Snapshot(nint hwnd, RectI screen, int stepPx, Action<byte[]?> done) => done(Picture);
-        public void Play(IReadOnlyList<DrainDot> dots, RectI window, RectI icon, bool restore, Action done)
-        {
-            LastWindow = window;
-            Plays.Add((dots, (icon.Left + icon.Right) / 2.0, (icon.Top + icon.Bottom) / 2.0, restore, done));
-        }
+        public void Snapshot(nint hwnd, RectI screen, Action<object?> done) => done(Picture);
+        public void Play(object? picture, RectI window, RectI icon, bool restore, Action done) =>
+            Plays.Add((picture, window, (icon.Left + icon.Right) / 2.0, (icon.Top + icon.Bottom) / 2.0, restore, done));
         public void Close() => Closed++;
     }
 
@@ -41,43 +35,32 @@ public sealed class DotDrainControllerTests
     }
 
     [Fact]
-    public void Controller_PlaysTowardTheIcon()
+    public void Controller_PlaysTheWindowsPictureTowardTheIcon()
     {
-        var (c, _, o) = Make();
+        var (c, e, o) = Make();
         c.OnMinimize(1, start: true);
         var play = Assert.Single(o.Plays);
-        Assert.Equal((920.0, 1040.0), (play.Tx, play.Ty)); // the icon's centre
+        Assert.Same(o.Picture, play.Picture);
+        Assert.Equal(e.Window, play.Window);
+        Assert.Equal((920.0, 1040.0), (play.Tx, play.Ty));
         Assert.False(play.Restore);
-        Assert.Equal(50, play.Dots.Count);                 // 10 × 5 cells, one colour dot each
-        Assert.Equal(14 * DotDrain.ColourRadius, play.Dots[0].R, 6);
-        Assert.Equal(0xFFFFFFFFu, play.Dots[0].Argb);       // white cells stay white
     }
 
+    // No picture (DRM video, a game, a window closing): the genie still plays, as a plain black card.
     [Fact]
-    public void Controller_ThumbnailFails_UsesFallback()
+    public void Controller_NoPicture_StillPlays()
     {
         var (c, _, o) = Make();
         o.Picture = null;
         c.OnMinimize(1, true);
-        Assert.All(Assert.Single(o.Plays).Dots, d => Assert.Equal(14 * DotDrain.OutlineFactor, d.R, 6));
-    }
-
-    [Fact]
-    public void Controller_NearBlack_UsesFallback()
-    {
-        var (c, _, o) = Make();
-        o.Picture = new byte[150];
-        c.OnMinimize(1, true);
-        var dots = Assert.Single(o.Plays).Dots;
-        Assert.Equal(50, dots.Count);
-        Assert.All(dots, d => Assert.Equal(14 * DotDrain.OutlineFactor, d.R, 6));
+        Assert.Null(Assert.Single(o.Plays).Picture);
     }
 
     [Fact]
     public void Controller_OtherMonitor_Skips()
     {
         var (c, e, o) = Make();
-        e.Normal = new RectI(2500, 100, 2700, 300); // on a second monitor to the right
+        e.Window = new RectI(2500, 100, 2700, 300);
         c.OnMinimize(1, true);
         Assert.Empty(o.Plays);
     }
@@ -127,7 +110,7 @@ public sealed class DotDrainControllerTests
         Assert.Equal(0, o.Closed);
         o.Plays[1].Done();
         Assert.Equal(1, o.Closed);
-        c.OnMinimize(3, true); // a new overlay for the next one
+        c.OnMinimize(3, true);
         Assert.Equal(3, o.Plays.Count);
     }
 
@@ -156,18 +139,18 @@ public sealed class DotDrainControllerTests
     private sealed class ThrowingOverlay : IDrainOverlay
     {
         public int Plays;
-        public void Snapshot(nint hwnd, RectI screen, int stepPx, Action<byte[]?> done) => done(null);
-        public void Play(IReadOnlyList<DrainDot> dots, RectI window, RectI icon, bool restore, Action done) { Plays++; throw new InvalidOperationException("boom"); }
+        public void Snapshot(nint hwnd, RectI screen, Action<object?> done) => done(null);
+        public void Play(object? picture, RectI window, RectI icon, bool restore, Action done) { Plays++; throw new InvalidOperationException("boom"); }
         public void Close() { }
     }
 
-    // Review (important): a failure after the snapshot (it runs later, from a timer) must not escape and must free the slot.
+    // Review (important): a failure after the snapshot must not escape and must free the slot.
     [Fact]
     public void Controller_PlayThrows_IsContainedAndFreesTheSlot()
     {
         var overlay = new ThrowingOverlay();
         var c = new DotDrainController(new Env(), () => overlay);
-        for (var i = 1; i <= 6; i++) c.OnMinimize(i, true); // would stop at 4 if slots leaked
+        for (var i = 1; i <= 6; i++) c.OnMinimize(i, true);
         Assert.Equal(6, overlay.Plays);
     }
 }

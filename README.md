@@ -108,8 +108,8 @@ notifications. `uninstall.ps1` removes it. Use `-NoTimestamp` to skip the signin
 - Right-click the start button (left-most) for **Keep taskbar visible**, **Start with Windows** and
   **Quit Nothing Shell**. Quitting always gives the Windows taskbar back.
 - Right-click an app for pin/unpin and its windows.
-- **Dot drain:** minimizing a window turns it into white dots that stream into its dock icon (a red dot blinks as they
-  land); restoring plays it backwards. For the best look turn off Windows' own animation (System > Advanced >
+- **Genie:** minimizing a window bends it into a funnel that slides into its dock icon; restoring flows it back out
+  (like macOS, in Nothing's style). For the best look turn off Windows' own animation (System > Advanced >
   Performance > "Animate windows when minimizing and maximizing"); Nothing Shell never changes that setting.
 - **Window previews:** rest the mouse on a running app in the dock to see a live preview of each of its windows; click
   one to switch to it, ✕ to close it. Both effects can be switched off in Settings > Shell.
