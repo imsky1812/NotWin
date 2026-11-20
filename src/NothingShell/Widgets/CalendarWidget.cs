@@ -68,21 +68,34 @@ public sealed class CalendarWidget : IDesktopWidget
         return new Grid { Children = { day, date } };
     }
 
+    // 2×1 (user, 2026-11-21: "pace the content better"): two equal halves — the day and big date centred on the left,
+    // a thin divider, then "No events", the month and the year centred vertically on the right.
     private static FrameworkElement Wide(DateTime now)
     {
-        var left = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 18, 0) };
-        var day = SerifText(now.ToString("ddd", CultureInfo.InvariantCulture), 16, TileChrome.Red);
+        var left = new StackPanel { VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center };
+        var day = SerifText(now.ToString("ddd", CultureInfo.InvariantCulture), 18, TileChrome.Red);
         day.HorizontalAlignment = HorizontalAlignment.Center;
         left.Children.Add(day);
-        var date = SerifText(now.Day.ToString(CultureInfo.InvariantCulture), 60);
+        var date = SerifText(now.Day.ToString(CultureInfo.InvariantCulture), 64);
         date.HorizontalAlignment = HorizontalAlignment.Center;
-        date.LineHeight = 60;
+        date.LineHeight = 64;
         date.LineStackingStrategy = LineStackingStrategy.BlockLineHeight;
         left.Children.Add(date);
-        var right = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
+        var right = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(18, 0, 0, 0) };
         right.Children.Add(TileChrome.Label("No events"));
-        right.Children.Add(TileChrome.Body(now.ToString("MMMM", CultureInfo.InvariantCulture), 16, FontWeights.SemiBold));
-        return new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center, Children = { left, right } };
+        var month = TileChrome.Body(now.ToString("MMMM", CultureInfo.InvariantCulture), 18, FontWeights.SemiBold);
+        month.Margin = new Thickness(0, 6, 0, 0);
+        right.Children.Add(month);
+        var year = TileChrome.Label(now.Year.ToString(CultureInfo.InvariantCulture));
+        year.Margin = new Thickness(0, 4, 0, 0);
+        right.Children.Add(year);
+        var divider = new Border { Width = 1, Background = Muted, Margin = new Thickness(0, 10, 0, 10), HorizontalAlignment = HorizontalAlignment.Right };
+        var grid = new Grid { ColumnDefinitions = { new ColumnDefinition(), new ColumnDefinition() } };
+        grid.Children.Add(left);
+        grid.Children.Add(divider);
+        Grid.SetColumn(right, 1);
+        grid.Children.Add(right);
+        return grid;
     }
 
     private static FrameworkElement Month(DateTime now)

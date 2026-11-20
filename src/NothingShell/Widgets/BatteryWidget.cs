@@ -103,12 +103,22 @@ public sealed class BatteryWidget : IDesktopWidget
         }
         if (_size != new WidgetSize(2, 1))
             return new Grid { Children = { ring }, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
-        var text = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(16, 0, 0, 0) };
-        text.Children.Add(TileChrome.Body(d.Name, 15, FontWeights.SemiBold));
-        var state = TileChrome.Label(low ? "Low · charge soon" : d.Percent is null ? "Connected" : "OK", low ? TileChrome.Red : null);
+        // 2×1 (user, 2026-11-21: "pace the content better"): two equal halves — the ring centred on the left, the name and
+        // state centred vertically on the right.
+        var text = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(6, 0, 16, 0) };
+        var name = TileChrome.Body(d.Name, 17, FontWeights.SemiBold);
+        name.TextTrimming = TextTrimming.CharacterEllipsis;
+        text.Children.Add(name);
+        var state = TileChrome.Label(low ? "Low · charge soon" : d.Percent is null ? "Connected" : d.Charging ? "Charging" : "OK", low ? TileChrome.Red : null);
         state.Margin = new Thickness(0, 6, 0, 0);
         text.Children.Add(state);
-        return new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(18, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center, Children = { ring, text } };
+        ring.HorizontalAlignment = HorizontalAlignment.Center;
+        ring.VerticalAlignment = VerticalAlignment.Center;
+        var grid = new Grid { ColumnDefinitions = { new ColumnDefinition(), new ColumnDefinition() } };
+        grid.Children.Add(ring);
+        Grid.SetColumn(text, 1);
+        grid.Children.Add(text);
+        return grid;
     }
 
     // mockup bRing: stroke = size × 0.09, track #2C2C2C, level #F2F2F2 (red under 20 %), round cap, from 12 o'clock.
