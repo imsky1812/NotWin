@@ -13,13 +13,4 @@ public sealed class DwmThumbnailTests
     public void NormalRect_NoWindow_IsNull() => Assert.Null(WindowListNative.NormalRect(0));
 
 
-    // The genie's picture: a read-only grab of a small corner of the screen as a bitmap.
-    [Fact]
-    public void CaptureRegion_ReturnsABitmap()
-    {
-        var bmp = ScreenCaptureNative.CaptureRegion(new RectI(0, 0, 140, 70));
-        Assert.NotEqual(0, bmp);
-        ScreenCaptureNative.Delete(bmp);
-        Assert.Equal(0, ScreenCaptureNative.CaptureRegion(new RectI(0, 0, 0, 0)));
-    }
 }

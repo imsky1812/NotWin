@@ -114,12 +114,14 @@ public sealed class DotDrainControllerTests
         Assert.Equal(3, o.Plays.Count);
     }
 
+    // Option A (2026-11-21): restoring is not animated — Windows has already put the window back, so a picture growing
+    // over it would look doubled.
     [Fact]
-    public void Controller_Restore_PlaysReverse()
+    public void Controller_Restore_IsNotAnimated()
     {
         var (c, _, o) = Make();
         c.OnMinimize(1, start: false);
-        Assert.True(Assert.Single(o.Plays).Restore);
+        Assert.Empty(o.Plays);
     }
 
     // Review (critical): with the dock auto-hidden, the window is still in the dock — aim at where it appears.

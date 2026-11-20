@@ -33,36 +33,6 @@ public static class ScreenCaptureNative
         }
     }
 
-    /// <summary>
-    /// A screen region as an HBITMAP (the caller frees it with <see cref="Delete"/>) — the minimize genie's picture
-    /// (user, 2026-11-21: the window itself, no dots). Never kept; 0 on failure.
-    /// </summary>
-    public static nint CaptureRegion(RectI screen)
-    {
-        var w = screen.Right - screen.Left;
-        var h = screen.Bottom - screen.Top;
-        if (w <= 0 || h <= 0) return 0;
-        var dc = GetDC(0);
-        if (dc == 0) return 0;
-        var mem = CreateCompatibleDC(dc);
-        var bmp = CreateCompatibleBitmap(dc, w, h);
-        try
-        {
-            if (bmp == 0) return 0;
-            var old = SelectObject(mem, bmp);
-            var ok = BitBlt(mem, 0, 0, w, h, dc, screen.Left, screen.Top, SrcCopy | CaptureBlt);
-            SelectObject(mem, old);
-            if (ok) return bmp;
-            DeleteObject(bmp);
-            return 0;
-        }
-        finally
-        {
-            DeleteDC(mem);
-            ReleaseDC(0, dc);
-        }
-    }
-
     public static void Delete(nint hBitmap)
     {
         if (hBitmap != 0) DeleteObject(hBitmap);

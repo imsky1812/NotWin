@@ -3,10 +3,10 @@ using NothingShell.Core.Dock;
 
 namespace NothingShell.Dock;
 
-/// <summary>What the minimize genie needs from the desktop (the real one reads the dock, settings and screen).</summary>
+/// <summary>What the minimize animation needs from the desktop (the real one reads the dock, settings and screen).</summary>
 public interface IDrainEnvironment
 {
-    /// <summary>The "Genie when minimizing" switch.</summary>
+    /// <summary>The "Minimize animation" switch.</summary>
     bool Enabled { get; }
 
     /// <summary>A full-screen app is in front, or the launcher / panel covers the dock.</summary>
@@ -47,7 +47,7 @@ public sealed class DotDrainController(IDrainEnvironment env, Func<IDrainOverlay
 
     public void OnMinimize(nint hwnd, bool start)
     {
-        if (!env.Enabled || env.Suppressed) return;
+        if (!start || !env.Enabled || env.Suppressed) return; // restore is not animated (option A)
         if (env.IconRect(hwnd) is not { } icon || env.DrainRect(hwnd, !start) is not { } window) return;
         var monitor = env.Monitor;
         var cx = (window.Left + window.Right) / 2;
@@ -64,14 +64,14 @@ public sealed class DotDrainController(IDrainEnvironment env, Func<IDrainOverlay
                 try { overlay.Play(picture, window, icon, !start, () => Ended(overlay)); }
                 catch (Exception e)
                 {
-                    Log.Error("minimize genie failed", e);
+                    Log.Error("minimize animation failed", e);
                     Ended(overlay);
                 }
             });
         }
         catch (Exception e)
         {
-            Log.Error("minimize genie failed", e);
+            Log.Error("minimize animation failed", e);
             Ended(overlay);
         }
     }
@@ -82,6 +82,6 @@ public sealed class DotDrainController(IDrainEnvironment env, Func<IDrainOverlay
         if (_gate.Running > 0 || !ReferenceEquals(overlay, _overlay)) return;
         _overlay = null;
         try { overlay.Close(); }
-        catch (Exception e) { Log.Error("minimize genie overlay close failed", e); }
+        catch (Exception e) { Log.Error("minimize animation overlay close failed", e); }
     }
 }
