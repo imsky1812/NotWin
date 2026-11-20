@@ -79,6 +79,11 @@ public static class DotDrain
         return raw.Select(d => new DrainDot(d.X, d.Y, d.R, (Dist(d) - min) / span * MaxStaggerMs)).ToList();
     }
 
+    /// <summary>The area an animation moves through: the window and its icon, plus <paramref name="pad"/> px all round.</summary>
+    public static RectI Area(RectI window, RectI icon, int pad) => new(
+        Math.Min(window.Left, icon.Left) - pad, Math.Min(window.Top, icon.Top) - pad,
+        Math.Max(window.Right, icon.Right) + pad, Math.Max(window.Bottom, icon.Bottom) + pad);
+
     /// <summary>Genie timing (user, 2026-11-21): minimize and restore, and the share of it spent forming the funnel.</summary>
     public const double GenieMs = 560, GenieRestoreMs = 500, BendShare = 0.35;
 
@@ -126,6 +131,23 @@ public static class DotDrain
         var x = q * q * d.X + 2 * q * p * d.X + p * p * targetX;
         var y = q * q * d.Y + 2 * q * p * targetY + p * p * targetY;
         return (x, y, 1 - (1 - ArrivalScale) * local, 1);
+    }
+}
+
+/// <summary>Frame timing of one animation, for the log (smoothness is measured, not guessed).</summary>
+public sealed class FrameStats
+{
+    private double? _last;
+
+    public int Frames { get; private set; }
+    public double WorstGapMs { get; private set; }
+
+    /// <summary>A frame was drawn at <paramref name="ms"/> since the animation started.</summary>
+    public void At(double ms)
+    {
+        if (_last is { } last) WorstGapMs = Math.Max(WorstGapMs, ms - last);
+        _last = ms;
+        Frames++;
     }
 }
 

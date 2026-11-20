@@ -158,4 +158,21 @@ public sealed class DotDrainTests
             if (left.Visible && right.Visible) Assert.True(left.X <= right.X);
         }
     }
+
+    // Smoothness (user, 2026-11-21: "choppy"): draw only over the window-to-icon area, not the whole screen.
+    [Fact]
+    public void Area_CoversTheWindowAndTheIcon_Padded()
+    {
+        var area = DotDrain.Area(new NothingShell.Core.RectI(400, 100, 1200, 700), new NothingShell.Core.RectI(940, 1030, 984, 1074), pad: 20);
+        Assert.Equal(new NothingShell.Core.RectI(380, 80, 1220, 1094), area);
+    }
+
+    [Fact]
+    public void FrameStats_CountsFramesAndWorstGap()
+    {
+        var stats = new FrameStats();
+        foreach (var t in new[] { 0.0, 16, 33, 70, 86 }) stats.At(t);
+        Assert.Equal(5, stats.Frames);
+        Assert.Equal(37, stats.WorstGapMs, 6);
+    }
 }

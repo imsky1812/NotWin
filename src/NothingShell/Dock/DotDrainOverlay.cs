@@ -20,9 +20,8 @@ public sealed class DotDrainOverlay : IDrainOverlay
     private const int ExTransparent = 0x20, ExToolWindow = 0x80, ExNoActivate = 0x08000000;
     private static readonly Brush White = Freeze(new SolidColorBrush(Color.FromRgb(0xF2, 0xF2, 0xF2)));
     private static readonly Brush Red = Freeze(new SolidColorBrush(Color.FromRgb(0xE8, 0x23, 0x1F)));
-    private static readonly Brush RimBrush = Freeze(new SolidColorBrush(Color.FromArgb(0x59, 0, 0, 0)));
     private readonly List<Anim> _finished = [];
-    private Pen? _rim;
+    private RectI _area; // what the overlay window covers now (screen px): only where animations move
     private readonly RectI _monitor;
     private readonly double _scale; // physical px per DIP
     private readonly List<Anim> _anims = [];
@@ -30,7 +29,10 @@ public sealed class DotDrainOverlay : IDrainOverlay
     private Window? _window;
     private bool _rendering;
 
-    private sealed record Anim(IReadOnlyList<DrainDot> Dots, RectI Window, double Tx, double Ty, double IconW, bool Restore, Action Done, Stopwatch Clock, double DotR);
+    private sealed record Anim(IReadOnlyList<DrainDot> Dots, RectI Window, double Tx, double Ty, double IconW, bool Restore, Action Done, Stopwatch Clock, double DotR)
+    {
+        public FrameStats Stats { get; } = new();
+    }
 
     public DotDrainOverlay(RectI monitor, double dpiScale)
     {
@@ -95,7 +97,15 @@ public sealed class DotDrainOverlay : IDrainOverlay
 
     public void Play(IReadOnlyList<DrainDot> dots, RectI window, RectI icon, bool restore, Action done)
     {
+        // Smoothness (user, 2026-11-21: "choppy"): a see-through window is redrawn whole every frame, so it covers only
+        // the window-to-icon area (grown when another animation joins), never the whole screen.
+        var needed = DotDrain.Area(window, icon, (int)Math.Ceiling(24 * _scale));
+        needed = new RectI(Math.Max(needed.Left, _monitor.Left), Math.Max(needed.Top, _monitor.Top),
+            Math.Min(needed.Right, _monitor.Right), Math.Min(needed.Bottom, _monitor.Bottom));
+        _area = _window is null ? needed : new RectI(Math.Min(_area.Left, needed.Left), Math.Min(_area.Top, needed.Top),
+            Math.Max(_area.Right, needed.Right), Math.Max(_area.Bottom, needed.Bottom));
         EnsureWindow();
+        DockWindowNative.PlaceTopmost(new WindowInteropHelper(_window!).Handle, _area);
         var dotR = dots.Count > 0 ? dots.Max(d => d.R) : 6;
         var iconW = Math.Max(icon.Right - icon.Left, 24 * _scale);
         _anims.Add(new Anim(dots, window, (icon.Left + icon.Right) / 2.0, (icon.Top + icon.Bottom) / 2.0, iconW, restore, done, Stopwatch.StartNew(), dotR));
@@ -127,7 +137,6 @@ public sealed class DotDrainOverlay : IDrainOverlay
         };
         w.SourceInitialized += (_, _) => DockWindowNative.AddExStyle(new WindowInteropHelper(w).Handle, ExTransparent | ExToolWindow | ExNoActivate);
         w.Show();
-        DockWindowNative.PlaceTopmost(new WindowInteropHelper(w).Handle, _monitor);
         _window = w;
     }
 
@@ -151,8 +160,6 @@ public sealed class DotDrainOverlay : IDrainOverlay
     {
         var finished = _finished;
         finished.Clear();
-        _rim ??= Freeze(new Pen(RimBrush, 0.8 / _scale));
-        var rim = _rim;
         using (var dc = _visual.RenderOpen())
         {
             foreach (var a in _anims)
@@ -161,6 +168,7 @@ public sealed class DotDrainOverlay : IDrainOverlay
                 var duration = a.Restore ? DotDrain.GenieRestoreMs : DotDrain.GenieMs;
                 var end = a.Restore ? duration : duration + DotDrain.BlinkMs;
                 if (t >= end) { finished.Add(a); continue; }
+                a.Stats.At(t);
                 if (t < duration)
                 {
                     var p = a.Restore ? 1 - t / duration : t / duration;
@@ -169,7 +177,7 @@ public sealed class DotDrainOverlay : IDrainOverlay
                         var (x, y, s, visible) = DotDrain.Genie(d, a.Window, a.Tx, a.Ty, a.IconW, p);
                         if (!visible) continue;
                         var r = d.R * s / _scale;
-                        dc.DrawEllipse(White, rim, Dip(x, y), r, r);
+                        dc.DrawEllipse(White, null, Dip(x, y), r, r); // no outline: half the drawing work per dot
                     }
                 }
                 else
@@ -186,12 +194,13 @@ public sealed class DotDrainOverlay : IDrainOverlay
         foreach (var a in finished.ToList())
         {
             _anims.Remove(a);
+            Log.Info($"dot drain: {a.Stats.Frames} frames, worst gap {a.Stats.WorstGapMs:F0} ms, {a.Dots.Count} dots, area {_area.Right - _area.Left}x{_area.Bottom - _area.Top}");
             try { a.Done(); }
             catch (Exception ex) { Log.Error("dot drain completion failed", ex); }
         }
     }
 
-    private Point Dip(double screenX, double screenY) => new((screenX - _monitor.Left) / _scale, (screenY - _monitor.Top) / _scale);
+    private Point Dip(double screenX, double screenY) => new((screenX - _area.Left) / _scale, (screenY - _area.Top) / _scale);
 
     private static T Freeze<T>(T f) where T : Freezable
     {
