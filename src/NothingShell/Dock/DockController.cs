@@ -244,6 +244,8 @@ public sealed class DockController : IDisposable
     {
         var path = item.LaunchPath;
         if (string.IsNullOrEmpty(path)) { Log.Info($"launch: no launch path for {item.AppId}"); return; }
+        // A Store app pinned by its exe inside WindowsApps cannot be run directly: start it by its app id instead.
+        if (PackagedApps.Resolve(path, ReadManifest) is { } packaged) path = packaged;
         // ShellExecuteEx with ASYNCOK: returns immediately; shortcuts, exes and shell:AppsFolder\<AUMID> all work.
         if (!ShellLinkNative.Open(path)) Log.Info($"launch failed for {item.AppId} ({path}) error={ShellLinkNative.LastError}");
     }
@@ -256,13 +258,19 @@ public sealed class DockController : IDisposable
         var hasExe = !string.IsNullOrEmpty(exe) && System.IO.File.Exists(exe);
         if (!isUwp && !hasExe) { Log.Info($"pin: nothing to launch for {item.AppId}"); return; }
 
-        var launch = isUwp ? @"shell:AppsFolder\" + item.AppId : exe;
+        var launch = isUwp ? @"shell:AppsFolder\" + item.AppId : PackagedApps.Resolve(exe, ReadManifest) ?? exe;
         var name = PinRules.Name(item.AppId, _indexedName?.Invoke(item.AppId), hasExe ? ExeDescription(exe) : null, item.DisplayName);
         var pinned = _settings.PinnedApps.Append(new PinnedApp(item.AppId, name, launch, hasExe && !isUwp ? exe.ToLowerInvariant() : null)).ToList(); // no exe key for UWP: the exe may be a shared host
         SavePins(pinned);
     }
 
     private static bool IsUwpId(string id) => PinRules.IsPackagedAppId(id);
+
+    private static string? ReadManifest(string path)
+    {
+        try { return System.IO.File.ReadAllText(path); }
+        catch (Exception e) when (e is System.IO.IOException or UnauthorizedAccessException) { return null; }
+    }
 
     private static bool CanPin(DockItem item) =>
         IsUwpId(item.AppId) ||
