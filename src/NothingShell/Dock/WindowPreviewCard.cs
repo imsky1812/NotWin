@@ -59,9 +59,10 @@ public sealed class WindowPreviewCard
             };
             var close = new Border
             {
-                Width = 20, Height = 20, CornerRadius = new CornerRadius(10), Background = TileChrome.Frozen(0x2A, 0x2A, 0x2A),
+                // A red dot with a white ✕ (user, 2026-11-21).
+                Width = 20, Height = 20, CornerRadius = new CornerRadius(10), Background = TileChrome.Red,
                 Cursor = Cursors.Hand, Margin = new Thickness(6, 0, 0, 0), ToolTip = "Close window",
-                Child = new TextBlock { Text = "✕", FontSize = 10, Foreground = TileChrome.Text, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center },
+                Child = new TextBlock { Text = "✕", FontSize = 10, FontWeight = FontWeights.Bold, Foreground = Brushes.White, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center },
             };
             close.MouseLeftButtonUp += (_, e) => { e.Handled = true; CloseWindow?.Invoke(hwnd); };
             DockPanel.SetDock(close, System.Windows.Controls.Dock.Right);

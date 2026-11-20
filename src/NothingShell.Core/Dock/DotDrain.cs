@@ -25,7 +25,9 @@ public static class DotDrain
 
     /// <summary>Where a minimizing window drains from: its work area when it was maximized, else its normal rectangle.</summary>
     public static RectI StartRect(RectI normal, bool maximized, RectI workArea) => maximized ? workArea : normal;
-    private const double RadiusFactor = 0.42, OutlineFactor = 0.30, MinRadius = 0.6;
+    /// <summary>Dot radius as a share of the pitch at full brightness, and for the grey outline (heavier dots, 2026-11-21).</summary>
+    public const double RadiusFactor = 0.5, OutlineFactor = 0.38;
+    private const double MinRadius = 0.8;
 
     /// <summary>True when at least 97 % of the samples are near-black (luminance under 12): the picture was not captured.</summary>
     public static bool IsNearBlack(byte[] gray)
@@ -76,6 +78,36 @@ public static class DotDrain
         var span = Math.Max(1e-9, max - min);
         return raw.Select(d => new DrainDot(d.X, d.Y, d.R, (Dist(d) - min) / span * MaxStaggerMs)).ToList();
     }
+
+    /// <summary>Genie timing (user, 2026-11-21): minimize and restore, and the share of it spent forming the funnel.</summary>
+    public const double GenieMs = 560, GenieRestoreMs = 500, BendShare = 0.35;
+
+    /// <summary>
+    /// The genie (user, 2026-11-21: "real physics of genie"): at progress <paramref name="p"/> (0 = the window, 1 = in the
+    /// icon) the window's shape bends into a funnel whose narrow end is the icon's width — the bottom, nearest the icon,
+    /// bends first — then the content slides down the funnel with a gravity-like acceleration; a dot that reaches the
+    /// icon is absorbed (not visible). Restore runs p from 1 back to 0.
+    /// </summary>
+    public static (double X, double Y, double Scale, bool Visible) Genie(DrainDot d, RectI window, double iconX, double iconY, double iconW, double p)
+    {
+        p = Math.Clamp(p, 0, 1);
+        double w = window.Right - window.Left, h = window.Bottom - window.Top;
+        var u = w > 0 ? (d.X - window.Left) / w : 0.5;
+        var bend = Smooth(Math.Clamp(p / BendShare, 0, 1));               // the funnel forms
+        var fall = Math.Clamp((p - BendShare) / (1 - BendShare), 0, 1);
+        fall *= fall;                                                       // then it accelerates in, like a falling body
+        var y = d.Y + fall * (iconY - window.Top);                          // the top row ends exactly at the icon
+        if (y >= iconY) return (iconX, iconY, ArrivalScale, false);
+        var depth = Math.Clamp((y - window.Top) / Math.Max(1, iconY - window.Top), 0, 1);
+        var pinch = bend * Smooth(depth);                                   // 0 = full width, 1 = the icon's width
+        var centre = Lerp(window.Left + w / 2, iconX, pinch);
+        var half = Lerp(w / 2, iconW / 2, pinch);
+        return (centre + (u - 0.5) * 2 * half, y, Lerp(1, ArrivalScale, pinch), true);
+    }
+
+    private static double Smooth(double t) => t * t * (3 - 2 * t);
+
+    private static double Lerp(double a, double b, double t) => a + (b - a) * t;
 
     /// <summary>
     /// Where a dot is at <paramref name="tMs"/>: minimizing, it waits for its delay, then moves along a quadratic curve

@@ -22,9 +22,14 @@ public sealed class DotDrainControllerTests
     {
         public byte[]? Picture = Enumerable.Repeat((byte)255, 10 * 5).ToArray();
         public readonly List<(IReadOnlyList<DrainDot> Dots, double Tx, double Ty, bool Restore, Action Done)> Plays = [];
+        public RectI LastWindow;
         public int Closed;
         public void Snapshot(nint hwnd, RectI screen, int stepPx, Action<byte[]?> done) => done(Picture);
-        public void Play(IReadOnlyList<DrainDot> dots, double tx, double ty, bool restore, Action done) => Plays.Add((dots, tx, ty, restore, done));
+        public void Play(IReadOnlyList<DrainDot> dots, RectI window, RectI icon, bool restore, Action done)
+        {
+            LastWindow = window;
+            Plays.Add((dots, (icon.Left + icon.Right) / 2.0, (icon.Top + icon.Bottom) / 2.0, restore, done));
+        }
         public void Close() => Closed++;
     }
 
@@ -44,7 +49,7 @@ public sealed class DotDrainControllerTests
         Assert.Equal((920.0, 1040.0), (play.Tx, play.Ty)); // the icon's centre
         Assert.False(play.Restore);
         Assert.Equal(50, play.Dots.Count);                 // 10 × 5 bright cells
-        Assert.Equal(14 * 0.42, play.Dots[0].R, 6);
+        Assert.Equal(14 * DotDrain.RadiusFactor, play.Dots[0].R, 6);
     }
 
     [Fact]
@@ -53,7 +58,7 @@ public sealed class DotDrainControllerTests
         var (c, _, o) = Make();
         o.Picture = null;
         c.OnMinimize(1, true);
-        Assert.All(Assert.Single(o.Plays).Dots, d => Assert.Equal(14 * 0.30, d.R, 6));
+        Assert.All(Assert.Single(o.Plays).Dots, d => Assert.Equal(14 * DotDrain.OutlineFactor, d.R, 6));
     }
 
     [Fact]
@@ -64,7 +69,7 @@ public sealed class DotDrainControllerTests
         c.OnMinimize(1, true);
         var dots = Assert.Single(o.Plays).Dots;
         Assert.Equal(50, dots.Count);
-        Assert.All(dots, d => Assert.Equal(14 * 0.30, d.R, 6));
+        Assert.All(dots, d => Assert.Equal(14 * DotDrain.OutlineFactor, d.R, 6));
     }
 
     [Fact]
@@ -151,7 +156,7 @@ public sealed class DotDrainControllerTests
     {
         public int Plays;
         public void Snapshot(nint hwnd, RectI screen, int stepPx, Action<byte[]?> done) => done(null);
-        public void Play(IReadOnlyList<DrainDot> dots, double tx, double ty, bool restore, Action done) { Plays++; throw new InvalidOperationException("boom"); }
+        public void Play(IReadOnlyList<DrainDot> dots, RectI window, RectI icon, bool restore, Action done) { Plays++; throw new InvalidOperationException("boom"); }
         public void Close() { }
     }
 

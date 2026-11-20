@@ -32,7 +32,8 @@ public interface IDrainOverlay
     /// <summary>The window's picture over <paramref name="screen"/> as grey cells of <paramref name="stepPx"/> (null = failed).</summary>
     void Snapshot(nint hwnd, RectI screen, int stepPx, Action<byte[]?> done);
 
-    void Play(IReadOnlyList<DrainDot> dots, double targetX, double targetY, bool restore, Action done);
+    /// <summary>Plays the genie for <paramref name="dots"/> between <paramref name="window"/> and <paramref name="icon"/> (screen px).</summary>
+    void Play(IReadOnlyList<DrainDot> dots, RectI window, RectI icon, bool restore, Action done);
 
     void Close();
 }
@@ -71,7 +72,7 @@ public sealed class DotDrainController(IDrainEnvironment env, Func<IDrainOverlay
                     var dots = gray is null || gray.Length != cols * rows || DotDrain.IsNearBlack(gray)
                         ? DotDrain.Outline(normal.Left, normal.Top, normal.Right - normal.Left, normal.Bottom - normal.Top, step, tx, ty)
                         : DotDrain.FromImage(gray, cols, rows, normal.Left, normal.Top, step, tx, ty);
-                    overlay.Play(dots, tx, ty, !start, () => Ended(overlay));
+                    overlay.Play(dots, normal, icon, !start, () => Ended(overlay));
                 }
                 catch (Exception e)
                 {

@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Windows;
 using System.Windows.Interop;
 using System.Windows.Media;
+using System.Windows.Threading;
 using NothingShell.Core;
 using NothingShell.Core.Dock;
 using NothingShell.Native;
@@ -29,7 +30,7 @@ public sealed class DotDrainOverlay : IDrainOverlay
     private Window? _window;
     private bool _rendering;
 
-    private sealed record Anim(IReadOnlyList<DrainDot> Dots, double Tx, double Ty, bool Restore, Action Done, Stopwatch Clock, double DotR);
+    private sealed record Anim(IReadOnlyList<DrainDot> Dots, RectI Window, double Tx, double Ty, double IconW, bool Restore, Action Done, Stopwatch Clock, double DotR);
 
     public DotDrainOverlay(RectI monitor, double dpiScale)
     {
@@ -68,26 +69,36 @@ public sealed class DotDrainOverlay : IDrainOverlay
             done(null);
             return;
         }
-        // Let DWM compose the picture (two frames), then read the region and take the stand-in away.
-        var wait = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromMilliseconds(40) };
-        wait.Tick += (_, _) =>
+        // Wait until DWM has composed the picture (no dark flash), read it, hand it on — the dots start on this same
+        // frame — and only then take the stand-in away, so the window turns straight into dots.
+        Dispatcher.CurrentDispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Render, () =>
         {
-            wait.Stop();
             byte[]? gray = null;
-            try { gray = ScreenCaptureNative.CaptureGray(screen, stepPx); }
+            try
+            {
+                DwmThumbnail.Flush();
+                DwmThumbnail.Flush();
+                gray = ScreenCaptureNative.CaptureGray(screen, stepPx);
+            }
             catch (Exception e) { Log.Error("dot drain capture failed", e); }
-            thumb.Dispose();
-            try { shot.Close(); } catch (InvalidOperationException) { }
-            done(gray);
-        };
-        wait.Start();
+            try { done(gray); }
+            finally
+            {
+                Dispatcher.CurrentDispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Background, () =>
+                {
+                    thumb.Dispose();
+                    try { shot.Close(); } catch (InvalidOperationException) { }
+                });
+            }
+        });
     }
 
-    public void Play(IReadOnlyList<DrainDot> dots, double targetX, double targetY, bool restore, Action done)
+    public void Play(IReadOnlyList<DrainDot> dots, RectI window, RectI icon, bool restore, Action done)
     {
         EnsureWindow();
         var dotR = dots.Count > 0 ? dots.Max(d => d.R) : 6;
-        _anims.Add(new Anim(dots, targetX, targetY, restore, done, Stopwatch.StartNew(), dotR));
+        var iconW = Math.Max(icon.Right - icon.Left, 24 * _scale);
+        _anims.Add(new Anim(dots, window, (icon.Left + icon.Right) / 2.0, (icon.Top + icon.Bottom) / 2.0, iconW, restore, done, Stopwatch.StartNew(), dotR));
         if (!_rendering)
         {
             CompositionTarget.Rendering += OnRendering;
@@ -147,13 +158,16 @@ public sealed class DotDrainOverlay : IDrainOverlay
             foreach (var a in _anims)
             {
                 var t = a.Clock.Elapsed.TotalMilliseconds;
-                var end = a.Restore ? DotDrain.RestoreMs : DotDrain.TotalMs + DotDrain.BlinkMs;
+                var duration = a.Restore ? DotDrain.GenieRestoreMs : DotDrain.GenieMs;
+                var end = a.Restore ? duration : duration + DotDrain.BlinkMs;
                 if (t >= end) { finished.Add(a); continue; }
-                if (a.Restore || t < DotDrain.TotalMs)
+                if (t < duration)
                 {
+                    var p = a.Restore ? 1 - t / duration : t / duration;
                     foreach (var d in a.Dots)
                     {
-                        var (x, y, s, _) = DotDrain.At(d, a.Tx, a.Ty, t, a.Restore);
+                        var (x, y, s, visible) = DotDrain.Genie(d, a.Window, a.Tx, a.Ty, a.IconW, p);
+                        if (!visible) continue;
                         var r = d.R * s / _scale;
                         dc.DrawEllipse(White, rim, Dip(x, y), r, r);
                     }
@@ -161,7 +175,7 @@ public sealed class DotDrainOverlay : IDrainOverlay
                 else
                 {
                     // Landed: one red dot blinks on the icon.
-                    var k = 1 - (t - DotDrain.TotalMs) / DotDrain.BlinkMs;
+                    var k = 1 - (t - DotDrain.GenieMs) / DotDrain.BlinkMs;
                     var r = a.DotR / _scale;
                     dc.PushOpacity(Math.Clamp(k, 0, 1));
                     dc.DrawEllipse(Red, null, Dip(a.Tx, a.Ty), r, r);
