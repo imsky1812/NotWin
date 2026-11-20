@@ -89,9 +89,25 @@ public sealed class AppIconCache
     {
         var rooted = Path.IsPathRooted(exePathOrAumid);
         if (rooted && !File.Exists(exePathOrAumid)) return null;
-        var parsing = rooted ? exePathOrAumid : @"shell:AppsFolder\" + exePathOrAumid;
-        var icon = IconNative.GetIcon(parsing, sizePx);
+        var icon = IconNative.GetIcon(ParsingName(exePathOrAumid, ReadText), sizePx);
         return icon is { } i ? ToBitmap(i.Bgra, i.Size) : null;
+    }
+
+    /// <summary>
+    /// What to ask the shell for an icon: an app id becomes <c>shell:AppsFolder\&lt;id&gt;</c>; a Store app's exe inside
+    /// WindowsApps becomes its app id too (user report 2026-11-20: WhatsApp's exe has no real icon of its own, its
+    /// package does); any other path is used as it is.
+    /// </summary>
+    public static string ParsingName(string exePathOrAumid, Func<string, string?> readText)
+    {
+        if (!Path.IsPathRooted(exePathOrAumid)) return @"shell:AppsFolder\" + exePathOrAumid;
+        return NothingShell.Core.PackagedApps.Resolve(exePathOrAumid, readText) ?? exePathOrAumid;
+    }
+
+    private static string? ReadText(string path)
+    {
+        try { return File.ReadAllText(path); }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException) { return null; }
     }
 
     private static BitmapSource ToBitmap(byte[] bgra, int size)
