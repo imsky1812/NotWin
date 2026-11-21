@@ -75,6 +75,49 @@ if ($bad.Count -gt 0) {
 }
 Write-Host "Checked $(@(Get-ChildItem $stage -Recurse -Include *.exe, *.dll -File).Count) signed files in staging."
 
+# 2b. Plan 12: the app used to be called Nothing Shell. Remove that install so the two never run side by side.
+# The taskbar is given back with the NEW, staged watchdog (its delete never follows links, security review #2), never
+# with the old exe. Each step reports one line; none of them stops the install. %AppData%\NothingShell is kept: NotWin
+# copies it over on first start and it stays as a backup.
+function Remove-LegacyNothingShell([string]$stagedWatchdog) {
+    $oldInstall = Join-Path $env:ProgramFiles 'NothingShell'
+    $runKey     = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run'
+    $hasRun     = $null -ne (Get-ItemProperty -Path $runKey -Name 'NothingShell' -ErrorAction SilentlyContinue)
+    $hasPkg     = $null -ne (Get-AppxPackage -Name 'NothingShell' -ErrorAction SilentlyContinue)
+    if (-not ((Test-Path $oldInstall) -or $hasRun -or $hasPkg)) { return }
+    Write-Host 'Old Nothing Shell install found: removing it.'
+
+    try {
+        foreach ($name in 'NothingShell.Watchdog', 'NothingShell') {
+            $procs = @(Get-Process -Name $name -ErrorAction SilentlyContinue)
+            $procs | Stop-Process -Force -ErrorAction SilentlyContinue
+            $procs | Wait-Process -Timeout 10 -ErrorAction SilentlyContinue
+        }
+        Write-Host '  stopped the old shell and watchdog'
+    } catch { Write-Warning "  could not stop the old shell: $($_.Exception.Message)" }
+
+    try {
+        $p = Start-Process -FilePath $stagedWatchdog -ArgumentList '--restore-now', '--state', ('"{0}"' -f (Join-Path $env:APPDATA 'NothingShell')) -Wait -PassThru
+        Write-Host "  taskbar given back for the old install (exit $($p.ExitCode))"
+    } catch { Write-Warning "  taskbar restore for the old install failed: $($_.Exception.Message)" }
+
+    try {
+        Remove-ItemProperty -Path $runKey -Name 'NothingShell' -ErrorAction SilentlyContinue
+        Write-Host '  removed the old start-with-Windows entry'
+    } catch { Write-Warning "  could not remove the old start-with-Windows entry: $($_.Exception.Message)" }
+
+    try {
+        Get-AppxPackage -Name 'NothingShell' -ErrorAction SilentlyContinue | Remove-AppxPackage
+        Write-Host '  removed the old package identity'
+    } catch { Write-Warning "  could not remove the old package: $($_.Exception.Message)" }
+
+    try {
+        if (Test-Path $oldInstall) { Remove-Item $oldInstall -Recurse -Force }
+        Write-Host "  deleted $oldInstall"
+    } catch { Write-Warning "  could not delete ${oldInstall}: $($_.Exception.Message)" }
+}
+Remove-LegacyNothingShell (Join-Path $stage 'NotWin.Watchdog.exe')
+
 # 3. Stop the running copy so files can be replaced (only now, after everything that can throw above).
 $watchdogWasRunning = [bool](Get-Process -Name 'NotWin.Watchdog' -ErrorAction SilentlyContinue)
 # Only the shell is killed: the watchdog sees it die and restores the taskbar by itself.
