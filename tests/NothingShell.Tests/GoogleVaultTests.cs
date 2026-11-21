@@ -64,4 +64,16 @@ public sealed class GoogleVaultTests : IDisposable
         Assert.False(File.Exists(Path.Combine(_dir, "calendar.dat")));
         Assert.Null(v.Load());
     }
+
+    // Final review I1: after Google signs you out, Connect reuses the saved secret for the same client ID.
+    [Fact]
+    public void ResolveClient_FallsBackToTheSavedSecret()
+    {
+        var saved = new GoogleCredentials("id.apps", "saved-secret", null);
+        Assert.Equal(("id.apps", "typed"), GoogleCalendarService.ResolveClient(" id.apps ", " typed ", saved));
+        Assert.Equal(("id.apps", "saved-secret"), GoogleCalendarService.ResolveClient("id.apps", "", saved));
+        Assert.Null(GoogleCalendarService.ResolveClient("other.apps", "", saved)); // a different client needs its own secret
+        Assert.Null(GoogleCalendarService.ResolveClient("id.apps", "", null));
+        Assert.Null(GoogleCalendarService.ResolveClient("", "typed", saved));
+    }
 }

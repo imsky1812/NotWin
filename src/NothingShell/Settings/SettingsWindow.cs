@@ -367,7 +367,7 @@ public sealed class SettingsWindow : Window
         _calendarHost.Children.Add(link);
         _calendarHost.Children.Add(SettingsFields.Caption("CLIENT ID"));
         _calendarHost.Children.Add(SettingsFields.Frame(_clientId));
-        _calendarHost.Children.Add(SettingsFields.Caption("CLIENT SECRET"));
+        _calendarHost.Children.Add(SettingsFields.Caption(c.HasSavedSecret ? "CLIENT SECRET (EMPTY: THE SAVED ONE IS USED)" : "CLIENT SECRET"));
         _calendarHost.Children.Add(SettingsFields.Frame(_clientSecret));
         var connect = Pill(c.Connecting ? "Cancel" : "Connect");
         connect.HorizontalAlignment = HorizontalAlignment.Left;
@@ -387,7 +387,6 @@ public sealed class SettingsWindow : Window
 
     private async Task ConnectAsync(GoogleCalendarService c)
     {
-        if (_clientId.Text.Trim().Length == 0 || _clientSecret.Password.Trim().Length == 0) return;
         Topmost = false; // the browser comes to the front for the sign-in
         try
         {

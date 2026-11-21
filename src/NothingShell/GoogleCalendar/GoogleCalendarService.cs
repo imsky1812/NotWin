@@ -27,7 +27,10 @@ public sealed class GoogleCalendarService : IDisposable
     private DateTimeOffset _accessExpires;
     private DateTimeOffset _lastRefresh = DateTimeOffset.MinValue;
     private CancellationTokenSource? _signIn;
-    private bool _refreshing, _disposed;
+    private bool _refreshing, _refreshAgain, _disposed;
+    // Bumped by sign-in, sign-out and Disconnect: an answer that arrives for an older generation is dropped (final
+    // review M1: a Disconnect or reconnect while a refresh is on the wire).
+    private int _generation;
 
     public GoogleCalendarService(string dataDir)
     {
@@ -45,6 +48,22 @@ public sealed class GoogleCalendarService : IDisposable
 
     /// <summary>The client ID saved earlier (prefills Settings after a sign-out).</summary>
     public string? SavedClientId => _credentials?.ClientId;
+
+    /// <summary>A secret is saved for <see cref="SavedClientId"/>: Connect works with the secret box left empty.</summary>
+    public bool HasSavedSecret => _credentials is { ClientSecret.Length: > 0 };
+
+    /// <summary>
+    /// The client to sign in with: the typed ID and secret, or (final review I1) the saved secret when the secret box is
+    /// empty and the ID is the saved one. Null when something is missing.
+    /// </summary>
+    public static (string Id, string Secret)? ResolveClient(string clientId, string typedSecret, GoogleCredentials? saved)
+    {
+        var id = clientId.Trim();
+        var secret = typedSecret.Trim();
+        if (id.Length == 0) return null;
+        if (secret.Length > 0) return (id, secret);
+        return saved is { ClientSecret.Length: > 0 } s && s.ClientId == id ? (id, s.ClientSecret) : null;
+    }
 
     public event Action? Changed;
 
@@ -73,11 +92,16 @@ public sealed class GoogleCalendarService : IDisposable
     }
 
     /// <summary>Signs in with the user's own OAuth client: the browser opens, the user approves, the events load.</summary>
-    public async Task<bool> ConnectAsync(string clientId, string secret)
+    public async Task<bool> ConnectAsync(string typedId, string typedSecret)
     {
-        clientId = clientId.Trim();
-        secret = secret.Trim();
-        if (clientId.Length == 0 || secret.Length == 0 || _signIn is not null || _disposed) return false;
+        if (_signIn is not null || _disposed) return false;
+        if (ResolveClient(typedId, typedSecret, _credentials) is not { } client)
+        {
+            StatusText = typedId.Trim().Length == 0 ? "PASTE THE CLIENT ID FIRST" : "PASTE THE CLIENT SECRET FIRST";
+            Raise();
+            return false;
+        }
+        var (clientId, secret) = client;
         _signIn = new CancellationTokenSource();
         StatusText = "FINISH SIGNING IN IN YOUR BROWSER…";
         Raise();
@@ -90,14 +114,22 @@ public sealed class GoogleCalendarService : IDisposable
                 StatusText = error ?? "SIGN-IN FAILED";
                 return false;
             }
+            _generation++;
             _credentials = new GoogleCredentials(clientId, secret, token.RefreshToken);
-            _vault.Save(_credentials);
+            try { _vault.Save(_credentials); }
+            catch (Exception e) { Log.Error("calendar: saving the sign-in failed (this session only)", e); }
             _access = token.AccessToken;
             _accessExpires = DateTimeOffset.UtcNow.AddSeconds(token.ExpiresIn);
             Status = CalendarStatus.SignedIn;
             StatusText = "CONNECTED";
             Log.Info("calendar: signed in");
             _timer.Start();
+        }
+        catch (Exception e)
+        {
+            Log.Error("calendar: sign-in failed unexpectedly", e);
+            StatusText = "SIGN-IN FAILED";
+            return false;
         }
         finally
         {
@@ -120,9 +152,12 @@ public sealed class GoogleCalendarService : IDisposable
 
     public async Task RefreshAsync()
     {
-        if (Status != CalendarStatus.SignedIn || _refreshing || _disposed) return;
+        if (Status != CalendarStatus.SignedIn || _disposed) return;
+        if (_refreshing) { _refreshAgain = true; return; }
         _refreshing = true;
+        _refreshAgain = false;
         _lastRefresh = DateTimeOffset.UtcNow;
+        var generation = _generation;
         try
         {
             var zone = TimeZoneInfo.Local;
@@ -131,7 +166,7 @@ public sealed class GoogleCalendarService : IDisposable
             string? page = null;
             for (var i = 0; i < MaxPages; i++)
             {
-                var json = await GetAsync(CalendarFeed.CalendarListUrl(page));
+                var json = await GetAsync(CalendarFeed.CalendarListUrl(page), generation);
                 if (json is null) return; // signed out meanwhile
                 var (some, next) = CalendarFeed.ParseCalendarList(json);
                 ids.AddRange(some);
@@ -144,15 +179,15 @@ public sealed class GoogleCalendarService : IDisposable
                 page = null;
                 for (var i = 0; i < MaxPages; i++)
                 {
-                    var json = await GetAsync(CalendarFeed.EventsUrl(id, from, to, page), skipForbidden: true);
+                    var json = await GetAsync(CalendarFeed.EventsUrl(id, from, to, page), generation, skipUnreadable: true);
                     if (json is null) { skipped++; break; }
                     var (some, next) = CalendarFeed.ParseEvents(json, zone);
                     events.AddRange(some);
                     if ((page = next) is null) break;
                 }
-                if (Status != CalendarStatus.SignedIn) return;
+                if (Status != CalendarStatus.SignedIn || generation != _generation) return;
             }
-            if (_disposed || Status != CalendarStatus.SignedIn) return;
+            if (_disposed || Status != CalendarStatus.SignedIn || generation != _generation) return;
             events.Sort((a, b) => a.Start.CompareTo(b.Start));
             Events = events;
             try { _vault.SaveEvents(events); }
@@ -160,23 +195,34 @@ public sealed class GoogleCalendarService : IDisposable
             StatusText = ids.Count == 1 ? "CONNECTED · 1 CALENDAR" : $"CONNECTED · {ids.Count} CALENDARS";
             Log.Info($"calendar: refreshed ({ids.Count} calendars, {skipped} skipped, {events.Count} events)");
         }
+        catch (ApiDisabledException)
+        {
+            // Signed in fine, but setup step 2 was skipped (final review I2): say so instead of "offline".
+            Log.Info("calendar: the Google Calendar API is not enabled in the user's Cloud project");
+            if (Status == CalendarStatus.SignedIn && generation == _generation) StatusText = "ENABLE THE GOOGLE CALENDAR API (STEP 2), THEN REFRESH";
+        }
         catch (Exception e) when (e is HttpRequestException or TaskCanceledException)
         {
             // The exception text could carry a URL with a calendar id; only its kind is logged.
             Log.Info("calendar: refresh failed (" + e.GetType().Name + "), showing the saved events");
-            if (Status == CalendarStatus.SignedIn) StatusText = "OFFLINE · SHOWING SAVED EVENTS";
+            if (Status == CalendarStatus.SignedIn && generation == _generation) StatusText = "OFFLINE · SHOWING SAVED EVENTS";
         }
         finally
         {
             _refreshing = false;
             Raise();
+            // A refresh asked for meanwhile, or a new sign-in while an older refresh was on the wire, runs now.
+            if ((_refreshAgain || generation != _generation) && Status == CalendarStatus.SignedIn && !_disposed) _ = RefreshAsync();
         }
     }
+
+    private sealed class ApiDisabledException() : HttpRequestException("calendar api disabled");
 
     /// <summary>Signs out: the token is revoked (best effort), the saved sign-in and events are deleted.</summary>
     public async Task DisconnectAsync()
     {
         var refresh = _credentials?.RefreshToken;
+        _generation++;
         _timer.Stop();
         _vault.Clear();
         _credentials = null;
@@ -195,32 +241,39 @@ public sealed class GoogleCalendarService : IDisposable
         catch (Exception e) when (e is HttpRequestException or TaskCanceledException) { Log.Info("calendar: revoke failed (offline?)"); }
     }
 
-    // GET with the access token; a 401 gets one fresh token and one retry. Null: signed out, or (skipForbidden) a
-    // calendar the account may no longer read (403 / 404 / 410). Other failures throw HttpRequestException.
-    private async Task<string?> GetAsync(string url, bool skipForbidden = false)
+    // GET with the access token; a 401 gets one fresh token and one retry. Null: signed out (or an older generation),
+    // or (skipUnreadable) a calendar the account may no longer read (403 that is not a rate limit, 404, 410). A disabled
+    // Calendar API throws ApiDisabledException; other failures (rate limits included: final review M3, so a calendar's
+    // events are never dropped from the cache) throw HttpRequestException and keep the saved events.
+    private async Task<string?> GetAsync(string url, int generation, bool skipUnreadable = false)
     {
         for (var attempt = 0; attempt < 2; attempt++)
         {
-            var access = await AccessTokenAsync();
+            var access = await AccessTokenAsync(generation);
             if (access is null) return null;
             using var request = new HttpRequestMessage(HttpMethod.Get, url);
             request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", access);
             using var response = await Http.SendAsync(request);
+            if (generation != _generation) return null;
             if (response.StatusCode == HttpStatusCode.Unauthorized && attempt == 0) { _access = null; continue; }
-            if (skipForbidden && response.StatusCode is HttpStatusCode.Forbidden or HttpStatusCode.NotFound or HttpStatusCode.Gone) return null;
-            if (!response.IsSuccessStatusCode) throw new HttpRequestException($"calendar api {(int)response.StatusCode}");
-            return await response.Content.ReadAsStringAsync();
+            if (response.IsSuccessStatusCode) return await response.Content.ReadAsStringAsync();
+            var reason = CalendarFeed.ErrorReason(await response.Content.ReadAsStringAsync());
+            if (response.StatusCode == HttpStatusCode.Forbidden && CalendarFeed.IsApiDisabled(reason)) throw new ApiDisabledException();
+            if (skipUnreadable && !CalendarFeed.IsRateLimited(reason)
+                && response.StatusCode is HttpStatusCode.Forbidden or HttpStatusCode.NotFound or HttpStatusCode.Gone) return null;
+            throw new HttpRequestException($"calendar api {(int)response.StatusCode}");
         }
         throw new HttpRequestException("calendar api 401");
     }
 
-    private async Task<string?> AccessTokenAsync()
+    private async Task<string?> AccessTokenAsync(int generation)
     {
         if (_access is not null && _accessExpires > DateTimeOffset.UtcNow.AddMinutes(1)) return _access;
         if (_credentials is not { RefreshToken: { } refresh } c) return null;
         using var response = await Http.PostAsync(GoogleOAuth.TokenUrl,
             new FormUrlEncodedContent(GoogleOAuth.RefreshForm(c.ClientId, c.ClientSecret, refresh)));
         var body = await response.Content.ReadAsStringAsync();
+        if (generation != _generation) return null; // disconnected or signed in again meanwhile
         if (!response.IsSuccessStatusCode)
         {
             if (GoogleOAuth.IsInvalidGrant(body) || response.StatusCode == HttpStatusCode.Unauthorized)
@@ -241,6 +294,7 @@ public sealed class GoogleCalendarService : IDisposable
     private void SignedOut()
     {
         Log.Info("calendar: Google refused the saved sign-in, signed out");
+        _generation++;
         _timer.Stop();
         _access = null;
         if (_credentials is not null)

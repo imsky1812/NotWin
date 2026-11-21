@@ -71,10 +71,47 @@ public static class CalendarFeed
         return days;
     }
 
-    /// <summary>The event that starts first among those not ended yet (one in progress counts); null when none.</summary>
-    public static CalEvent? NextEvent(IEnumerable<CalEvent> events, DateTimeOffset now) =>
-        events.Where(e => e.End > now || (e.End <= e.Start && e.Start >= now))
-            .OrderBy(e => e.Start).ThenBy(e => e.AllDay ? 0 : 1).FirstOrDefault();
+    /// <summary>
+    /// The event that starts first among those not ended yet (one in progress counts); null when none. An all-day event
+    /// already in progress (a birthday, a holiday, a trip) gives way to a timed event still to come or running today
+    /// (final review M4), so it never hides the day's meetings.
+    /// </summary>
+    public static CalEvent? NextEvent(IEnumerable<CalEvent> events, DateTimeOffset now)
+    {
+        var open = events.Where(e => e.End > now || (e.End <= e.Start && e.Start >= now))
+            .OrderBy(e => e.Start).ThenBy(e => e.AllDay ? 0 : 1).ToList();
+        if (open.Count == 0) return null;
+        var first = open[0];
+        if (!first.AllDay || first.Start > now) return first;
+        return open.FirstOrDefault(e => !e.AllDay && e.Start.ToOffset(now.Offset).Date <= now.Date) ?? first;
+    }
+
+    /// <summary>
+    /// The reason in a Google API error body (<c>error.errors[0].reason</c>, else <c>error.details[].reason</c>), or null.
+    /// </summary>
+    public static string? ErrorReason(string json)
+    {
+        try
+        {
+            using var doc = JsonDocument.Parse(json);
+            if (doc.RootElement.ValueKind != JsonValueKind.Object || !doc.RootElement.TryGetProperty("error", out var error)
+                || error.ValueKind != JsonValueKind.Object) return null;
+            foreach (var list in new[] { "errors", "details" })
+                if (error.TryGetProperty(list, out var items) && items.ValueKind == JsonValueKind.Array)
+                    foreach (var item in items.EnumerateArray())
+                        if (item.ValueKind == JsonValueKind.Object && GoogleOAuth.Str(item, "reason") is { Length: > 0 } reason)
+                            return reason;
+            return null;
+        }
+        catch (JsonException) { return null; }
+    }
+
+    /// <summary>The Calendar API is not switched on for the user's Cloud project (setup step 2 skipped).</summary>
+    public static bool IsApiDisabled(string? reason) => reason is "accessNotConfigured" or "SERVICE_DISABLED";
+
+    /// <summary>Google asked to slow down: a passing failure, not a calendar the account cannot read.</summary>
+    public static bool IsRateLimited(string? reason) =>
+        reason is "rateLimitExceeded" or "userRateLimitExceeded" or "quotaExceeded" or "RATE_LIMIT_EXCEEDED";
 
     /// <summary>"NOW", "TODAY 14:30", "TODAY", "TOMORROW 09:00", "TOMORROW", or "TUE 24".</summary>
     public static string WhenLabel(CalEvent e, DateTimeOffset now, TimeZoneInfo zone)

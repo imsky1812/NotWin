@@ -22,10 +22,10 @@ public static class GoogleSignIn
     public static async Task<(GoogleToken? Token, string? Error)> RunAsync(HttpClient http, string clientId, string secret, CancellationToken ct)
     {
         var listener = new TcpListener(IPAddress.Loopback, 0);
-        listener.Start();
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
         try
         {
+            listener.Start();
             var redirect = $"http://127.0.0.1:{((IPEndPoint)listener.LocalEndpoint).Port}/";
             var verifier = GoogleOAuth.NewVerifier();
             var state = GoogleOAuth.NewVerifier()[..32];

@@ -148,4 +148,51 @@ public sealed class CalendarFeedTests
         Assert.Contains("fields=", url);
         Assert.Contains("pageToken=x", CalendarFeed.CalendarListUrl("x"));
     }
+
+    // Final review M4: a birthday / holiday / trip in progress must not hide today's meetings on the 2×1 widget.
+    [Fact]
+    public void NextEvent_AllDayInProgress_GivesWayToTodaysTimedEvent()
+    {
+        var now = At(11, 21, 10);
+        var birthday = AllDay(At(11, 21), At(11, 22), "birthday");
+        var trip = AllDay(At(11, 19), At(11, 26), "trip");
+        var meeting = Timed(At(11, 21, 14), At(11, 21, 15), "meeting");
+        var tomorrow = Timed(At(11, 22, 9), At(11, 22, 10), "tomorrow");
+        Assert.Equal("meeting", CalendarFeed.NextEvent([birthday, trip, meeting, tomorrow], now)?.Title);
+        // Nothing timed left today: the all-day event shows ("TODAY").
+        Assert.Equal("birthday", CalendarFeed.NextEvent([birthday, tomorrow], now)?.Title);
+        // An all-day event that starts later (tomorrow) never beats an earlier timed one.
+        Assert.Equal("meeting", CalendarFeed.NextEvent([AllDay(At(11, 22), At(11, 23)), meeting], now)?.Title);
+    }
+
+    // Final review I2 / M3: what a Google API error is about.
+    [Fact]
+    public void ErrorReason_ReadsLegacyAndDetailsReasons()
+    {
+        Assert.Equal("accessNotConfigured", CalendarFeed.ErrorReason("""
+            {"error":{"code":403,"message":"Google Calendar API has not been used in project 1 before or it is disabled.",
+             "errors":[{"message":"x","domain":"usageLimits","reason":"accessNotConfigured"}],"status":"PERMISSION_DENIED",
+             "details":[{"@type":"type.googleapis.com/google.rpc.ErrorInfo","reason":"SERVICE_DISABLED"}]}}
+            """));
+        Assert.Equal("SERVICE_DISABLED", CalendarFeed.ErrorReason("""
+            {"error":{"code":403,"status":"PERMISSION_DENIED","details":[{"reason":"SERVICE_DISABLED"}]}}
+            """));
+        Assert.Equal("rateLimitExceeded", CalendarFeed.ErrorReason("""{"error":{"errors":[{"reason":"rateLimitExceeded"}]}}"""));
+        Assert.Null(CalendarFeed.ErrorReason("garbage"));
+        Assert.Null(CalendarFeed.ErrorReason("""{"error":"x"}"""));
+    }
+
+    [Theory]
+    [InlineData("accessNotConfigured", true, false)]
+    [InlineData("SERVICE_DISABLED", true, false)]
+    [InlineData("rateLimitExceeded", false, true)]
+    [InlineData("userRateLimitExceeded", false, true)]
+    [InlineData("quotaExceeded", false, true)]
+    [InlineData("forbidden", false, false)]
+    [InlineData(null, false, false)]
+    public void ErrorReason_Kinds(string? reason, bool disabled, bool rateLimited)
+    {
+        Assert.Equal(disabled, CalendarFeed.IsApiDisabled(reason));
+        Assert.Equal(rateLimited, CalendarFeed.IsRateLimited(reason));
+    }
 }
