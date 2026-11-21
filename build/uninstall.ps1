@@ -36,6 +36,9 @@ if (Test-Path $watchdog) {
 # 3. Autostart entry
 Remove-ItemProperty -Path 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run' -Name 'NothingShell' -ErrorAction SilentlyContinue
 
+# 3b. Sparse package identity (registered by install.ps1)
+Get-AppxPackage -Name 'NothingShell' -ErrorAction SilentlyContinue | Remove-AppxPackage
+
 # 4. Remove install dir
 if (Test-Path $install) { Remove-Item $install -Recurse -Force }
 

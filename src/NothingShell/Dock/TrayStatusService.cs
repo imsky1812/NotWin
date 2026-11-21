@@ -87,6 +87,15 @@ public sealed class TrayStatusService : INotifyPropertyChanged, IDisposable
         }
     }
 
+    /// <summary>On mains power (the charger is in), whether or not the battery is taking charge right now.</summary>
+    public bool PluggedIn
+    {
+        get => _pluggedIn;
+        private set => Set(ref _pluggedIn, value);
+    }
+
+    private bool _pluggedIn;
+
     public bool Charging
     {
         get => _charging;
@@ -137,6 +146,7 @@ public sealed class TrayStatusService : INotifyPropertyChanged, IDisposable
             ReadBattery();
             PowerManager.RemainingChargePercentChanged += OnPowerChanged;
             PowerManager.BatteryStatusChanged += OnPowerChanged;
+            PowerManager.PowerSupplyStatusChanged += OnPowerChanged;
         }
         catch (Exception e) { Log.Error("battery status unavailable", e); }
     }
@@ -152,6 +162,7 @@ public sealed class TrayStatusService : INotifyPropertyChanged, IDisposable
             HasBattery = status != BatteryStatus.NotPresent;
             BatteryPercent = Math.Clamp(PowerManager.RemainingChargePercent, 0, 100);
             Charging = status == BatteryStatus.Charging;
+            PluggedIn = PowerManager.PowerSupplyStatus != PowerSupplyStatus.NotPresent;
         }
         catch (Exception e) { Log.Error("battery read failed", e); }
     }
@@ -227,13 +238,25 @@ public sealed class TrayStatusService : INotifyPropertyChanged, IDisposable
         var v = _audio.Rebind();
         if (v is { } vol) ApplyVolume(vol.Percent, vol.Muted);
         else ApplyVolume(0, true); // no output device: show the muted glyph
+        try { DefaultDeviceChanged?.Invoke(); }
+        catch (Exception e) { Log.Error("default-device handler failed", e); }
     }
+
+    /// <summary>The default playback device changed (UI thread): e.g. headphones plugged in or out.</summary>
+    public event Action? DefaultDeviceChanged;
 
     private void ApplyVolume(int percent, bool muted)
     {
         if (_disposed) return;
         VolumePercent = percent;
         Muted = muted;
+    }
+
+    /// <summary>Sets the system volume (panel slider). UI thread. The watcher's callback then updates VolumePercent.</summary>
+    public bool SetVolume(int percent)
+    {
+        if (_disposed || _audio is null) return false;
+        return _audio.SetMasterScalar(Math.Clamp(percent, 0, 100) / 100f);
     }
 
     // ---- plumbing ----
@@ -258,6 +281,7 @@ public sealed class TrayStatusService : INotifyPropertyChanged, IDisposable
             SystemEvents.TimeChanged -= OnSystemTimeChanged;
             PowerManager.RemainingChargePercentChanged -= OnPowerChanged;
             PowerManager.BatteryStatusChanged -= OnPowerChanged;
+            PowerManager.PowerSupplyStatusChanged -= OnPowerChanged;
             if (_netHandler is not null) NetworkInformation.NetworkStatusChanged -= _netHandler;
             foreach (var r in _radios) r.StateChanged -= OnRadioStateChanged;
             _radios.Clear();

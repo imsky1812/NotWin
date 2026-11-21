@@ -19,6 +19,9 @@ public sealed class WinKeyListener : IDisposable
     /// <summary>Raised on the UI thread after a lone Win tap.</summary>
     public event Action? LauncherRequested;
 
+    /// <summary>Raised on the UI thread for Win+A / Win+N (Windows' own panels do not open).</summary>
+    public event Action? PanelRequested;
+
     public WinKeyListener(HookThread hookThread, Dispatcher ui)
     {
         _ui = ui;
@@ -32,7 +35,15 @@ public sealed class WinKeyListener : IDisposable
         var v = _detector.OnKey(vk, down, injectedByUs);
         if (v.InjectMaskFirst) KeyboardHookNative.InjectMaskKey();
         if (v.OpenLauncher) _ui.BeginInvoke(DispatcherPriority.Input, Raise);
+        if (v.OpenPanel) _ui.BeginInvoke(DispatcherPriority.Input, RaisePanel);
         return v.Swallow;
+    }
+
+    private void RaisePanel()
+    {
+        Log.Info("win+a/n -> panel");
+        try { PanelRequested?.Invoke(); }
+        catch (Exception e) { Log.Error("panel request failed", e); }
     }
 
     private void Raise()

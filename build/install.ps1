@@ -126,6 +126,26 @@ if ($LASTEXITCODE -ge 8) { throw "robocopy failed (exit $LASTEXITCODE)" }
 $global:LASTEXITCODE = 0
 Write-Host "Installed to $install"
 
+# 6b. Sparse package identity (notifications, radios). Registered for the installing user with the Program Files
+#     folder as external location. Optional: on failure the shell still runs, just without notification access.
+try {
+    $makeappx = Join-Path $signtool.Directory 'makeappx.exe'
+    $stage = Join-Path $repo 'out/package'
+    $msix = Join-Path $repo 'out/NothingShell.msix'
+    Remove-Item $stage, $msix -Recurse -Force -ErrorAction SilentlyContinue
+    New-Item -ItemType Directory (Join-Path $stage 'Assets') -Force | Out-Null
+    Copy-Item (Join-Path $repo 'src/NothingShell/Package/AppxManifest.xml') $stage
+    Copy-Item (Join-Path $repo 'src/NothingShell/Package/Assets/logo.png') (Join-Path $stage 'Assets')
+    Invoke-Native $makeappx @('pack', '/nv', '/o', '/d', $stage, '/p', $msix)
+    Invoke-Native $signtool.FullName @('sign', '/fd', 'SHA256', '/sha1', $thumb, $msix)
+    Get-AppxPackage -Name 'NothingShell' -ErrorAction SilentlyContinue | Remove-AppxPackage
+    Add-AppxPackage -Path $msix -ExternalLocation $install
+    $pkg = Get-AppxPackage -Name 'NothingShell'
+    Write-Host "Package registered: $($pkg.PackageFullName) ($($pkg.Status))"
+} catch {
+    Write-Warning "Package identity registration failed: $($_.Exception.Message). Nothing Shell will run without notification access."
+}
+
 # 7. Launch once WITHOUT elevation (explorer.exe de-elevates) so the user process writes the HKCU Run value.
 Start-Process explorer.exe -ArgumentList "`"$install\NothingShell.exe`""
 Write-Host "Launched NothingShell unelevated. Check %AppData%\NothingShell\log.txt for uiAccess=1."

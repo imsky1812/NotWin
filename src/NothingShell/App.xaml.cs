@@ -23,6 +23,10 @@ public partial class App : Application
     private Launcher.WinKeyListener? _winKeys;
     private Launcher.LauncherController? _launcher;
     private Launcher.AppIndex? _index;
+    private Notch.NotchController? _notch;
+    private Media.MediaSessionService? _media;
+    private Notifications.NotificationService? _notifications;
+    private Panel.QuickPanelController? _panel;
     private bool _secondInstance;
 
     protected override void OnStartup(StartupEventArgs e)
@@ -67,6 +71,8 @@ public partial class App : Application
 
         var uiAccess = TokenInfo.GetUiAccess() ? 1 : 0;
         Log.Info($"startup uiAccess={uiAccess} pid={Environment.ProcessId}");
+        var hasIdentity = PackageIdentity.HasIdentity(out var packageName);
+        Log.Info($"package identity={hasIdentity} name={packageName ?? "(none)"}");
 
         // 2. Conflict gate: nothing touches the taskbar while Fenn is running.
         if (!ConflictGate.CheckOrWait())
@@ -113,18 +119,61 @@ public partial class App : Application
     {
         var index = _index!;
         _launcher = new Launcher.LauncherController(index, new Launcher.FileSearchService());
-        _launcher.Launched += name => Log.Info($"launched \"{name}\""); // Plan 3: the notch shows "Opening ‹name›…"
+        // Notch (spec §6.4): resting time/battery, "Opening ‹name›…" after a launch; hidden in full screen.
+        try
+        {
+            _notch = new Notch.NotchController(_tray!);
+            _notch.SetFullscreen(_fullscreen!.IsFullscreen);
+            _fullscreen.Changed += fs => _notch?.SetFullscreen(fs);
+            _launcher.Launched += name => _notch?.Opening(name);
+
+            // Music state: the system media session (Changed arrives on this UI thread).
+            _media = new Media.MediaSessionService();
+            _media.Changed += snap => _notch?.SetMusic(snap.Playing, snap.Art);
+            _ = _media.StartAsync();
+
+            // Notifications: shown in the notch for 3.6 s (and listed in the panel, Task 12).
+            _notifications = new Notifications.NotificationService();
+            var notchIcons = new Dock.AppIconCache();
+            _notifications.Added += item => _notch?.Notify(
+                new Core.Notch.NotchNotification(item.AppId, item.AppName, item.Text),
+                string.IsNullOrEmpty(item.AppId) ? null : notchIcons.Get(item.AppId, 40));
+            _ = _notifications.StartAsync();
+        }
+        catch (Exception e) { Log.Error("notch failed to start", e); }
         if (_dock is not null)
         {
             _dock.StartClicked += _launcher.Toggle;
             _dock.SearchClicked += _launcher.Toggle;
         }
-        _fullscreen!.Changed += fs => { if (fs) _launcher?.Close(); };
+        _fullscreen!.Changed += fs => { if (fs) { _launcher?.Close(); _panel?.Close(); } };
+
+        // Quick-settings panel (spec §6.3): Win+A / Win+N (below) and the dock tray. Guarded like the notch: a failure
+        // here must never take the dock and launcher down with it (Win+A / Win+N then simply do nothing).
+        try
+        {
+            var panel = new Panel.QuickPanelController(_reveal);
+            var tiles = new Panel.TilesSection(panel.Window.TilesHost);
+            panel.Opening += tiles.Refresh;
+            var sliders = new Panel.SlidersSection(panel.Window.SlidersHost, _tray!, new Panel.BrightnessService());
+            panel.Opening += sliders.Refresh;
+            if (_notifications is not null && _controller is not null)
+            {
+                var controller = _controller;
+                var notes = new Panel.NotificationsSection(panel.Window.NotificationsHost, _notifications,
+                    () => controller.Settings, controller.UpdateSettings, panel.Close, () => panel.IsOpen);
+                panel.Opening += () => _ = notes.RefreshAsync();
+            }
+            _panel = panel;
+            if (_dock is not null) _dock.TrayClicked += panel.Toggle;
+        }
+        catch (Exception e) { Log.Error("quick-settings panel failed to start", e); }
 
         try
         {
             _winKeys = new Launcher.WinKeyListener(_hooks!, Dispatcher);
             _winKeys.LauncherRequested += _launcher.Toggle;
+            _winKeys.PanelRequested += () => _panel?.Toggle();
         }
         catch (Exception e)
         {
@@ -213,6 +262,10 @@ public partial class App : Application
             _appBar?.Dispose();
             _winKeys?.Dispose();
             _launcher?.Dispose();
+            _media?.Dispose();
+            _notifications?.Dispose();
+            _panel?.Dispose();
+            _notch?.Dispose();
             _controller?.Dispose();
             _tray?.Dispose();
             _mouse?.Dispose();

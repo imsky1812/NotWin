@@ -12,13 +12,13 @@
 param(
     # Run only these sections. Default (no -Only): reinstall + Dock, Apps, Tray, Reserve, Startup.
     # Example: -Only KeySpike,Notify
-    [ValidateSet('Task8', 'KeySpike', 'Overflow', 'Desktop', 'Notify', 'Dock', 'Apps', 'Tray', 'Reserve', 'Launcher', 'Startup')]
+    [ValidateSet('Task8', 'KeySpike', 'Overflow', 'Desktop', 'Notify', 'Dock', 'Apps', 'Tray', 'Reserve', 'Launcher', 'Notch', 'Panel', 'Startup')]
     [string[]]$Only,
     # With -Only the reinstall step is skipped unless -Reinstall is given.
     [switch]$Reinstall
 )
 $ErrorActionPreference = 'Stop'
-$Sections = if ($Only) { @($Only) } else { @('Launcher', 'Dock', 'Reserve', 'Startup') }
+$Sections = if ($Only) { @($Only) } else { @('Notch', 'Panel', 'Launcher', 'Dock', 'Reserve', 'Startup') }
 
 # =====================================================================================
 # HELPERS (everything above the "END HELPERS" marker is safe to dot-source for testing)
@@ -723,7 +723,7 @@ try {
     Write-Good 'Install done.'
     } else {
         Write-Info 'Skipping the reinstall (use -Reinstall to force it).'
-        if ((Test-Section 'Task8') -or (Test-Section 'Overflow') -or (Test-Section 'Dock') -or (Test-Section 'Apps') -or (Test-Section 'Tray') -or (Test-Section 'Reserve') -or (Test-Section 'Launcher') -or (Test-Section 'Startup')) {
+        if ((Test-Section 'Task8') -or (Test-Section 'Overflow') -or (Test-Section 'Dock') -or (Test-Section 'Apps') -or (Test-Section 'Tray') -or (Test-Section 'Reserve') -or (Test-Section 'Launcher') -or (Test-Section 'Notch') -or (Test-Section 'Panel') -or (Test-Section 'Startup')) {
             if (-not (Test-Path $AppExe) -or -not (Test-Path $Watchdog)) { throw 'The app is not installed. Run again with -Reinstall.' }
         }
     }
@@ -744,7 +744,7 @@ try {
     Write-Step 'STEP 1: close Fenn'
     $fenn = @(Get-Process -Name 'fenn' -ErrorAction SilentlyContinue)
     $fennSkipped = $false
-    $needFennGone = (Test-Section 'Task8') -or (Test-Section 'Overflow') -or (Test-Section 'Dock') -or (Test-Section 'Apps') -or (Test-Section 'Tray') -or (Test-Section 'Reserve') -or (Test-Section 'Launcher')
+    $needFennGone = (Test-Section 'Task8') -or (Test-Section 'Overflow') -or (Test-Section 'Dock') -or (Test-Section 'Apps') -or (Test-Section 'Tray') -or (Test-Section 'Reserve') -or (Test-Section 'Launcher') -or (Test-Section 'Notch') -or (Test-Section 'Panel')
     if ($fenn.Count -gt 0 -and $needFennGone) {
         Write-Do 'Please quit Fenn now: find its icon in the tray (bottom right), right-click it and choose Quit.'
         Write-Info 'I will wait until it is gone.  (Press S here to continue anyway - results may then be wrong.)'
@@ -1511,6 +1511,70 @@ try {
         Complete-Quit 'LA.quit' $app 'launcher section (--quit)'
     }
 
+    # ================================================================ NOTCH + PANEL (plan 3)
+    if ((Test-Section 'Notch') -or (Test-Section 'Panel')) {
+        Write-Step 'NOTCH + PANEL: package identity, notch states, quick settings, notifications'
+        $toast = Join-Path $Repo 'spikes\NotifySpike\send-test-toast.ps1'
+        $logOff = Get-LogLength $AppLog
+        $app = Start-App
+        [void](Wait-Until { (Get-LogSince $AppLog $logOff) -match 'dock ready' } 15000 250)
+        [void](Wait-Until { (Get-LogSince $AppLog $logOff) -match 'notifications: (listener ready|unavailable)|notification listener failed' } 10000 250)
+        $l = Get-LogSince $AppLog $logOff
+        [void](Complete-Check -Id 'PN.0' -Description 'Package identity present and notification listener ready' `
+            -Measured @{ identity = ($l -match 'package identity=True'); listener = ($l -match 'notifications: listener ready') } `
+            -MeasuredPass (($l -match 'package identity=True') -and ($l -match 'notifications: listener ready')))
+
+        # PN.1: identity must not break the watchdog's restore (state file in the real %AppData%).
+        Get-Process -Name 'NothingShell' -ErrorAction SilentlyContinue | Stop-Process -Force
+        $back = Wait-Until { [NsWin]::TrayState() -eq 1 } 8000 200
+        [void](Complete-Check -Id 'PN.1' -Description 'Hard kill with package identity: watchdog restores the taskbar' `
+            -Measured @{ trayBackMs = $back } -MeasuredPass ($back -ge 0))
+        $logOff = Get-LogLength $AppLog
+        $app = Start-App
+        [void](Wait-Until { (Get-LogSince $AppLog $logOff) -match 'dock ready' } 15000 250)
+
+        if (Test-Section 'Notch') {
+            [void](Ask-Check 'NT.1' 'Notch: top centre, dot-matrix time + battery' 'Look at the top centre of the screen.' 'Is there a black pill with the time in dots and the battery on the right?')
+            $o = Get-LogLength $AppLog
+            [void](Ask-Check 'NT.2' 'Launching shows "Opening …" in the notch' 'Tap Win, type  calc  and press Enter. Watch the notch.' 'Did the notch briefly say "Opening Calculator…"?' `
+                -Measured @{ openingLogged = ((Get-LogSince $AppLog $o) -match 'notch state=Opening') } -AnswerRequired $true)
+            Get-Process -Name CalculatorApp -ErrorAction SilentlyContinue | ForEach-Object { try { $_.CloseMainWindow() | Out-Null } catch { } }
+            [void](Ask-Check 'NT.3' 'Music state' 'Play music (Spotify or a YouTube video in the browser, not full screen) for ~5 s, then pause it.' 'While playing: art + moving dots in the notch? After pausing: back to the time within ~1 s?')
+            $o = Get-LogLength $AppLog
+            & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $toast -Text ("NothingShell test " + (Get-Date -Format 'HH:mm:ss')) | Out-Null
+            Start-Sleep -Seconds 2
+            $l = Get-LogSince $AppLog $o
+            $a = Ask-YN 'A test notification was just sent. Did the notch grow and show "Windows PowerShell" + the text for a few seconds?'
+            [void](Complete-Check -Id 'NT.4' -Description 'New notification shows in the notch' -Measured @{ addedLogged = ($l -match 'notification added'); notchLogged = ($l -match 'notch state=Notification') } `
+                -MeasuredPass (($l -match 'notification added') -and ($l -match 'notch state=Notification')) -Answer $a -Expect 'y')
+            $banner = Ask-YN 'Did Windows also show its own pop-up at the bottom right? (just recording; y or n are both fine)'
+            [void](Complete-Check -Id 'NT.4b' -Description 'Windows banner also shown (depends on your banner settings)' -Measured @{ windowsBanner = $banner } -Info)
+            Write-Do 'FULL SCREEN: open a YouTube video. After Enter you get 15 s: click it, press f. A test notification is sent at 8 s. Do NOT click this window.'
+            Wait-Enter 'Press Enter to start the 15 seconds'
+            Start-Sleep -Seconds 8
+            & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $toast -Text ("NothingShell test " + (Get-Date -Format 'HH:mm:ss')) | Out-Null
+            Start-Sleep -Seconds 7
+            try { [console]::Beep(880, 300) } catch { }
+            [void](Ask-Check 'NT.5' 'Full screen hides the notch; a notification during it does not pop the notch' 'Leave full screen now.' 'In full screen: was the notch hidden, and did the notification NOT show in the notch?')
+        }
+
+        if (Test-Section 'Panel') {
+            $o = Get-LogLength $AppLog
+            [void](Ask-Check 'QP.1' 'Win+A / Win+N open Nothing Shell''s panel' 'Press Win+A. Then Win+A again. Then Win+N, and Esc.' 'Did our panel open bottom-right (and Windows'' own Quick Settings / notifications did NOT), and close again?' `
+                -Measured @{ panelLogged = ((Get-LogSince $AppLog $o) -match 'win\+a/n -> panel') })
+            [void](Ask-Check 'QP.2' 'Tray click opens the panel; click outside closes; dock stays up' 'Show the dock and click the tray (Wi-Fi / volume / clock area). Then click on the desktop.' 'Did the panel open with the dock staying visible, and close when you clicked outside?')
+            [void](Ask-Check 'QP.3' 'Volume slider + output chip' 'Open the panel, drag the volume slider. If you have two outputs (e.g. buds connected), click the chip next to it.' 'Did the system volume follow the slider (and the chip switch device, if you have two)?')
+            [void](Ask-Check 'QP.4' 'Brightness slider' 'Drag the brightness slider down and back up.' 'Did the screen brightness change?')
+            [void](Ask-Check 'QP.5' 'Wi-Fi tile' 'Click the arrow (›) on the Wi-Fi tile. Optionally tap the tile to turn Wi-Fi off and on again (a few seconds offline).' 'Did it list networks (or a location hint), with your network marked Connected?')
+            [void](Ask-Check 'QP.6' 'Bluetooth tile' 'Click the arrow on the Bluetooth tile. If your buds are paired, try Connect / Connected on them.' 'Did it list paired devices, and did connecting work (or open Bluetooth settings)?')
+            & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $toast -Text ("NothingShell test " + (Get-Date -Format 'HH:mm:ss')) | Out-Null
+            Start-Sleep -Seconds 2
+            [void](Ask-Check 'QP.7' 'Notifications in the panel' 'Open the panel. Find "Windows PowerShell" under NOTIFICATIONS. Click its ✕, then send yourself nothing else and press CLEAR ALL if anything remains.' 'Was the test notification listed, and did ✕ / Clear all remove it?')
+            [void](Ask-Check 'QP.8' 'Banner tip (one time)' 'Look at the top of NOTIFICATIONS for the tip about Windows pop-ups. Click "Got it".' 'Did the tip show and disappear after "Got it"?')
+        }
+        Complete-Quit 'NP.quit' $app 'notch + panel section (--quit)'
+    }
+
     # ================================================================ STARTUP (task 16)
     if (Test-Section 'Startup') {
         Write-Step 'STARTUP: Fenn guard, single instance, start with Windows'
@@ -1568,7 +1632,7 @@ try {
     }
 
     # ================================================================ LAST QUESTION
-    if ((Test-Section 'Dock') -or (Test-Section 'Apps') -or (Test-Section 'Tray') -or (Test-Section 'Reserve') -or (Test-Section 'Launcher') -or (Test-Section 'Startup')) {
+    if ((Test-Section 'Dock') -or (Test-Section 'Apps') -or (Test-Section 'Tray') -or (Test-Section 'Reserve') -or (Test-Section 'Launcher') -or (Test-Section 'Notch') -or (Test-Section 'Panel') -or (Test-Section 'Startup')) {
         Write-Step 'LAST QUESTION'
         Write-Host '  Keep Nothing Shell as your taskbar from now on?' -ForegroundColor Cyan
         Write-Host '    y = Nothing Shell starts at sign-in and keeps running (Fenn must stay closed)'

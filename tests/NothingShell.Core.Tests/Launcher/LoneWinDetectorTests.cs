@@ -27,10 +27,12 @@ public sealed class LoneWinDetectorTests
     [Fact]
     public void ChordedWin_DoesNotOpen()
     {
+        // Any ordinary combo (Win+E here; Win+A/N are the panel keys, covered below).
+        const uint E = 0x45;
         var d = new LoneWinDetector();
         Assert.Equal(Nothing, d.OnKey(LWin, true, false));
-        Assert.Equal(Nothing, d.OnKey(A, true, false));
-        Assert.Equal(Nothing, d.OnKey(A, false, false));
+        Assert.Equal(Nothing, d.OnKey(E, true, false));
+        Assert.Equal(Nothing, d.OnKey(E, false, false));
         Assert.Equal(Nothing, d.OnKey(LWin, false, false));
     }
 
@@ -103,6 +105,79 @@ public sealed class LoneWinDetectorTests
         // In an LL hook the async key state updates after the hook returns: a fresh press still reads "up".
         Assert.Equal(Nothing, d.OnKey(LWin, true, false));
         Assert.Equal(Open, d.OnKey(LWin, false, false));
+    }
+
+    private const uint KeyA = 0x41, KeyN = 0x4E, KeyE = 0x45, LCtrl = 0xA2;
+
+    [Fact]
+    public void WinA_SwallowsLetterAndOpensPanel()
+    {
+        var d = new LoneWinDetector();
+        d.OnKey(LWin, true, false);
+        Assert.Equal(new KeyVerdict(Swallow: true, InjectMaskFirst: false, OpenLauncher: false, OpenPanel: true), d.OnKey(KeyA, true, false));
+        Assert.Equal(new KeyVerdict(Swallow: true, InjectMaskFirst: false, OpenLauncher: false), d.OnKey(KeyA, false, false));
+        Assert.Equal(new KeyVerdict(Swallow: false, InjectMaskFirst: true, OpenLauncher: false), d.OnKey(LWin, false, false));
+    }
+
+    [Fact]
+    public void WinN_SameAsWinA()
+    {
+        var d = new LoneWinDetector();
+        d.OnKey(LWin, true, false);
+        Assert.True(d.OnKey(KeyN, true, false).OpenPanel);
+        Assert.True(d.OnKey(KeyN, false, false).Swallow);
+        var up = d.OnKey(LWin, false, false);
+        Assert.True(up.InjectMaskFirst);
+        Assert.False(up.OpenLauncher);
+    }
+
+    [Fact]
+    public void WinShiftA_PassesThrough()
+    {
+        var d = new LoneWinDetector();
+        d.OnKey(LWin, true, false);
+        d.OnKey(LShift, true, false);
+        Assert.Equal(Nothing, d.OnKey(KeyA, true, false));
+    }
+
+    [Fact]
+    public void WinCtrlN_PassesThrough()
+    {
+        var d = new LoneWinDetector();
+        d.OnKey(LWin, true, false);
+        d.OnKey(LCtrl, true, false);
+        Assert.Equal(Nothing, d.OnKey(KeyN, true, false));
+    }
+
+    [Fact]
+    public void AutoRepeatA_OpensOnce()
+    {
+        var d = new LoneWinDetector();
+        d.OnKey(LWin, true, false);
+        Assert.True(d.OnKey(KeyA, true, false).OpenPanel);
+        var repeat = d.OnKey(KeyA, true, false);
+        Assert.True(repeat.Swallow);
+        Assert.False(repeat.OpenPanel);
+    }
+
+    [Fact]
+    public void WinA_ThenWinE_EStillPassesThrough()
+    {
+        var d = new LoneWinDetector();
+        d.OnKey(LWin, true, false);
+        d.OnKey(KeyA, true, false);
+        d.OnKey(KeyA, false, false);
+        Assert.Equal(Nothing, d.OnKey(KeyE, true, false));
+    }
+
+    [Fact]
+    public void LetterUpAfterWinReleased_IsStillSwallowed()
+    {
+        var d = new LoneWinDetector();
+        d.OnKey(LWin, true, false);
+        d.OnKey(KeyA, true, false);
+        d.OnKey(LWin, false, false);
+        Assert.True(d.OnKey(KeyA, false, false).Swallow);
     }
 
     [Fact]

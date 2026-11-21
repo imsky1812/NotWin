@@ -192,7 +192,7 @@ public partial class LauncherWindow : Window
             if (sel is not null) AllAppsList.ScrollIntoView(sel);
             return;
         }
-        var panel = _vm.View == LauncherView.Home ? (Panel)MostGrid : ResultRows;
+        var panel = _vm.View == LauncherView.Home ? (System.Windows.Controls.Panel)MostGrid : ResultRows;
         foreach (var child in panel.Children.OfType<Border>())
         {
             var isSel = sel is not null && child.Tag is LaunchItem it && it.Id == sel.Id;

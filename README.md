@@ -30,7 +30,12 @@ D:\NothingLauncher\build\install.ps1
 3. Copies them to `C:\Program Files\NothingShell`, then starts the shell once as you (not as admin).
 
 The shell then adds itself to `HKCU\...\Run`, so it starts at sign-in. Only the installed copy writes
-that entry. Use `-NoTimestamp` to skip the signing timestamp when offline.
+that entry.
+
+`install.ps1` also registers a small **sparse package** named `NothingShell`, which points at
+`C:\Program Files\NothingShell`. This gives the shell a package identity, which Windows requires before an app can
+read notifications. It never appears in Start. If the registration fails, the shell still works, just without
+notifications. `uninstall.ps1` removes it. Use `-NoTimestamp` to skip the signing timestamp when offline.
 
 ## Using it
 
@@ -41,7 +46,27 @@ that entry. Use `-NoTimestamp` to skip the signing timestamp when offline.
   **Enter** to open and **Esc** to close. A click outside the panel or another Win tap also closes it.
   With nothing typed it shows **Most used** (your launches from Nothing Shell; at first, the apps Windows
   saw you use most recently), **All apps ›** (A–Z) and the power button (Sleep / Restart / Shut down, which
-  act immediately). Win+A and Win+N still open Windows' own panels until Plan 3.
+  act immediately).
+- **Quick settings + notifications panel:** **Win+A**, **Win+N** or a click on the dock's tray opens it at the bottom
+  right. It has:
+  - **Wi-Fi tile:** tap to toggle the radio; **›** lists networks (saved and open networks join directly, secured
+    new ones open Windows' Wi-Fi settings).
+  - **Bluetooth tile:** tap to toggle the radio; **›** lists paired devices (buds and headphones connect or
+    disconnect; other devices open Windows' Bluetooth settings).
+  - **Volume slider** and an **output chip** that switches the playback device.
+  - **Brightness slider** (built-in display).
+  - **Notifications** grouped by app: click to open the app, ✕ dismisses, **Clear all**.
+
+  Esc or a click outside closes it.
+- **Notch:** a black pill at the top centre shows:
+  - the time (dot matrix) and battery;
+  - the playing song (art and an equalizer);
+  - new notifications for about 3.6 s;
+  - "Opening ‹app›…" after a launch.
+
+  It hides while a full-screen app is in front.
+- **Windows' own notification pop-ups:** Nothing Shell never changes your notification settings. A one-time tip in
+  the panel offers to open Windows' settings so you can turn on *Do not disturb*, or turn off banners for chatty apps.
 - Quit from a script: `& 'C:\Program Files\NothingShell\NothingShell.exe' --quit` (the same clean exit as the menu).
 - Right-click the start button (left-most) for **Keep taskbar visible**, **Start with Windows** and
   **Quit Nothing Shell**. Quitting always gives the Windows taskbar back.

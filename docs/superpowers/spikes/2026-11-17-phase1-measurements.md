@@ -68,3 +68,23 @@ Before the samples the launcher had been opened many times: searches, All apps, 
 - **If later plans push the budget:** destroy the launcher window after it has been closed for 5 minutes instead of
   only hiding it (rebuilding takes a fraction of a second on the next open). The spec allows this: "Hidden surfaces
   should be released or made very cheap".
+
+## Phase 3: panel, notifications, notch (2026-11-19)
+
+Installed Release build from `plan3-panel-notch` at fb5867c (pid 2504, started 01:31:09), with the notch on, the
+notification listener running, and the panel used before the sample (Wi-Fi list, Bluetooth, output switch,
+brightness, notifications). No music was playing, so the notch was resting (equalizer stopped).
+
+| Sample | Process | Working set | Private bytes | CPU over 60 s |
+|---|---|---|---|---|
+| **~10 min idle (01:43)** | NothingShell | 33.9 MB | 64.8 MB | 63 ms (0.103% of one core, 0.009% of total CPU) |
+| | Watchdog | 1.4 MB | 6.2 MB | 0 ms |
+| | **Total** | **35.3 MB** | **71.0 MB** | |
+
+**Result: PASS.** Total working set 35.3 MB (under 100 MB), CPU about 0.
+
+### Notes
+- Private bytes grew about 5 MB over Phase 2 (59.4 → 64.8 MB): the panel window, the notch window, the WinRT
+  media / notification / radio objects and the Bluetooth watcher.
+- The 63 ms of CPU in the window is the notch clock and tray minute tick plus listener and radio callbacks; there is
+  no polling. The equalizer (Plan 3 minor M1) only runs while music plays and was not measured here.
