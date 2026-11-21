@@ -29,6 +29,9 @@ public interface ISessionSource
     Task<bool> PlayPauseAsync();
     Task<bool> NextAsync();
     Task<bool> PreviousAsync();
+
+    /// <summary>Jumps to <paramref name="position"/> from the start (false when the app does not allow it).</summary>
+    Task<bool> SeekAsync(TimeSpan position) => Task.FromResult(false);
     event Action? Changed;
 }
 
@@ -82,6 +85,9 @@ public sealed class MediaSessionService : IDisposable
     public Task<bool> NextAsync() => Control(s => s.NextAsync(), "next");
 
     public Task<bool> PreviousAsync() => Control(s => s.PreviousAsync(), "previous");
+
+    /// <summary>Jumps the current song to <paramref name="position"/> (the media widget's draggable dots).</summary>
+    public Task<bool> SeekAsync(TimeSpan position) => Control(s => s.SeekAsync(position), "seek");
 
     private async Task<bool> Control(Func<ISessionSource, Task<bool>> act, string what)
     {
@@ -320,6 +326,14 @@ public sealed class MediaSessionService : IDisposable
         public async Task<bool> PlayPauseAsync() => await _s.TryTogglePlayPauseAsync();
         public async Task<bool> NextAsync() => await _s.TrySkipNextAsync();
         public async Task<bool> PreviousAsync() => await _s.TrySkipPreviousAsync();
+
+        // The session's own clock starts at StartTime; positions here count from the start of the song.
+        public async Task<bool> SeekAsync(TimeSpan position)
+        {
+            var start = TimeSpan.Zero;
+            try { start = _s.GetTimelineProperties().StartTime; } catch { /* the app closed it: try from zero */ }
+            return await _s.TryChangePlaybackPositionAsync((start + position).Ticks);
+        }
 
         public bool PlaybackPlaying
         {

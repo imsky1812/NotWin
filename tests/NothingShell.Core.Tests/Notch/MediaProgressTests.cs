@@ -32,4 +32,28 @@ public sealed class MediaProgressTests
         Assert.Equal(S(100), MediaProgress.Position(S(100), S(200), at, playing: false, at.AddSeconds(10)));
         Assert.Equal(S(200), MediaProgress.Position(S(100), S(200), at, playing: true, at.AddSeconds(500)));
     }
+
+    // User, 2026-11-21: the progress dots are draggable. Where the pointer is on the bar = where in the song.
+    [Theory]
+    [InlineData(0, 100, 0)]
+    [InlineData(50, 100, 120)]
+    [InlineData(100, 100, 240)]
+    [InlineData(-20, 100, 0)]     // dragged past the left end
+    [InlineData(150, 100, 240)]   // past the right end
+    public void SeekTarget_FromThePointer(double x, double width, int seconds) =>
+        Assert.Equal(TimeSpan.FromSeconds(seconds), MediaProgress.SeekTarget(x, width, TimeSpan.FromSeconds(240)));
+
+    [Fact]
+    public void SeekTarget_UnknownLengthOrNoBar_IsNull()
+    {
+        Assert.Null(MediaProgress.SeekTarget(10, 100, TimeSpan.Zero));
+        Assert.Null(MediaProgress.SeekTarget(10, 0, TimeSpan.FromSeconds(240)));
+    }
+
+    [Theory]
+    [InlineData(0, 0)]
+    [InlineData(50, 10)]
+    [InlineData(100, 20)]
+    [InlineData(-5, 0)]
+    public void LitAt_PreviewWhileDragging(double x, int lit) => Assert.Equal(lit, MediaProgress.LitAt(x, 100, 20));
 }

@@ -18,6 +18,8 @@ public sealed class MediaSessionServiceTests
         public Task<bool> PlayPauseAsync() { PlayPauseCalls++; return Task.FromResult(true); }
         public Task<bool> NextAsync() { NextCalls++; return Task.FromResult(true); }
         public Task<bool> PreviousAsync() { PreviousCalls++; return Task.FromResult(true); }
+        public TimeSpan? SoughtTo;
+        public Task<bool> SeekAsync(TimeSpan position) { SoughtTo = position; return Task.FromResult(true); }
         public event Action? Changed;
         public void Raise() => Changed?.Invoke();
     }
@@ -64,6 +66,16 @@ public sealed class MediaSessionServiceTests
     {
         var s = await Started(new FakeManager { Current = new FakeSession { PlaybackPlaying = true, Thumb = null } });
         Assert.Null(s.Current.Art);
+    }
+
+    // User, 2026-11-21: drag the media widget's progress dots to jump anywhere in the song.
+    [Fact]
+    public async Task Seek_GoesToTheCurrentSession()
+    {
+        var session = new FakeSession { PlaybackPlaying = true };
+        var s = await Started(new FakeManager { Current = session });
+        Assert.True(await s.SeekAsync(TimeSpan.FromSeconds(95)));
+        Assert.Equal(TimeSpan.FromSeconds(95), session.SoughtTo);
     }
 
     [Fact]
