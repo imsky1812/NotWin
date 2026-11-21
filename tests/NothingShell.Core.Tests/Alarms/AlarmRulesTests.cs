@@ -95,4 +95,14 @@ public sealed class AlarmRulesTests
         }
         finally { try { Directory.Delete(dir, true); } catch (IOException) { } }
     }
+
+    // Plan 10: Windows' alarm sound, another of its alarm sounds when that one is gone, null (beep + warning) when none.
+    [Fact]
+    public void Sound_PicksTheFirstThatExists()
+    {
+        var media = Path.Combine(@"C:\Windows", "Media");
+        Assert.Equal(Path.Combine(media, "Alarm01.wav"), AlarmSound.Pick(@"C:\Windows", _ => true));
+        Assert.Equal(Path.Combine(media, "Alarm03.wav"), AlarmSound.Pick(@"C:\Windows", p => p.EndsWith("Alarm03.wav")));
+        Assert.Null(AlarmSound.Pick(@"C:\Windows", _ => false));
+    }
 }

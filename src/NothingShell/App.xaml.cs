@@ -35,6 +35,7 @@ public partial class App : Application
     private readonly System.Windows.Threading.DispatcherTimer _alarmTick = new() { Interval = TimeSpan.FromSeconds(1) };
     private readonly System.Windows.Threading.DispatcherTimer _alarmQuiet = new() { Interval = TimeSpan.FromSeconds(60) };
     private System.Windows.Media.MediaPlayer? _alarmSound;
+    private readonly System.Windows.Threading.DispatcherTimer _alarmBeep = new() { Interval = TimeSpan.FromSeconds(1.5) };
     private Alarms.AlarmRingWindow? _ringWindow;
     private Sync.SyncService? _sync;
     private string _syncStatus = "OFF";
@@ -418,25 +419,36 @@ public partial class App : Application
         alarms.Ringing += alarm =>
         {
             var time = $"{alarm.Hour:00}:{alarm.Minute:00}";
-            try
+            var sound = Core.Alarms.AlarmSound.Pick(Environment.GetFolderPath(Environment.SpecialFolder.Windows), File.Exists);
+            var text = time;
+            if (sound is null)
             {
-                _alarmSound ??= new System.Windows.Media.MediaPlayer();
-                var player = _alarmSound;
-                player.Open(new Uri(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Windows), "Media", "Alarm01.wav")));
-                player.MediaEnded -= LoopAlarm;
-                player.MediaEnded += LoopAlarm;
-                player.Play();
+                // Plan 10: never a silent alarm. Beep instead, and say why.
+                Log.Info("alarm: no alarm sound file in the Windows Media folder, beeping");
+                text = time + " · sound file missing, beeping";
+                _alarmBeep.Start();
             }
-            catch (Exception e) { Log.Error("alarm sound failed", e); }
+            else
+            {
+                try
+                {
+                    _alarmSound ??= NewAlarmPlayer();
+                    _alarmSound.Open(new Uri(sound));
+                    _alarmSound.Play();
+                }
+                catch (Exception e) { Log.Error("alarm sound failed", e); _alarmBeep.Start(); }
+            }
             _alarmQuiet.Stop();
             _alarmQuiet.Start();
-            _notch?.NotifyLocal("Alarm", time, "timer");
-            _notifications?.AddLocal("Alarm", time);
+            _notch?.NotifyLocal("Alarm", text, "timer");
+            _notifications?.AddLocal("Alarm", text);
             if (_fullscreen?.IsFullscreen != true) ShowRing(alarm);
         };
+        _alarmBeep.Tick += (_, _) => System.Media.SystemSounds.Exclamation.Play();
         alarms.Quiet += () =>
         {
             _alarmQuiet.Stop();
+            _alarmBeep.Stop();
             try { _alarmSound?.Stop(); } catch (Exception e) { Log.Error("alarm sound stop failed", e); }
             var ring = _ringWindow;
             _ringWindow = null;
@@ -444,6 +456,19 @@ public partial class App : Application
         };
         if (_fullscreen is not null)
             _fullscreen.Changed += fs => { if (!fs && alarms.RingingNow is { } a && _ringWindow is null) ShowRing(a); };
+    }
+
+    private System.Windows.Media.MediaPlayer NewAlarmPlayer()
+    {
+        var player = new System.Windows.Media.MediaPlayer();
+        player.MediaEnded += LoopAlarm;
+        player.MediaFailed += (_, e) =>
+        {
+            // The file could not be played (damaged, no audio device): beep instead while it rings.
+            Log.Info("alarm: the sound could not be played (" + e.ErrorException?.GetType().Name + "), beeping");
+            if (_alarms?.RingingNow is not null) _alarmBeep.Start();
+        };
+        return player;
     }
 
     private void LoopAlarm(object? sender, EventArgs e)
@@ -593,6 +618,7 @@ public partial class App : Application
             _weather?.Dispose();
             _calendar?.Dispose();
             _alarmTick.Stop();
+            _alarmBeep.Stop();
             _syncTimer.Stop();
             _syncWatch?.Dispose();
             try { _alarmSound?.Stop(); } catch { /* exiting */ }

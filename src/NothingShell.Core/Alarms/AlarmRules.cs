@@ -74,6 +74,16 @@ public static class AlarmRules
     }
 }
 
+/// <summary>
+/// The sound an alarm plays (Plan 10): Windows' Alarm01.wav, else another of its alarm sounds (Alarm02 … Alarm10), else
+/// null — the app then beeps and says the sound file is missing.
+/// </summary>
+public static class AlarmSound
+{
+    public static string? Pick(string windowsDir, Func<string, bool> exists) =>
+        Enumerable.Range(1, 10).Select(i => Path.Combine(windowsDir, "Media", $"Alarm{i:00}.wav")).FirstOrDefault(exists);
+}
+
 /// <summary>The alarms in <c>alarms.json</c> (written atomically); a missing or bad file is an empty list.</summary>
 public sealed class AlarmStore(string dir)
 {

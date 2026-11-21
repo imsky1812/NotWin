@@ -51,6 +51,9 @@ public sealed class AlarmRingWindow : Window
         Topmost = true;
         ResizeMode = ResizeMode.NoResize;
         SizeToContent = SizeToContent.WidthAndHeight;
+        Opacity = 0; // shown once it sits in its place (Plan 10: it used to appear elsewhere and jump)
+        Left = -32000;
+        Top = -32000;
         var time = TileChrome.Body(AlarmLook.Time(alarm), 34, FontWeights.SemiBold);
         time.Margin = new Thickness(0, 2, 0, 12);
         time.HorizontalAlignment = HorizontalAlignment.Center;
@@ -74,6 +77,7 @@ public sealed class AlarmRingWindow : Window
             var left = (mon.Left + mon.Right) / 2 - w / 2;
             var top = mon.Top + (int)Math.Round(64 * scale);
             DockWindowNative.PlaceTopmost(new WindowInteropHelper(this).Handle, new RectI(left, top, left + w, top + h));
+            Opacity = 1;
         };
     }
 }
