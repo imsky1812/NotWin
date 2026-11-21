@@ -6,7 +6,7 @@
 event (2×1). Sign-in and the guided setup live in Settings.
 
 **Architecture:**
-- Pure rules live in Core (`NothingShell.Core.Calendar`):
+- Pure rules live in Core (`NothingShell.Core.GoogleCalendar`):
   - OAuth URLs, form bodies and response parsing;
   - Calendar API parsing;
   - which days have dots;
@@ -46,7 +46,7 @@ the Windows Desktop runtime), xUnit.
 
 ### Task 1: OAuth rules (Core)
 
-**Files:** Create `src/NothingShell.Core/Calendar/GoogleOAuth.cs`; Test `tests/NothingShell.Core.Tests/Calendar/GoogleOAuthTests.cs`
+**Files:** Create `src/NothingShell.Core/GoogleCalendar/GoogleOAuth.cs`; Test `tests/NothingShell.Core.Tests/GoogleCalendar/GoogleOAuthTests.cs`
 
 **Interfaces — Produces:**
 - `record GoogleToken(string AccessToken, string? RefreshToken, int ExpiresIn)`
@@ -62,7 +62,7 @@ the Windows Desktop runtime), xUnit.
   - `(string? Code, string? State, string? Error) ParseRedirect(string requestLine)`: takes `GET /?code=..&state=.. HTTP/1.1`
 
 - [ ] Tests:
-  - `Challenge_MatchesRfc7636Example`: the verifier `dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk` gives `E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuqyCDH8SRwk`.
+  - `Challenge_MatchesRfc7636Example`: the verifier `dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk` gives `E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM`.
   - `Verifier_Is64UrlSafeChars`.
   - `AuthUrl_HasScopePkceOfflineAndConsent`: contains `code_challenge_method=S256`, `access_type=offline`,
     `prompt=consent`, and `scope=` with the URL-encoded `Scope`.
@@ -74,7 +74,7 @@ the Windows Desktop runtime), xUnit.
 
 ### Task 2: Calendar feed rules (Core)
 
-**Files:** Create `src/NothingShell.Core/Calendar/CalendarFeed.cs`; Test `tests/NothingShell.Core.Tests/Calendar/CalendarFeedTests.cs`
+**Files:** Create `src/NothingShell.Core/GoogleCalendar/CalendarFeed.cs`; Test `tests/NothingShell.Core.Tests/GoogleCalendar/CalendarFeedTests.cs`
 
 **Interfaces — Produces:**
 - `record CalEvent(string Title, DateTimeOffset Start, DateTimeOffset End, bool AllDay)`: all-day Start and End are
@@ -110,7 +110,7 @@ the Windows Desktop runtime), xUnit.
 ### Task 3: Vault, loopback sign-in, service (app)
 
 **Files:**
-- Create `src/NothingShell/Calendar/GoogleVault.cs`, `GoogleSignIn.cs`, `GoogleCalendarService.cs`.
+- Create `src/NothingShell/GoogleCalendar/GoogleVault.cs`, `GoogleSignIn.cs`, `GoogleCalendarService.cs`.
 - Test `tests/NothingShell.Tests/GoogleVaultTests.cs`.
 
 **Interfaces — Produces:**
