@@ -1,0 +1,231 @@
+# Phase 0 spike findings (2026-11-17)
+
+Environment: Windows 11 build 26300, 1920x1080, .NET 10. **Fenn** (third-party taskbar/notch app, fenn.exe) was running during all tests. The explorer-owned `Shell_TrayWnd` reported `IsWindowVisible=False` at the start of every overflow run (what hid it was not measured). Spike code: `spikes/KeySpike`, `spikes/OverflowSpike` (throwaway, not in `NotWin.sln`). Install pipeline for the uiAccess run: `spikes/install-spikes.ps1` (elevated; publishes each spike that has a `spike-install.txt` marker, signs with `CN=NothingShell Dev`, copies to `C:\Program Files\NothingShell.Spikes\<Name>\`).
+
+Tests ran unattended on the live desktop with synthetic `SendInput`. Caveat: synthetic keys travel the same low-level hook chain as physical keys, but the shell could in principle treat them differently (e.g. Start's Win-keyup logic). Physical confirmation is in the manual lists below.
+
+Gotcha: while the session was locked (LogonUI running) `SendInput` never reaches the user desktop, so every key test falsely fails and UIA Invoke was slow (~2 s). Both spikes now abort when LogonUI is running. Results from that period are discarded; everything below was measured on an unlocked desktop.
+
+## Spike: lone Win key
+
+Method: `WH_KEYBOARD_LL` hook (`KeySpike`). Win keydown passes through. On Win keyup with no other key in between: inject VK 0xE8 down+up (marked with `dwExtraInfo` so the hook ignores them) *before* the keyup is passed on, print `OPEN LAUNCHER`. Win+A / Win+N (no Shift/Ctrl/Alt): swallow the letter keydown/up, print `OPEN PANEL`, mask the Win keyup the same way. Everything else passes through. `KeySpike.exe --selftest` drives this and detects Start via a visible, non-cloaked `StartMenuExperienceHost` window or a foreground process of `StartMenuExperienceHost`/`SearchHost`.
+
+Observed (Debug build, non-uiAccess, `--selftest`, final run):
+
+| Check | Result |
+|---|---|
+| Control: lone Win tap with hook NOT installed opens Start | Start detected (detector valid) |
+| (a) lone Win tap with hook: Start stays closed, `OPEN LAUNCHER` logged | PASS |
+| Win+A: `OPEN PANEL (Win+A)` logged, no `OPEN LAUNCHER`, no Start window detected | PASS for that. Absence of Quick Settings was NOT measured (no detector); manual |
+| Win+N: `OPEN PANEL (Win+N)` logged, no `OPEN LAUNCHER`, no Start window detected | PASS for that. Absence of the Notification Center was NOT measured; manual |
+| Win+E: passes through, new Explorer window opened (closed by harness) | PASS |
+| Win+D: hook logged pass-through and no `OPEN LAUNCHER`; asserted foreground class Progman/WorkerW after the 1st press (observed `explorer:Progman`) and not Progman/WorkerW after the 2nd (observed `claude:Chrome_WidgetWin_1`) | PASS (assertions added in fix round 1, re-run) |
+| (b) Win+L, Win+Shift+S, Win+Tab, Win+arrows | NOT TESTED (lock / overlay / window moves; manual) |
+| (c) uiAccess, signed, Program Files, Task Manager focused | NOT TESTED (needs elevated install; manual) |
+
+Verdict: the mask-key technique satisfies (a) with synthetic input on this build. Injecting the mask via `SendInput` from inside the hook callback works; no recursion because of the `dwExtraInfo` mark.
+
+### Manual checks pending (user)
+1. Elevated PowerShell 7: `D:\NothingLauncher\spikes\install-spikes.ps1` (build\install.ps1 must have run once so the cert exists and is trusted).
+2. From a normal (non-elevated) terminal: `& 'C:\Program Files\NothingShell.Spikes\KeySpike\KeySpike.exe'`.
+3. Physical keyboard: tap Win alone several times (LWin and RWin), also with Task Manager focused (normal, and once "Run as administrator"). Expect `OPEN LAUNCHER` printed and Start never opens. This is pass (a) and (c).
+4. Press Win+A and Win+N: expect `OPEN PANEL`, no Quick Settings/Notifications, and no Start on release.
+5. Press Win+E, Win+D, Win+L, Win+Shift+S, Win+Tab, Win+Left/Right/Up/Down, Win+R, Win+V: all behave normally (b), also with Task Manager focused (c).
+6. Hold Win, press and release another key, release Win: no `OPEN LAUNCHER`. Tap Win twice quickly. Report any case where Start still opens.
+7. With the elevated Task Manager focused the hook must still fire (this is what uiAccess buys). Ctrl+C in the console to quit.
+
+## Spike: tray overflow
+
+Method (`OverflowSpike --run [--early-hide]`; `--dump` prints the UIA tree of the tray): strategies tried in order against the explorer-owned taskbar. Success = a visible, non-cloaked top-level window of class `TopLevelWindowForOverflowXamlIsland`.
+
+Environment findings:
+- **Fenn registers its own decoy `Shell_TrayWnd`** (owned by fenn.exe), so `FindWindow("Shell_TrayWnd")` can return the wrong window. The spike picks the one owned by `explorer`. Production code must do the same.
+- Fenn re-hides the real taskbar about 30 ms after any `ShowWindow`. The spike therefore re-issues `ShowWindow(SW_SHOWNA)` every 3 ms on the tray and on its `Windows.UI.Composition.DesktopWindowContentBridge` child while it searches for the chevron. Without Fenn this pinning is probably unnecessary (not tested).
+- The tray chevron in UIA: `ControlType.Button`, `AutomationId='SystemTrayIcon'`, `Name='Show Hidden Icons'`, class `SystemTray.NormalButton`, supports `InvokePattern`.
+- With the tray hidden, UIA exposes no XAML children (the content bridge child is hidden). The tray window and its bridge child must both be shown before the chevron can be found.
+
+Results, fix-round re-run (on the unlocked desktop; 3 runs of `--run --early-hide`, 1 run of `--run`; tray initially hidden, restored to hidden every time). Timing definitions: t=0 is the first `ShowWindow`; "visible time" = t=0 to the moment the hide call returns; "flyout latency" = Invoke start to the flyout window being seen (5 ms polling).
+
+| Strategy | Result |
+|---|---|
+| 1. taskbar hidden, UIA Invoke | FAIL in every run (8/8): chevron not found (no UIA children). Observed only with Fenn running; the root cause may be Fenn rather than Windows, not tested without it |
+| 2. show, find chevron (must expose InvokePattern), Invoke, hide | Worked 4/4 in the re-run (flyout survived the taskbar hide; still open 600 ms later). Early-hide runs (hide ~15 ms after Invoke starts): visible time 102, 74, 66 ms; flyout latency 27, 25, 26 ms. Non-early run: flyout 23 ms after Invoke start, hide issued after it, visible time 96 ms. All under 300 ms. Caveat: in the first fix-round attempt (before requiring InvokePattern) 3 of 4 runs found a chevron element at 44-57 ms that had no InvokePattern yet and failed; earlier unlocked runs had visible times of 116-377 ms (those figures used the older, differently reset timers and are superseded). So the find step is flaky unless the pattern check is included. |
+| 3. taskbar hidden, Win+B then Enter | Flyout appeared 13-14 ms after Enter in 4/4 re-runs. During Win+B/Enter the tray window was sampled every 5 ms: `IsWindowVisible` was false in every sample (0 of 23-28 per run, 8 runs). The window rect is a separate matter. Only two numbers were recorded per run: the lowest `rect.top` seen during sampling, and the top read at run start (the full sample series was not kept). First batch of 4 runs, per run "lowest top seen / initial top read at run start": 1020 / 1078, 1078 / 1020, 1020 / 1020, 1078 / 1020. Final batch of 4 runs: 1020 / 1020 in all four. No measurement here ties 1078 or 1020 to being painted or hidden. What the data shows: `IsWindowVisible` was false in all samples; the rect values differ between runs, and the lowest top seen was 1020 in 6 of 8 runs. It does not establish whether anything was painted on screen during Win+B/Enter. Visual flash is unverified; manual check. Enter is only sent if Win+B put focus on `Shell_TrayWnd` (guard added to avoid stray Enter) |
+
+Overall status of the overflow criterion: PENDING. Mechanically, strategies 2 and 3 open Windows' own flyout (`TopLevelWindowForOverflowXamlIsland`) with the taskbar hidden within 300 ms by `IsWindowVisible`/timing, but the criterion also needs working icons and right-click menus, and a visual check for flash. Neither was verified; see manual checks. Taskbar painting on screen was not observed visually.
+
+Not verified: flyout contents (icons present), right-click menus, Discord/Steam icons, flyout position when the real taskbar is hidden normally, and behavior when Fenn is NOT running. Esc does not reliably close a flyout opened this way (focus never lands in it); the spike falls back to `SW_HIDE` on the flyout window, so stale flyout state is possible.
+
+Taskbar state: restored to its initial hidden state after every run (verified: both `Shell_TrayWnd` windows `IsWindowVisible=False`, no overflow/Explorer/Start windows left). The spike also records and restores the XAML bridge child (`DesktopWindowContentBridge`) that `PinShow` forces visible; final check reports its WS_VISIBLE against the initial value (False/False in all 4 re-runs; an earlier build that did not restore it showed it left True right after a run, which the shell later reset). Checked on the machine afterwards: bridge child WS_VISIBLE=False.
+
+### Manual checks pending (user)
+1. Run `spikes\OverflowSpike\bin\Debug\net10.0-windows10.0.22621.0\OverflowSpike.exe --run --early-hide` while watching the bottom/right of the screen. Note any taskbar flash and its duration.
+2. Separately, with the taskbar hidden, press Win+B then Enter yourself: confirm the flyout shows the correct hidden icons (Discord, Steam, etc.).
+3. Right-click an icon in that flyout: the context menu must appear and its items must work.
+4. Repeat 1-3 with Fenn closed and the Windows taskbar set to auto-hide (and once always visible) to see behavior without the decoy `Shell_TrayWnd`/re-hide. Report whether the 300 ms criterion holds.
+5. Confirm the taskbar returns to its original state after each run.
+
+## Spike: desktop layer
+
+Code: `spikes/DesktopLayerSpike` (`--option A|B [--selftest] [--stay] [--no-reshow]`). Raw console output of every self-test run: `spikes/DesktopLayerSpike/runs/` (runA1-3, runB1-3, runBnr1-2). Environment: Windows 11 build 26300, 1920x1080, Fenn running. Runs happened on the unlocked desktop (no LogonUI). N: Option A 3 runs (+1 fix-round re-run, runA4); Option B with re-show 3 runs; Option B without re-show (`--no-reshow`) 2 runs. Window: 300x300 WPF window at screen (100,300) with a click-counting button. This spike does not need a signed/Program Files install (no `spike-install.txt` marker): nothing here uses uiAccess.
+
+Self-test method: (1) `ZTest`: open an own top-level window over the spike in the normal state; (2) send Win+D with `SendInput`; (3) measure; (4) click test; (5) Win+D again and verify the foreground window is the same as before. Clicks: `SendInput` is sent only if `WindowFromPoint` at the button centre returns the spike's own HWND (checked before and again after moving the cursor); otherwise skipped. `UIA InvokePattern` is a secondary check and involves no mouse, so it does not prove a real click can reach the window.
+
+Desktop tree observed (all runs): `Progman` (explorer, rect 0,0,1920,1080) has children `SHELLDLL_DefView` (-> `SysListView32`) and a `WorkerW` (all child windows of Progman). No top-level `WorkerW` had a `SHELLDLL_DefView` child. So Option A parented the spike to Progman (the DefView host) and put it at HWND_TOP among Progman's children (index 0 of 3 siblings).
+
+Option A: send 0x052C to Progman, `SetParent` to Progman, `HWND_TOP`.
+
+| Criterion | Measured | Result |
+|---|---|---|
+| (a) click registers | With the desktop shown (after Win+D), `WindowFromPoint(button centre)` = spike HWND; `SendInput` left click: clicks 0 -> 1 and a mouse-up event seen, in 3/3 runs. UIA `InvokePattern` also raised the count (1 -> 2) in 3/3 | PASS (N=3) |
+| (b) under normal windows | In the normal state a top-level test window of mine was placed over the spike: `WindowFromPoint(spike centre)` = test window; walking `GW_HWNDNEXT` from the test window reaches Progman (the spike's root) below it, 3/3. Progman's index among top-level windows was 234 of 235 and 237 of 238 in run 1 (0 = topmost). In the normal state `WindowFromPoint` at the spike centre returned the Claude app's Chrome window (isSpike=False) in all runs, i.e. the user's app was hit-tested above the spike. **Disconfirming observation, unexplained:** after Win+D #1, Progman's top-level z-index was 37 of 238 in runA1 and 35 of 237 in runA4 (vs 233-237 in the normal state); not investigated. The `GW_HWNDNEXT` walk reaching the root is near-trivially true for any window near the bottom, so it adds little. Only my own test window and the user's Claude window were tested, not arbitrary apps | PASS (normal-state snapshot only, N=3+1); "always under normal windows" is NOT shown (Progman rose to index 35-37 after Win+D) |
+| (c) visible after Win+D | After Win+D #1: `IsWindowVisible`=True, `IsIconic`=False, cloaked=False, foreground = Progman; the logged `WindowFromPoint(centre) ... isSpike=True` line after Win+D #1 appears in runA1, runA2, runA3 and runA4. After the restoring Win+D #2 the user's foreground window was unchanged (all runs). Painting (that the window is actually drawn on screen) was not measured | Flag and hit-test PASS (N=4); painting NOT MEASURED (manual) |
+| (d) survives Explorer restart | Not run (controller decision: Explorer must not be restarted). Watcher exists (`--stay`, 250 ms timer, recreates the window when its HWND is gone or Progman changed; logs ms since loss detected). The code-path check (calling `Attach()` again on a live window) kept it parented/visible; that is not an Explorer restart | NOT MEASURED (manual) |
+| (e) not in Alt-Tab / dock list | Spike is a child window (style has WS_CHILD, parent=Progman), `EnumWindows` did not list it (False in all states), `WS_EX_TOOLWINDOW`=False, cloaked=False. Alt-Tab heuristic (visible, unowned, top-level, not toolwindow) computed False because it is not top-level. `GetWindow(GW_OWNER)` returned a non-zero handle for the child; not investigated. Alt-Tab was not pressed and no dock exists yet to check its list | Heuristic only, not observed in Alt-Tab: NOT MEASURED (manual) |
+
+Option B: top-level `WS_EX_TOOLWINDOW|WS_EX_NOACTIVATE`, `HWND_BOTTOM` via `WM_WINDOWPOSCHANGING`, re-show on `EVENT_SYSTEM_FOREGROUND` -> Progman/WorkerW.
+
+| Criterion | Measured | Result |
+|---|---|---|
+| (a) click registers | After Win+D, `WindowFromPoint(button centre)` = `SysListView32` (explorer's desktop FolderView), not the spike, in 3/3 re-show runs and 2/2 no-reshow runs. The `SendInput` click was therefore skipped by the safety rule every time, so no real click was delivered to it. UIA Invoke raised the count (0 -> 1) in 5/5, which proves only that the button's handler works | FAIL for real clicks in the measured state (hit-testing at the button goes to the desktop list view; 5/5 runs). Real click never delivered, so "the click would not register" is inferred from `WindowFromPoint`, not measured |
+| (b) under normal windows | Top-level index 234-237 of 236-239 (near the bottom; user's windows above), and the own test window was above it (`WindowFromPoint` = test window in 3/5 runs; in the other 2 the Claude window was hit instead, so that check was inconclusive in those runs) | PASS for "stays near bottom" (N=5); not tested against every app |
+| (c) visible after Win+D | `IsWindowVisible`=True, `IsIconic`=False after Win+D #1 in all 5 runs, **including no-reshow** (re-show was therefore not needed to keep the flag True). The re-show hook did fire in the 3 re-show runs. But `WindowFromPoint(centre)` returned the explorer `SysListView32`, not the spike, in 5/5; whether the spike is actually painted above or below the desktop icons was not measured | Flag-level PASS; actual on-screen visibility NOT MEASURED (manual) |
+| (d) Explorer restart | Not run. `TaskbarCreated` handler exists (code path exercised only by posting the message to itself) | NOT MEASURED (manual) |
+| (e) Alt-Tab / dock | Top-level, `WS_EX_TOOLWINDOW`=True, no `WS_EX_APPWINDOW`, visible, not cloaked; Alt-Tab heuristic computed False (5/5). `GW_OWNER` non-zero in all runs, not investigated. Alt-Tab not pressed; no dock yet | Heuristic only: NOT MEASURED (manual) |
+
+Conclusion (from the measurements above only): Option A passed the flag/hit-test checks for (a) (real SendInput click, 4/4 runs), (b) (normal-state snapshot only; Progman rose to index 35-37 after Win+D, unexplained) and (c) (flag + hit-test; painting not measured); Option B failed (a) because the desktop list view was the hit-test target over the spike after Win+D. (d), (e) in Alt-Tab and any visual check remain manual. Notes: Explorer's pid changed between my first and later runs (11924 -> 11472); cause not investigated. Cleanup: no DesktopLayerSpike process remained after the runs; each run ended with Win+D toggled back and the original foreground window restored (see "foreground same as before Win+D: True" in each log).
+
+### Manual checks pending (user/controller)
+1. `cd spikes\DesktopLayerSpike; .\bin\Debug\net10.0-windows10.0.22621.0\DesktopLayerSpike.exe --option A --stay` (log also at `%TEMP%\DesktopLayerSpike.log`). Click the button with the mouse (desktop shown and with apps open).
+2. Criterion (d): in a terminal run `Stop-Process -Name explorer` (Explorer normally auto-restarts; with Fenn running expect side effects). Read the `WATCH:` lines in the log: need re-attach within 2 s of Progman reappearing. Confirm the widget is visible and clickable afterwards.
+3. Criterion (e): press Alt-Tab and check the window list; confirm no `DesktopLayerSpike` entry. Check the dock window list once it exists.
+4. Visually confirm the window is above the wallpaper/icons and under normal windows, and that it stays visible after Win+D.
+5. Ctrl+C to quit.
+
+### Fix round 1 (re-attach logic, Win+D restore)
+- `Attach()` now returns success (false when no DefView host or parent != host). `Watch()` treats `host == 0` / wrong parent as lost and keeps retrying every 250 ms; "re-attached" is logged only on success and reports both "ms since new Progman first seen" and "ms since loss detected". The 2 s criterion should be read from the first (since Progman first seen) figure. The retry path was not exercised (no Explorer restart); NOT MEASURED.
+- `SelfTest` restores Win+D in `finally` when a "toggled" flag is set. Exception path not exercised.
+- Re-run Option A self-test once: runs/runA4-fixround.txt: SendInput click registered (0 -> 1), UIA Invoke 1 -> 2, foreground restored, no spike process left.
+
+## Spike: notification listener
+
+Code: `spikes/NotifySpike` (`NotifySpike.exe [--seconds N] [--expect <text>] [--verbose] [--cleanup]`, log `%TEMP%\NotifySpike.log`; test-toast sender `send-test-toast.ps1`; sanitized run logs `runs/`), sparse-package manifest `AppxManifest.xml`, embedded-identity manifests `app.manifest` / `app.uiaccess.manifest`, `register.ps1` (pack + sign + register / `-Remove`). Environment: Windows 11 build 26300, Developer Mode on, run non-elevated (no admin was available to the agent).
+
+How the package was built, signed and registered (all non-admin):
+1. `dotnet publish spikes/NotifySpike/NotifySpike.csproj -c Release -o out/spikes/NotifySpike` (non-uiAccess manifest; the exe's embedded manifest has `<msix publisher="CN=NothingShell Dev" packageName="NothingShell.NotifySpike" applicationId="App"/>`).
+2. `pwsh spikes/NotifySpike/register.ps1 -ExternalLocation D:\NothingLauncher\out\spikes\NotifySpike`: `makeappx pack /nv /o` (from NuGet `Microsoft.Windows.SDK.BuildTools` 10.0.28000.2957), `signtool sign /fd SHA256 /sha1 <CN=NothingShell Dev thumbprint>`, then `Add-AppxPackage -Path out\spikes\NotifySpike.msix -ExternalLocation <dir>`. Manifest: `uap10:AllowExternalContent=true`, `uap3:Capability Name="userNotificationListener"`, `rescap:runFullTrust`, Application `Executable="NotifySpike.exe"` with `uap10:TrustLevel="mediumIL" uap10:RuntimeBehavior="win32App"`. (Note: the capability is in the `uap3` namespace; I added `uap3` to IgnorableNamespaces beyond the brief's list.) Registration succeeded: `Get-AppxPackage` -> `NothingShell.NotifySpike_1.0.0.0_neutral__vsqbmsqrkt384`, `SignatureKind: Developer`, `Status: Ok`.
+3. The package is **left registered** for the manual session. Remove with: `pwsh spikes\NotifySpike\register.ps1 -Remove` (= `Get-AppxPackage NothingShell.NotifySpike | Remove-AppxPackage`).
+
+**Warning:** with `--verbose` (and in the first, pre-fix-round runs) `%TEMP%\NotifySpike.log` contains OTHER APPS' NOTIFICATION TEXT; never commit or share it. By default the spike now redacts every notification that is not a test toast.\n\nTest toasts: generated with `spikes/NotifySpike/send-test-toast.ps1` (`powershell.exe`, 5.1) via `ToastNotificationManager.CreateToastNotifier('{1AC14E77-02E7-4E5D-B744-2EB1AE5198B7}\WindowsPowerShell\v1.0\powershell.exe').Show(...)`, text `NothingShell spike test <HH:mm:ss> ...`. After the runs `NotifySpike.exe --cleanup` removed the remaining test notification(s) via `RemoveNotification`; a following listing showed 0 notifications containing "NothingShell spike test". The Action Center held 8-9 other toasts, which the spike listed; their content is not reproduced here.
+
+Measured (N counts runs/toasts):
+
+| Item | Measured | Result |
+|---|---|---|
+| Package identity present | `GetCurrentPackageFullName` rc=0, name `NothingShell.NotifySpike_1.0.0.0_neutral__vsqbmsqrkt384` in every launch (also from a copy of the exe in `%TEMP%\nsctl`, i.e. identity attached by the embedded `<msix>` element, not by folder). A no-identity control run was not done | measured |
+| Access | `GetAccessStatus()` before any request = `Allowed`; `RequestAccessAsync()` returned `Allowed` after 19-24 ms; no prompt was observable (the call returned in ~20 ms; no UIA/window enumeration was done, so "no prompt" is inferred from the latency). Access status was already Allowed on the very first launch, so whether a consent prompt ever appears for a fresh package was not observed | Allowed in every launch |
+| (a) text prints | `GetNotificationsAsync(NotificationKinds.Toast)` listed existing toasts with `AppInfo.DisplayInfo.DisplayName` and the `ToastGeneric` text elements printed. New test toasts: `NotificationChanged` (ChangeKind=Added) fired with the app (`Windows PowerShell [{1AC14E77-...}\WindowsPowerShell\v1.0\powershell.exe]`) and exact text `NothingShell spike test 00:28:22 run2 | body line two`, 1/1 in run 2 and 3/3 in run 3 (original runs, matched by inspection; run-3 log not kept). Re-run in the fix round (`runs/normal.txt`, sanitized): 3/3 toasts; the new `--expect` self-check logged `EXPECT MATCH` for each, via both the event (3/3) and the 1 s poll (3/3); original-run event latency 40-60 ms after `Show` (run 2 `shown at 00:28:22.512`, event 00:28:22.561). Total 7 toasts, 3 asserted by the self-check | PASS (N=7 toasts, 3 self-checked) |
+| `Removed` events | In the original run 3 (log not retained) a `Removed` event was seen about 2 s after `Added` for each of 3 non-suppressed toasts. In the fix-round re-run (`runs/normal.txt`, 3 toasts) no `Removed` event was logged. Not reproduced; cause not investigated | inconsistent, not established |
+| (b) with banners off | The "Show notification banners" setting was NOT touched (controller decision). Proxy only: toasts with `ToastNotification.SuppressPopup = true` (delivered to the Action Center without a banner) were also delivered to the listener: 3/3 in run 4 (log not retained) and 3/3 in the fix-round re-run (`runs/suppress.txt`: `Added` event 3/3, poll 3/3, `EXPECT MATCH` 6/6). This is not the same as the per-app Settings toggle | NOT MEASURED (manual); proxy 6/6 |
+| (c) signed uiAccess exe under Program Files | Needs admin (install-spikes.ps1). Not run. The log line `inProgramFiles=` is only a path check; `tokenUIAccess=` (GetTokenInformation TokenUIAccess) reads the real token: `0` in the non-uiAccess runs here, so check it is `1` in the manual run. Only checked: the `-p:UiAccess=true` build compiles. NotifySpike now has `spike-install.txt`, and `install-spikes.ps1` calls `register.ps1 -ExternalLocation <Program Files dir>` after installing | NOT MEASURED (manual) |
+
+Raw output of the original run 2 (other apps' EXISTING lines omitted; this was before the `tokenUIAccess` line and the redaction were added; sanitized logs of the re-run are in `spikes/NotifySpike/runs/`):
+```
+00:28:17.123 GetCurrentPackageFullName rc=0 name=NothingShell.NotifySpike_1.0.0.0_neutral__vsqbmsqrkt384
+00:28:17.160 GetAccessStatus (before) = Allowed
+00:28:17.182 RequestAccessAsync returned Allowed after 21 ms
+00:28:17.241 GetNotificationsAsync(Toast) count=8
+00:28:17.379 NotificationChanged handler attached
+00:28:22.561 EVENT NotificationChanged kind=Added id=127755 ... app=Windows PowerShell [{1AC14E77-02E7-4E5D-B744-2EB1AE5198B7}\WindowsPowerShell\v1.0\powershell.exe] text="NothingShell spike test 00:28:22 run2 | body line two"
+00:28:22.613   POLL NEW id=127755 ... text="NothingShell spike test 00:28:22 run2 | body line two"
+```
+
+Conclusion (from the above only): criterion (a) is met with a registered sparse package (non-uiAccess, run from the build output): the listener is Allowed and prints app name + text for existing and newly arrived toasts. (b) and (c) are not measured.
+
+### Manual checks pending (user/controller), NotifySpike
+1. (b) Run `D:\NothingLauncher\out\spikes\NotifySpike\NotifySpike.exe --seconds 120`. In Settings > System > Notifications > (target app, e.g. Discord or Windows PowerShell) turn **off** "Show notification banners". Send a message/toast (or `powershell -File <toast.ps1>` equivalent). Confirm the text still prints (`EVENT` / `POLL NEW` lines). Turn the setting back on.
+2. (c) Elevated terminal (it must be the SAME Windows user: the cert is in CurrentUser\My and the package registration is per-user): `pwsh spikes\install-spikes.ps1 -Only NotifySpike` (publishes with uiAccess, signs, copies to `C:\Program Files\NothingShell.Spikes\NotifySpike`, re-registers the sparse package with that external location). Run `C:\Program Files\NothingShell.Spikes\NotifySpike\NotifySpike.exe --seconds 60` from a normal (non-elevated) terminal, send a toast, and check for `tokenUIAccess=1`, the `GetCurrentPackageFullName` name, `RequestAccessAsync` status and the printed text. Not verified that identity + uiAccess work together.
+3. Remove afterwards: `pwsh spikes\NotifySpike\register.ps1 -Remove`.
+
+## Hands-on results (2026-11-18, user present)
+
+Two interactive runs of `build/verify/plan1-handson.ps1`, with the user answering the physical checks. Sources: `.superpowers/sdd/2026-11-17-plan1-foundation-and-dock/handson-results-20261118-010546.json` (run 1, Task 8, Overflow, Desktop; K and N also ran) and `handson-results-20261118-015632.json` (run 2, `-Only KeySpike,Notify`).
+
+Run 1 notes: K.0, N.1 and N.2 failed there because of a script output-capture bug, fixed in commit `a7c0f8f`. The run was stopped by the user at the banners-off step, so N.3 and N.4 do not exist in run 1. Run 1 had Fenn closed (S0 `fennRunning=false`).
+
+Run 2 notes: END failed. At the start Fenn was running and the Explorer taskbar was hidden (`trayState` 0); at the end Fenn was not running and the taskbar was visible (`trayState` 1). Auto-hide was true at both points. Per the run report, the tray visibility difference is why END failed. Every other check in run 2 passed.
+
+### Task 8 (run 1, normal user, uiAccess app)
+
+| Check | Description | Measured | User answer | Verdict |
+|---|---|---|---|---|
+| C8.1 | App start: taskbar hidden, auto-hide on, watchdog matches, uiAccess=1, window fills screen | Watchdog found, parent-start match; tray state 0; work area 0,0,1920,1080; app not elevated | y | PASS |
+| C8.1b | After 10 s, watchdog and app alive, taskbar still hidden | Both alive; tray state 0 | - | PASS |
+| C8.2 | Normal quit: taskbar back, auto-hide original, state file deleted, watchdog exited | Taskbar back in 113 ms; state file deleted; watchdog exited | y | PASS |
+| C8.3 | Force-kill: taskbar back within 3 s, auto-hide restored | Taskbar back in 106 ms; state file deleted; watchdog exited | - | PASS |
+| C8.4a | Explorer restart: new tray hidden by the app | New tray appeared at 406 ms, hidden 10 ms later | y | PASS |
+| C8.4b | Normal quit after Explorer restart brings taskbar back | Taskbar back in 1 ms | y | PASS |
+| C8.5 | Leftover state file: after killing watchdog and app, next run restores the original auto-hide | State file survived both kills; taskbar stayed hidden; taskbar back in 107 ms on quit; state file deleted. Auto-hide was switched OFF for this check (the original value in the test), and the notes say it was set back to ON afterwards | y | PASS |
+
+### Overflow (run 1, Fenn closed)
+
+| Check | Description | Measured | User answer | Verdict |
+|---|---|---|---|---|
+| O.1 | Flyout works with taskbar hidden (show, invoke, hide, early hide) | Strategy 2 worked: taskbar visible 83 ms, flyout 49 ms after Invoke start, still open 600 ms after hide. Strategy 3 (Win+B, Enter) worked; tray `IsWindowVisible` true in 0/24 samples. Strategy 1 found no chevron | y (taskbar flash seen) | PASS |
+| O.2 | Same, hide after flyout (late hide) | Strategy 2 worked: taskbar visible 64 ms, flyout 20 ms after Invoke start. Strategy 3 worked; 0/24 samples visible | y (taskbar flash seen) | PASS |
+| O.3 | Win+B then Enter shows correct hidden icons | Not measured | y | PASS |
+| O.4 | Right-click menus on flyout icons work | Not measured | y | PASS |
+| O.5 | Taskbar returns to original state | Tray visible, auto-hide original and now the same | - | PASS |
+
+### Desktop layer (run 1, Fenn closed)
+
+| Check | Description | Measured | User answer | Verdict |
+|---|---|---|---|---|
+| D.0 | DesktopLayerSpike started | Process up | - | PASS |
+| D.1 | Widget visible on the desktop | Not measured | y | PASS |
+| D.2 | Widget clickable | Not measured | y | PASS |
+| D.3 | Re-attaches after Explorer restart, within 2 s of Progman reappearing | Re-attached 106 ms after the new Progman was first seen (613 ms after loss detected) | y | PASS |
+| D.4 | Widget NOT in the Alt+Tab list | Not measured | y (widget seen in Alt+Tab) | FAIL |
+
+### KeySpike
+
+| Check | Description | Measured | User answer | Verdict |
+|---|---|---|---|---|
+| K.0 (run 1) | KeySpike started and hook installed | `hookInstalled` false (output-capture bug, fixed in `a7c0f8f`) | - | FAIL |
+| K.0 (run 2) | KeySpike started and hook installed | Process up, hook installed | - | PASS |
+| K.1 | Win alone: Start does not open, launcher event logged | 7 `OPEN LAUNCHER` events | n | PASS |
+| K.2 | Win+A: Quick Settings does not open | 1 `OPEN PANEL (Win+A)`, 0 launcher events | n | PASS |
+| K.3 | Win+N: Notification Center does not open | 1 `OPEN PANEL (Win+N)`, 0 launcher events | n | PASS |
+| K.4 | Win+E opens File Explorer | Pass-through logged | y | PASS |
+| K.5 | Win+D twice behaves normally | Pass-through logged for both presses | y | PASS |
+| K.6 | Win+Tab opens Task View | Pass-through logged | y | PASS |
+| K.7 | Win+Shift+S opens the screenshot bar | Pass-through logged | y | PASS |
+| K.8 | Win+Arrow snaps a window | Pass-through logged | y | PASS |
+| K.9 | Win alone with elevated Task Manager focused: Start does not open | 3 `OPEN LAUNCHER` events | n | PASS |
+| K.10 | Win+L locks normally | Not measured | y | PASS |
+
+### NotifySpike
+
+| Check | Description | Measured | User answer | Verdict |
+|---|---|---|---|---|
+| N.1 (run 1) | Installed: tokenUIAccess=1, package identity, access Allowed | Not reached: `tokenUIAccess` false, access not Allowed, log empty (output-capture bug, fixed in `a7c0f8f`) | - | FAIL |
+| N.2 (run 1) | Self-sent test toast received (expect match) | Listener not started (output-capture bug, fixed in `a7c0f8f`) | - | FAIL |
+| N.1 (run 2) | Installed: tokenUIAccess=1, package identity, access Allowed | `tokenUIAccess` 1; package identity present; access Allowed | - | PASS |
+| N.2 (run 2) | Self-sent test toast received (expect match) | Expect match via the Added event and via the poll | - | PASS |
+| N.3 | Banners off: listener still receives the toast | Expect match; banner seen by user: n | n | PASS |
+| N.4 | Test toasts cleaned up | 1 test toast removed | - | PASS |
+
+### What this closes
+
+Closed:
+- Physical Win key alone does not open Start, including with elevated Task Manager focused (K.1, K.9).
+- Win+A and Win+N panels do not open (K.2, K.3).
+- Other Win combos behave normally: Win+E, Win+D, Win+Tab, Win+Shift+S, Win+Arrow, Win+L (K.4 to K.8, K.10).
+- Notifications with uiAccess, package identity, and banners off (N.1 to N.3, run 2).
+- Overflow flyout with working right-click menus, with Fenn not running (O.3, O.4).
+- Widget re-attaches after an Explorer restart (D.3).
+- Task 8 checks 1 to 5 (C8.1 to C8.5, run 1).
+
+Open:
+- D.4: the user saw the test widget in Alt+Tab. This must be fixed in the real widget host.
+- Overflow strategies 2 and 3: the user reported a brief taskbar flash (O.1 and O.2). For strategy 3 the recorded samples show the tray not visible in any sample, so the flash is not explained by the recorded data and needs a separate look.

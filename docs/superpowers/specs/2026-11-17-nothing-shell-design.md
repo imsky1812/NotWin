@@ -80,7 +80,7 @@ Items marked **(builder's call)** were proposed by Claude and not explicitly cho
 | **red** | **`#E8231F`** | the **only** accent: "now", the next dot to go out, the snake's food, low battery, today's date, the day name, the second hand, the last start-button dot, alerts |
 | on-state | `#F2F2F2` fill with dark text | active toggles (Wi-Fi, Bluetooth, keep awake) |
 
-No blue, purple, green or yellow anywhere. Notifications and the media widget use only greyscale artwork treatments where we draw them; album art itself stays as-is.
+No blue, purple, green or yellow anywhere. Notifications and the media widget use only greyscale artwork treatments where we draw them; album art itself stays as-is, and so do app icons in the dock (user decision 2026-11-18).
 
 ### Type
 - **Dot matrix:** numbers only (clocks, timer, percentages, scores, temperatures). Use the **5×7 dot renderer from the mockups** as the default so it matches what was approved; NDot can be offered as an option **(builder's call)**. Never use dots for sentences.
@@ -100,7 +100,7 @@ No blue, purple, green or yellow anywhere. Notifications and the media widget us
 ### 6.1 Dock (taskbar)
 - **Hidden by default.** The native Windows taskbar never appears.
 - **Reveal:** when the cursor touches the bottom edge of the primary display, the dock slides up after **150ms**. It hides **500ms** after the cursor leaves, unless a panel is open or "keep visible" is on.
-- **Layout (left → right):** start button (3×3 dots, last one red) · search button · divider · pinned + running apps (monochrome-style circular icons, a small dot under running apps, red dot + highlight for the focused app) · divider · **⌃ overflow button** · tray (Wi-Fi, volume, battery, time + day/date in mono).
+- **Layout (left → right):** start button (3×3 dots, last one red) · search button · divider · pinned + running apps (**apps' original colour icons** — user decision 2026-11-18, replacing the earlier monochrome icons; a small dot under running apps, red dot + highlight for the focused app) · divider · **⌃ overflow button** · tray (Wi-Fi, volume, battery, time + day/date in mono).
 - **⌃ overflow (user's choice):** opens **Windows' own tray overflow flyout**, so other apps' tray icons (Discord, Steam, OneDrive, VPN…) keep their real icons and right-click menus. Nothing Shell does **not** draw third-party tray icons itself. Mechanism is the builder's call (e.g. invoking the native overflow, or briefly showing the native tray area); it must work while the native taskbar is otherwise hidden.
 - **Initial pinned apps (builder's call):** import the user's current Windows taskbar pins on first run.
 - **"Keep dock visible" on (builder's call):** the dock **reserves its screen space** like a normal taskbar (registered appbar / work area), so maximized windows end above it; it handles Explorer restarts. When off, the dock floats over windows and nothing is reserved.

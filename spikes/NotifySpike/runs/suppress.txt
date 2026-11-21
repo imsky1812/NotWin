@@ -1,0 +1,30 @@
+00:33:06.734 exe=D:\NothingLauncher\out\spikes\NotifySpike\NotifySpike.exe pid=10164 inProgramFiles=False tokenUIAccess=0 verbose=False
+00:33:06.742 GetCurrentPackageFullName rc=0 name=NothingShell.NotifySpike_1.0.0.0_neutral__vsqbmsqrkt384
+00:33:06.779 GetAccessStatus (before) = Allowed
+00:33:06.799 RequestAccessAsync returned Allowed after 19 ms
+00:33:06.808 GetAccessStatus (after) = Allowed
+00:33:06.858 GetNotificationsAsync(Toast) count=9
+00:33:06.893   EXISTING id=127634 (non-test notification, content redacted)
+00:33:06.905   EXISTING id=127644 (non-test notification, content redacted)
+00:33:06.919   EXISTING id=127657 (non-test notification, content redacted)
+00:33:06.929   EXISTING id=127690 (non-test notification, content redacted)
+00:33:06.941   EXISTING id=127691 (non-test notification, content redacted)
+00:33:06.953   EXISTING id=127710 (non-test notification, content redacted)
+00:33:06.965   EXISTING id=127726 (non-test notification, content redacted)
+00:33:06.976   EXISTING id=127741 (non-test notification, content redacted)
+00:33:06.986   EXISTING id=127764 app=Windows PowerShell [{1AC14E77-02E7-4E5D-B744-2EB1AE5198B7}\WindowsPowerShell\v1.0\powershell.exe] text="NothingShell spike test normal #3 | body line two"
+00:33:07.006 NotificationChanged handler attached
+00:33:07.006 Listening 22s (polling GetNotificationsAsync every 1s for ids not in the initial set)...
+00:33:11.064 EVENT NotificationChanged kind=Added id=127765 id=127765 app=Windows PowerShell [{1AC14E77-02E7-4E5D-B744-2EB1AE5198B7}\WindowsPowerShell\v1.0\powershell.exe] text="NothingShell spike test suppress #1 | body line two"
+00:33:11.065 EXPECT MATCH (text starts with "NothingShell spike test suppress")
+00:33:11.206   POLL NEW id=127765 app=Windows PowerShell [{1AC14E77-02E7-4E5D-B744-2EB1AE5198B7}\WindowsPowerShell\v1.0\powershell.exe] text="NothingShell spike test suppress #1 | body line two"
+00:33:11.207 EXPECT MATCH (text starts with "NothingShell spike test suppress")
+00:33:14.951 EVENT NotificationChanged kind=Added id=127766 id=127766 app=Windows PowerShell [{1AC14E77-02E7-4E5D-B744-2EB1AE5198B7}\WindowsPowerShell\v1.0\powershell.exe] text="NothingShell spike test suppress #2 | body line two"
+00:33:14.951 EXPECT MATCH (text starts with "NothingShell spike test suppress")
+00:33:15.417   POLL NEW id=127766 app=Windows PowerShell [{1AC14E77-02E7-4E5D-B744-2EB1AE5198B7}\WindowsPowerShell\v1.0\powershell.exe] text="NothingShell spike test suppress #2 | body line two"
+00:33:15.417 EXPECT MATCH (text starts with "NothingShell spike test suppress")
+00:33:18.866 EVENT NotificationChanged kind=Added id=127767 id=127767 app=Windows PowerShell [{1AC14E77-02E7-4E5D-B744-2EB1AE5198B7}\WindowsPowerShell\v1.0\powershell.exe] text="NothingShell spike test suppress #3 | body line two"
+00:33:18.867 EXPECT MATCH (text starts with "NothingShell spike test suppress")
+00:33:19.614   POLL NEW id=127767 app=Windows PowerShell [{1AC14E77-02E7-4E5D-B744-2EB1AE5198B7}\WindowsPowerShell\v1.0\powershell.exe] text="NothingShell spike test suppress #3 | body line two"
+00:33:19.614 EXPECT MATCH (text starts with "NothingShell spike test suppress")
+00:33:30.009 done

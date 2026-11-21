@@ -1,0 +1,72 @@
+[   320 ms] Option B: toplevel bottom; rect (100,300,400,600) 300x300 noReshow=True
+[   321 ms] created window 8067A option=B
+[  1825 ms] === SELFTEST option B noReshow=True OS=10.0.26300.0
+[  1834 ms] foreground before: 1041A class=Chrome_WidgetWin_1 owner=claude(17144) title='Claude'
+[  1835 ms] --- state: initial (normal desktop, user's windows present)
+[  1837 ms]   hwnd=8067A IsWindow=True IsWindowVisible=True IsIconic=False cloaked=False rect=(100,300,400,600) 300x300
+[  1837 ms]   style=0x16080000 exstyle=0x8000080 (TOOLWINDOW=True APPWINDOW=False NOACTIVATE=True CHILD=False) parent=0 owner(GW_OWNER)=90660
+[  1837 ms]   z-order among siblings of its parent: index 231 of 233 (0 = topmost)
+[  1837 ms]   Progman z-index among top-level windows: 232 of 233 (spike top-level index 231)
+[  1838 ms]   present in EnumWindows (top-level enumeration): True
+[  1838 ms]   Alt-Tab heuristic (visible && !cloaked && unowned && top-level && (!TOOLWINDOW || APPWINDOW)) = False  [computed; Alt-Tab not pressed]
+[  1838 ms]   WindowFromPoint(center 250,450) = 1042E class=Chrome_RenderWidgetHostHWND owner=claude(17144) title='Chrome Legacy Window'  isSpike=False
+[  1838 ms]   foreground = 1041A class=Chrome_WidgetWin_1 owner=claude(17144) title='Claude'
+[  1838 ms] --- z-order test: own top-level test window over the spike
+[  1876 ms] WinEvent FOREGROUND -> 50776 class=HwndWrapper[DesktopLayerSpike;;3c62b875-3a89-44ce-b5aa-d9eec4b58a02] owner=DesktopLayerSpike(11528) title='ZTestWindow'; spike visible=True iconic=False
+[  2483 ms]   WindowFromPoint(spike center) = 50776 class=HwndWrapper[DesktopLayerSpike;;3c62b875-3a89-44ce-b5aa-d9eec4b58a02] owner=DesktopLayerSpike(11528) title='ZTestWindow'  isTestWindow=True
+[  2484 ms]   walking GW_HWNDNEXT from test window 50776: spike's top-level root 8067A (the spike itself) found below it = True after 201 steps
+[  2484 ms]   test window top-level z-index 34 of 237
+[  2497 ms] WinEvent FOREGROUND -> 1041A class=Chrome_WidgetWin_1 owner=claude(17144) title='Claude'; spike visible=True iconic=False
+[  2905 ms]   test window closed; IsWindow(test)=False; foreground=1041A class=Chrome_WidgetWin_1 owner=claude(17144) title='Claude'
+[  2905 ms] --- state: after z-test
+[  2905 ms]   hwnd=8067A IsWindow=True IsWindowVisible=True IsIconic=False cloaked=False rect=(100,300,400,600) 300x300
+[  2905 ms]   style=0x16080000 exstyle=0x8000080 (TOOLWINDOW=True APPWINDOW=False NOACTIVATE=True CHILD=False) parent=0 owner(GW_OWNER)=90660
+[  2905 ms]   z-order among siblings of its parent: index 234 of 236 (0 = topmost)
+[  2905 ms]   Progman z-index among top-level windows: 235 of 236 (spike top-level index 234)
+[  2905 ms]   present in EnumWindows (top-level enumeration): True
+[  2906 ms]   Alt-Tab heuristic (visible && !cloaked && unowned && top-level && (!TOOLWINDOW || APPWINDOW)) = False  [computed; Alt-Tab not pressed]
+[  2906 ms]   WindowFromPoint(center 250,450) = 1042E class=Chrome_RenderWidgetHostHWND owner=claude(17144) title='Chrome Legacy Window'  isSpike=False
+[  2906 ms]   foreground = 1041A class=Chrome_WidgetWin_1 owner=claude(17144) title='Claude'
+[  2906 ms] foreground before Win+D: 1041A class=Chrome_WidgetWin_1 owner=claude(17144) title='Claude'
+[  2906 ms] >>> Win+D #1
+[  3093 ms] WinEvent FOREGROUND -> 1020A class=Progman owner=explorer(11472) title='Program Manager'; spike visible=True iconic=False
+[  4172 ms] --- state: after Win+D #1 (desktop shown)
+[  4173 ms]   hwnd=8067A IsWindow=True IsWindowVisible=True IsIconic=False cloaked=False rect=(100,300,400,600) 300x300
+[  4173 ms]   style=0x16080000 exstyle=0x8000080 (TOOLWINDOW=True APPWINDOW=False NOACTIVATE=True CHILD=False) parent=0 owner(GW_OWNER)=90660
+[  4173 ms]   z-order among siblings of its parent: index 235 of 236 (0 = topmost)
+[  4173 ms]   Progman z-index among top-level windows: 33 of 236 (spike top-level index 235)
+[  4173 ms]   present in EnumWindows (top-level enumeration): True
+[  4173 ms]   Alt-Tab heuristic (visible && !cloaked && unowned && top-level && (!TOOLWINDOW || APPWINDOW)) = False  [computed; Alt-Tab not pressed]
+[  4173 ms]   WindowFromPoint(center 250,450) = 10210 class=SysListView32 owner=explorer(11472) title='FolderView'  isSpike=False
+[  4173 ms]   foreground = 1020A class=Progman owner=explorer(11472) title='Program Manager'
+[  4175 ms] --- click test: desktop shown
+[  4181 ms]   button center 250,450; WindowFromPoint = 10210 class=SysListView32 owner=explorer(11472) title='FolderView'
+[  4181 ms]   SKIP SendInput click: point is not over the spike window (safety rule)
+[  4216 ms] WinEvent FOREGROUND -> 8067A class=HwndWrapper[DesktopLayerSpike;;97d4c7dc-e543-4b59-9dd5-83fed1dcaac3] owner=DesktopLayerSpike(11528) title='DesktopLayerSpike'; spike visible=True iconic=False
+[  4631 ms]   UIA InvokePattern: clicks 0 -> 1 (secondary check; no mouse involved)
+[  4631 ms] >>> Win+D #2 (restore)
+[  4643 ms] WinEvent FOREGROUND -> D03E6 class=Chrome_WidgetWin_1 owner=chrome(23496) title='Nothing Shell - Final mockup v2 - Google Chrome'; spike visible=True iconic=False
+[  4644 ms] WinEvent FOREGROUND -> 1041A class=Chrome_WidgetWin_1 owner=claude(17144) title='Claude'; spike visible=True iconic=False
+[  6186 ms] --- state: after Win+D #2 (restored)
+[  6186 ms]   hwnd=8067A IsWindow=True IsWindowVisible=True IsIconic=False cloaked=False rect=(100,300,400,600) 300x300
+[  6186 ms]   style=0x16080000 exstyle=0x8000080 (TOOLWINDOW=True APPWINDOW=False NOACTIVATE=True CHILD=False) parent=0 owner(GW_OWNER)=90660
+[  6186 ms]   z-order among siblings of its parent: index 233 of 236 (0 = topmost)
+[  6186 ms]   Progman z-index among top-level windows: 235 of 236 (spike top-level index 233)
+[  6187 ms]   present in EnumWindows (top-level enumeration): True
+[  6187 ms]   Alt-Tab heuristic (visible && !cloaked && unowned && top-level && (!TOOLWINDOW || APPWINDOW)) = False  [computed; Alt-Tab not pressed]
+[  6187 ms]   WindowFromPoint(center 250,450) = 1042E class=Chrome_RenderWidgetHostHWND owner=claude(17144) title='Chrome Legacy Window'  isSpike=False
+[  6187 ms]   foreground = 1041A class=Chrome_WidgetWin_1 owner=claude(17144) title='Claude'
+[  6187 ms] foreground same as before Win+D: True  (before 1041A, after 1041A)
+[  6187 ms] --- re-attach code path (NOT an Explorer restart)
+[  6188 ms] TaskbarCreated received
+[  6701 ms] --- state: after simulated re-attach call
+[  6701 ms]   hwnd=8067A IsWindow=True IsWindowVisible=True IsIconic=False cloaked=False rect=(100,300,400,600) 300x300
+[  6701 ms]   style=0x16080000 exstyle=0x8000080 (TOOLWINDOW=True APPWINDOW=False NOACTIVATE=True CHILD=False) parent=0 owner(GW_OWNER)=90660
+[  6701 ms]   z-order among siblings of its parent: index 233 of 236 (0 = topmost)
+[  6701 ms]   Progman z-index among top-level windows: 235 of 236 (spike top-level index 233)
+[  6701 ms]   present in EnumWindows (top-level enumeration): True
+[  6701 ms]   Alt-Tab heuristic (visible && !cloaked && unowned && top-level && (!TOOLWINDOW || APPWINDOW)) = False  [computed; Alt-Tab not pressed]
+[  6702 ms]   WindowFromPoint(center 250,450) = 1042E class=Chrome_RenderWidgetHostHWND owner=claude(17144) title='Chrome Legacy Window'  isSpike=False
+[  6702 ms]   foreground = 1041A class=Chrome_WidgetWin_1 owner=claude(17144) title='Claude'
+[  6702 ms] === SELFTEST END
+[  6726 ms] exited

@@ -1,0 +1,29 @@
+00:32:44.205 exe=D:\NothingLauncher\out\spikes\NotifySpike\NotifySpike.exe pid=12120 inProgramFiles=False tokenUIAccess=0 verbose=False
+00:32:44.214 GetCurrentPackageFullName rc=0 name=NothingShell.NotifySpike_1.0.0.0_neutral__vsqbmsqrkt384
+00:32:44.253 GetAccessStatus (before) = Allowed
+00:32:44.273 RequestAccessAsync returned Allowed after 19 ms
+00:32:44.283 GetAccessStatus (after) = Allowed
+00:32:44.332 GetNotificationsAsync(Toast) count=8
+00:32:44.369   EXISTING id=127634 (non-test notification, content redacted)
+00:32:44.382   EXISTING id=127644 (non-test notification, content redacted)
+00:32:44.397   EXISTING id=127657 (non-test notification, content redacted)
+00:32:44.407   EXISTING id=127690 (non-test notification, content redacted)
+00:32:44.419   EXISTING id=127691 (non-test notification, content redacted)
+00:32:44.431   EXISTING id=127710 (non-test notification, content redacted)
+00:32:44.444   EXISTING id=127726 (non-test notification, content redacted)
+00:32:44.456   EXISTING id=127741 (non-test notification, content redacted)
+00:32:44.476 NotificationChanged handler attached
+00:32:44.476 Listening 22s (polling GetNotificationsAsync every 1s for ids not in the initial set)...
+00:32:48.472 EVENT NotificationChanged kind=Added id=127762 id=127762 app=Windows PowerShell [{1AC14E77-02E7-4E5D-B744-2EB1AE5198B7}\WindowsPowerShell\v1.0\powershell.exe] text="NothingShell spike test normal #1 | body line two"
+00:32:48.473 EXPECT MATCH (text starts with "NothingShell spike test normal")
+00:32:48.692   POLL NEW id=127762 app=Windows PowerShell [{1AC14E77-02E7-4E5D-B744-2EB1AE5198B7}\WindowsPowerShell\v1.0\powershell.exe] text="NothingShell spike test normal #1 | body line two"
+00:32:48.692 EXPECT MATCH (text starts with "NothingShell spike test normal")
+00:32:52.371 EVENT NotificationChanged kind=Added id=127763 id=127763 app=Windows PowerShell [{1AC14E77-02E7-4E5D-B744-2EB1AE5198B7}\WindowsPowerShell\v1.0\powershell.exe] text="NothingShell spike test normal #2 | body line two"
+00:32:52.372 EXPECT MATCH (text starts with "NothingShell spike test normal")
+00:32:52.890   POLL NEW id=127763 app=Windows PowerShell [{1AC14E77-02E7-4E5D-B744-2EB1AE5198B7}\WindowsPowerShell\v1.0\powershell.exe] text="NothingShell spike test normal #2 | body line two"
+00:32:52.891 EXPECT MATCH (text starts with "NothingShell spike test normal")
+00:32:56.302 EVENT NotificationChanged kind=Added id=127764 id=127764 app=Windows PowerShell [{1AC14E77-02E7-4E5D-B744-2EB1AE5198B7}\WindowsPowerShell\v1.0\powershell.exe] text="NothingShell spike test normal #3 | body line two"
+00:32:56.302 EXPECT MATCH (text starts with "NothingShell spike test normal")
+00:32:57.102   POLL NEW id=127764 app=Windows PowerShell [{1AC14E77-02E7-4E5D-B744-2EB1AE5198B7}\WindowsPowerShell\v1.0\powershell.exe] text="NothingShell spike test normal #3 | body line two"
+00:32:57.102 EXPECT MATCH (text starts with "NothingShell spike test normal")
+00:33:06.515 done
