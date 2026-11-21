@@ -1,125 +1,81 @@
 #Requires -Version 7
 <#
 .SYNOPSIS
-  Builds, signs and installs Nothing Shell (uiAccess requires a signed exe under Program Files).
-  Run from an elevated terminal.
-.PARAMETER NoTimestamp
-  Skip the RFC3161 timestamp (offline runs).
-.PARAMETER SkipAdminSteps
-  Dev/test only: skip Root/TrustedPublisher import, process stop, the Program Files copy and the final launch.
-  Everything else (cert in CurrentUser\My, publish, signing into out/app) still runs without elevation.
+  Installs Nothing Shell from out/ (built and signed by build\build.ps1, run WITHOUT admin rights first). Run this one
+  from an elevated PowerShell. uiAccess requires a signed exe under Program Files.
+.DESCRIPTION
+  Security review 2026-11-21 (#1, #7): nothing is compiled or signed here. The elevated part only
+    - trusts the signing certificate machine-wide, straight from the certificate store (no temporary .cer file),
+    - copies out/ into an admin-only staging folder under Program Files,
+    - checks that every exe and dll there carries a valid signature by that certificate and that NothingShell.exe
+      asks for uiAccess, and refuses to install otherwise,
+    - stops the running copy, mirrors the staging folder into Program Files and registers the package.
 #>
 [CmdletBinding()]
-param(
-    [switch]$NoTimestamp,
-    [switch]$SkipAdminSteps
-)
+param()
 $ErrorActionPreference = 'Stop'
 
 $repo    = Split-Path -Parent $PSScriptRoot
 $outApp  = Join-Path $repo 'out/app'
+$outMsix = Join-Path $repo 'out/NothingShell.msix'
 $install = Join-Path $env:ProgramFiles 'NothingShell'
+$stage   = Join-Path $env:ProgramFiles 'NothingShell.staging'
 $subject = 'CN=NothingShell Dev'
 
-function Test-Admin {
-    $id = [Security.Principal.WindowsIdentity]::GetCurrent()
-    ([Security.Principal.WindowsPrincipal]$id).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+$id = [Security.Principal.WindowsIdentity]::GetCurrent()
+if (-not ([Security.Principal.WindowsPrincipal]$id).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
+    Write-Error 'install.ps1 must be run from an elevated (Run as administrator) PowerShell. Build first with build\build.ps1 (not elevated).'
+    exit 1
 }
-
-if (-not $SkipAdminSteps -and -not (Test-Admin)) {
-    Write-Error 'install.ps1 must be run from an elevated (Run as administrator) PowerShell. Re-run elevated, or pass -SkipAdminSteps for a non-admin dry run.'
+if (-not (Test-Path (Join-Path $outApp 'NothingShell.exe')) -or -not (Test-Path $outMsix)) {
+    Write-Error 'Nothing to install: run build\build.ps1 from a normal (not elevated) terminal first.'
     exit 1
 }
 
-$dotnet = (Get-Command dotnet -ErrorAction SilentlyContinue)?.Source
-if (-not $dotnet) { $dotnet = Join-Path $env:ProgramFiles 'dotnet/dotnet.exe' }
-if (-not (Test-Path $dotnet)) { throw 'dotnet not found.' }
-
-function Invoke-Native([string]$exe, [string[]]$arguments) {
-    & $exe @arguments
-    if ($LASTEXITCODE -ne 0) { throw "$exe failed (exit $LASTEXITCODE): $($arguments -join ' ')" }
-}
-
-# 1. Code-signing cert (reuse if present)
+# 1. The signing certificate (made by build.ps1 in the user's store) and machine-wide trust, without a temp file.
 $cert = Get-ChildItem Cert:\CurrentUser\My |
-    Where-Object { $_.Subject -eq $subject -and $_.HasPrivateKey -and $_.NotAfter -gt (Get-Date) -and
+    Where-Object { $_.Subject -eq $subject -and $_.NotAfter -gt (Get-Date) -and
                    ($_.EnhancedKeyUsageList.ObjectId -contains '1.3.6.1.5.5.7.3.3') } |
     Sort-Object NotAfter -Descending | Select-Object -First 1
-if (-not $cert) {
-    Write-Host "Creating code-signing certificate $subject"
-    $cert = New-SelfSignedCertificate -Type CodeSigningCert -Subject $subject `
-        -KeyAlgorithm RSA -KeyLength 3072 -HashAlgorithm SHA256 -KeyExportPolicy NonExportable `
-        -CertStoreLocation Cert:\CurrentUser\My -NotAfter (Get-Date).AddYears(5)
-}
+if (-not $cert) { throw "Signing certificate $subject not found: run build\build.ps1 first." }
 $thumb = $cert.Thumbprint
-Write-Host "Using certificate $thumb"
-
-# 2. Trust it machine-wide (uiAccess requires a chain to a trusted root)
-if (-not $SkipAdminSteps) {
-    $tmp = Join-Path ([IO.Path]::GetTempPath()) "nothingshell-$thumb.cer"
-    Export-Certificate -Cert $cert -FilePath $tmp | Out-Null
-    foreach ($store in 'Root', 'TrustedPublisher') {
-        if (-not (Test-Path "Cert:\LocalMachine\$store\$thumb")) {
-            Import-Certificate -FilePath $tmp -CertStoreLocation "Cert:\LocalMachine\$store" | Out-Null
-            Write-Host "Imported into LocalMachine\$store"
+foreach ($storeName in 'Root', 'TrustedPublisher') {
+    $store = [Security.Cryptography.X509Certificates.X509Store]::new($storeName, 'LocalMachine')
+    $store.Open('ReadWrite')
+    try {
+        if (-not ($store.Certificates | Where-Object Thumbprint -eq $thumb)) {
+            # Only the public part goes in (the private key never leaves the user's store).
+            $public = [Security.Cryptography.X509Certificates.X509Certificate2]::new($cert.RawData)
+            $store.Add($public)
+            Write-Host "Trusted in LocalMachine\$storeName"
         }
-    }
-    Remove-Item $tmp -Force
+    } finally { $store.Close() }
 }
 
-# 3. Publish
-# A copy started straight from the build output (for example by double-clicking it) locks $outApp: stop it first.
-$fromOut = @(Get-Process -Name 'NothingShell', 'NothingShell.Watchdog' -ErrorAction SilentlyContinue |
-    Where-Object { $_.Path -and $_.Path.StartsWith([IO.Path]::GetFullPath($outApp), [StringComparison]::OrdinalIgnoreCase) })
-if ($fromOut.Count -gt 0) {
-    Write-Host "Stopping $($fromOut.Count) process(es) running from $outApp"
-    $fromOut | Stop-Process -Force
-    Start-Sleep -Milliseconds 500
-}
-if (Test-Path $outApp) { Remove-Item $outApp -Recurse -Force }
-# The shelf's drag helper runs at normal level (no uiAccess), so drags reach normal apps. Published first: if the two
-# share a file (NothingShell.Core.dll, same source), the shell's own publish below is the copy that stays.
-Invoke-Native $dotnet @('publish', (Join-Path $repo 'src/NothingShell.DragHelper'), '-c', 'Release', '-o', $outApp)
-# A plain Release build (no UiAccess) leaves obj/bin output with the normal manifest that publish would reuse, and the
-# shell then starts without uiAccess (2026-11-20). Always publish from clean Release output, then check the manifest.
-foreach ($stale in 'src/NothingShell/obj/Release', 'src/NothingShell/bin/Release') {
-    $path = Join-Path $repo $stale
-    if (Test-Path $path) { Remove-Item $path -Recurse -Force }
-}
-Invoke-Native $dotnet @('publish', (Join-Path $repo 'src/NothingShell'), '-c', 'Release', '-p:UiAccess=true', '-o', $outApp)
-$builtExe = Join-Path $outApp 'NothingShell.exe'
-if (-not ([IO.File]::ReadAllText($builtExe, [Text.Encoding]::UTF8) -match 'uiAccess="true"')) {
-    throw "NothingShell.exe was built without uiAccess=""true"" in its manifest; not installing it."
-}
-try {
-    Invoke-Native $dotnet @('publish', (Join-Path $repo 'src/NothingShell.Watchdog'), '-c', 'Release', '-o', $outApp)
-} catch {
-    Write-Warning "Native AOT publish of the watchdog failed ($($_.Exception.Message)). Falling back to a non-AOT publish; install the 'Desktop development with C++' workload for AOT."
-    Invoke-Native $dotnet @('publish', (Join-Path $repo 'src/NothingShell.Watchdog'), '-c', 'Release', '-p:PublishAot=false', '-o', $outApp)
-}
+# 2. Stage into an admin-only folder, then check every signature there (what is checked is what gets installed).
+if (Test-Path $stage) { Remove-Item $stage -Recurse -Force }
+New-Item -ItemType Directory -Path $stage | Out-Null
+robocopy $outApp $stage /MIR /NFL /NDL /NJH /NJS /NP | Out-Null
+if ($LASTEXITCODE -ge 8) { throw "robocopy into staging failed (exit $LASTEXITCODE)" }
+$global:LASTEXITCODE = 0
+$stageMsix = Join-Path $stage 'NothingShell.msix'
+Copy-Item $outMsix $stageMsix -Force
 
-# 4. Sign every exe/dll (signtool from the Microsoft.Windows.SDK.BuildTools NuGet package)
-Invoke-Native $dotnet @('restore', (Join-Path $repo 'build/tools/tools.csproj'), '--verbosity', 'quiet')
-$pkgRoot = ((& $dotnet nuget locals global-packages --list) -replace '^global-packages:\s*', '').Trim()
-$signtool = Get-ChildItem (Join-Path $pkgRoot 'microsoft.windows.sdk.buildtools') -Recurse -Filter signtool.exe -ErrorAction SilentlyContinue |
-    Where-Object { $_.Directory.Name -eq 'x64' } |
-    Sort-Object FullName -Descending | Select-Object -First 1
-if (-not $signtool) { throw 'signtool.exe (x64) not found in the NuGet cache after restoring build/tools/tools.csproj.' }
-
-$signArgs = @('sign', '/fd', 'SHA256', '/sha1', $thumb)
-if (-not $NoTimestamp) { $signArgs += @('/tr', 'http://timestamp.digicert.com', '/td', 'SHA256') }
-$files = Get-ChildItem $outApp -Recurse -Include *.exe, *.dll -File
-foreach ($f in $files) {
-    Invoke-Native $signtool.FullName ($signArgs + $f.FullName)
+$bad = @()
+foreach ($f in @(Get-ChildItem $stage -Recurse -Include *.exe, *.dll -File)) { # the msix signature is checked by Add-AppxPackage
+    $sig = Get-AuthenticodeSignature -FilePath $f.FullName
+    if ($sig.Status -ne 'Valid' -or $sig.SignerCertificate.Thumbprint -ne $thumb) { $bad += $f.Name }
 }
-Write-Host "Signed $($files.Count) files."
-
-# 5. Stop the running copy so files can be replaced. Done only now, after everything that can throw (publish, signing),
-#    so a failed run never leaves the user's taskbar hidden with the shell and its watchdog gone.
-if ($SkipAdminSteps) {
-    Write-Host "SkipAdminSteps: not copying to $install. Output is in $outApp"
-    return
+if (-not ([IO.File]::ReadAllText((Join-Path $stage 'NothingShell.exe'), [Text.Encoding]::UTF8) -match 'uiAccess="true"')) {
+    $bad += 'NothingShell.exe (no uiAccess in its manifest)'
 }
+if ($bad.Count -gt 0) {
+    Remove-Item $stage -Recurse -Force
+    throw "Not installing: $($bad.Count) file(s) are not signed by $subject ($thumb): $($bad -join ', '). Rebuild with build\build.ps1."
+}
+Write-Host "Checked $(@(Get-ChildItem $stage -Recurse -Include *.exe, *.dll -File).Count) signed files in staging."
+
+# 3. Stop the running copy so files can be replaced (only now, after everything that can throw above).
 $watchdogWasRunning = [bool](Get-Process -Name 'NothingShell.Watchdog' -ErrorAction SilentlyContinue)
 # Only the shell is killed: the watchdog sees it die and restores the taskbar by itself.
 Get-Process -Name 'NothingShell' -ErrorAction SilentlyContinue | Stop-Process -Force
@@ -127,50 +83,33 @@ $deadline = (Get-Date).AddSeconds(10)
 while ((Get-Process -Name 'NothingShell.Watchdog' -ErrorAction SilentlyContinue) -and (Get-Date) -lt $deadline) {
     Start-Sleep -Milliseconds 250
 }
-# Watchdog still running (stuck) or never ran: restore explicitly with the installed copy before replacing files.
-$installedWatchdog = Join-Path $install 'NothingShell.Watchdog.exe'
+# Watchdog stuck or never ran: restore explicitly. The staged (checked) watchdog is used; it deletes its state file
+# without following links (security review #2).
+$stagedWatchdog = Join-Path $stage 'NothingShell.Watchdog.exe'
 if ((-not $watchdogWasRunning) -or (Get-Process -Name 'NothingShell.Watchdog' -ErrorAction SilentlyContinue)) {
-    if (Test-Path $installedWatchdog) {
-        # WinExe: '&' would not wait, so use Start-Process -Wait to get a real exit code.
-        $p = Start-Process -FilePath $installedWatchdog -ArgumentList '--restore-now', '--state', ('"{0}"' -f (Join-Path $env:APPDATA 'NothingShell')) -Wait -PassThru
-        if ($p.ExitCode -ne 0) {
-            throw "Watchdog --restore-now failed (exit $($p.ExitCode)). Aborting before replacing files in $install so the installed watchdog stays available to retry the taskbar restore."
-        }
-    }
+    $p = Start-Process -FilePath $stagedWatchdog -ArgumentList '--restore-now', '--state', ('"{0}"' -f (Join-Path $env:APPDATA 'NothingShell')) -Wait -PassThru
+    if ($p.ExitCode -ne 0) { throw "Watchdog --restore-now failed (exit $($p.ExitCode)). Nothing was replaced in $install." }
     Get-Process -Name 'NothingShell.Watchdog' -ErrorAction SilentlyContinue | Stop-Process -Force
 }
 Start-Sleep -Milliseconds 500
 
-# 6. Mirror to Program Files
-# The four Nothing wallpapers (spec §5) and their previews, for the Settings wallpaper picker (Plan 5).
-$wallOut = Join-Path $outApp 'Wallpapers'
-New-Item -ItemType Directory -Force -Path $wallOut | Out-Null
-Copy-Item (Join-Path $repo 'wallpapers/*.png'), (Join-Path $repo 'wallpapers/*_preview.jpg') $wallOut -Force
-robocopy $outApp $install /MIR /NFL /NDL /NJH /NJS /NP | Out-Null
+# 4. Mirror the checked staging folder into Program Files.
+robocopy $stage $install /MIR /XF NothingShell.msix /NFL /NDL /NJH /NJS /NP | Out-Null
 if ($LASTEXITCODE -ge 8) { throw "robocopy failed (exit $LASTEXITCODE)" }
 $global:LASTEXITCODE = 0
 Write-Host "Installed to $install"
 
-# 6b. Sparse package identity (notifications, radios). Registered for the installing user with the Program Files
-#     folder as external location. Optional: on failure the shell still runs, just without notification access.
+# 5. Sparse package identity (notifications, radios). Optional: on failure the shell runs without notification access.
 try {
-    $makeappx = Join-Path $signtool.Directory 'makeappx.exe'
-    $stage = Join-Path $repo 'out/package'
-    $msix = Join-Path $repo 'out/NothingShell.msix'
-    Remove-Item $stage, $msix -Recurse -Force -ErrorAction SilentlyContinue
-    New-Item -ItemType Directory (Join-Path $stage 'Assets') -Force | Out-Null
-    Copy-Item (Join-Path $repo 'src/NothingShell/Package/AppxManifest.xml') $stage
-    Copy-Item (Join-Path $repo 'src/NothingShell/Package/Assets/logo.png') (Join-Path $stage 'Assets')
-    Invoke-Native $makeappx @('pack', '/nv', '/o', '/d', $stage, '/p', $msix)
-    Invoke-Native $signtool.FullName @('sign', '/fd', 'SHA256', '/sha1', $thumb, $msix)
     Get-AppxPackage -Name 'NothingShell' -ErrorAction SilentlyContinue | Remove-AppxPackage
-    Add-AppxPackage -Path $msix -ExternalLocation $install
+    Add-AppxPackage -Path $stageMsix -ExternalLocation $install
     $pkg = Get-AppxPackage -Name 'NothingShell'
     Write-Host "Package registered: $($pkg.PackageFullName) ($($pkg.Status))"
 } catch {
     Write-Warning "Package identity registration failed: $($_.Exception.Message). Nothing Shell will run without notification access."
 }
+Remove-Item $stage -Recurse -Force -ErrorAction SilentlyContinue
 
-# 7. Launch once WITHOUT elevation (explorer.exe de-elevates) so the user process writes the HKCU Run value.
+# 6. Launch once WITHOUT elevation (explorer.exe de-elevates) so the user process writes the HKCU Run value.
 Start-Process explorer.exe -ArgumentList "`"$install\NothingShell.exe`""
 Write-Host "Launched NothingShell unelevated. Check %AppData%\NothingShell\log.txt for uiAccess=1."

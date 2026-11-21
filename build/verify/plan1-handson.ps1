@@ -699,15 +699,27 @@ try {
     if ($doInstall) {
     Write-Step 'SETUP: installing the latest app and test programs'
     $installOk = $false
+    # Security review 2026-11-21: building and signing run WITHOUT admin rights (build.ps1, started de-elevated),
+    # only the install itself runs here, elevated.
+    $built = $false
     foreach ($noTs in $false, $true) {
-        $extra = if ($noTs) { @('-NoTimestamp') } else { @() }
-        Write-Info ("Running build\install.ps1 {0}" -f ($extra -join ' '))
-        & $pwsh -NoProfile -ExecutionPolicy Bypass -File (Join-Path $Repo 'build\install.ps1') @extra 2>&1 | ForEach-Object { Write-Host "    $_" }
-        if ($LASTEXITCODE -eq 0) { $installOk = $true; break }
-        Write-Bad "install.ps1 failed (exit $LASTEXITCODE)."
+        $extra = if ($noTs) { ' -NoTimestamp' } else { '' }
+        $buildLog = Join-Path $env:TEMP ("nsho-build-{0}.log" -f [guid]::NewGuid().ToString('N').Substring(0, 8))
+        $script:TempFiles.Add($buildLog)
+        Write-Info ("Running build\build.ps1{0} (not elevated)" -f $extra)
+        [void](Invoke-Unelevated ("`"{0}`" -NoProfile -ExecutionPolicy Bypass -File `"{1}`"{2}" -f $pwsh, (Join-Path $Repo 'build\build.ps1'), $extra) $buildLog -Wait -TimeoutSec 900)
+        if (Test-Path $buildLog) { Get-Content $buildLog | Select-Object -Last 5 | ForEach-Object { Write-Host "    $_" } }
+        if (Test-Path (Join-Path $Repo 'out\NothingShell.msix')) { $built = $true; break }
+        Write-Bad 'build.ps1 did not produce out\NothingShell.msix.'
         if (-not $noTs) { Write-Info 'Retrying once without the online timestamp...' }
     }
-    if (-not $installOk) { throw 'build\install.ps1 failed. Nothing else was changed.' }
+    if ($built) {
+        Write-Info 'Running build\install.ps1'
+        & $pwsh -NoProfile -ExecutionPolicy Bypass -File (Join-Path $Repo 'build\install.ps1') 2>&1 | ForEach-Object { Write-Host "    $_" }
+        $installOk = $LASTEXITCODE -eq 0
+        if (-not $installOk) { Write-Bad "install.ps1 failed (exit $LASTEXITCODE)." }
+    }
+    if (-not $installOk) { throw 'build\build.ps1 or build\install.ps1 failed. Nothing else was changed.' }
     if (-not (Test-Path $AppExe) -or -not (Test-Path $Watchdog)) { throw "Install finished but $AppExe or the watchdog is missing." }
 
     $spikesOk = $false
