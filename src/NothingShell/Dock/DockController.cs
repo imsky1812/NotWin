@@ -286,6 +286,18 @@ public sealed class DockController : IDisposable
     /// <summary>The current settings (this controller owns settings.json; other parts update through <see cref="UpdateSettings"/>).</summary>
     public ShellSettings Settings => _settings;
 
+    /// <summary>
+    /// Settings from another PC (Plan 9 sync, already merged and saved): taken over as they are, the dock's pins,
+    /// keep-visible and previews re-applied.
+    /// </summary>
+    public void ApplyExternal(ShellSettings settings)
+    {
+        _settings = settings;
+        Rebuild();
+        ApplyKeepVisible(settings.KeepDockVisible);
+        PreviewsEnabled = settings.WindowPreviews;
+    }
+
     /// <summary>Applies <paramref name="change"/> and saves, so there is only one writer of settings.json.</summary>
     public void UpdateSettings(Func<ShellSettings, ShellSettings> change)
     {

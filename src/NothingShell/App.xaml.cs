@@ -36,6 +36,11 @@ public partial class App : Application
     private readonly System.Windows.Threading.DispatcherTimer _alarmQuiet = new() { Interval = TimeSpan.FromSeconds(60) };
     private System.Windows.Media.MediaPlayer? _alarmSound;
     private Alarms.AlarmRingWindow? _ringWindow;
+    private Sync.SyncService? _sync;
+    private string _syncStatus = "OFF";
+    private System.IO.FileSystemWatcher? _syncWatch;
+    private readonly System.Windows.Threading.DispatcherTimer _syncTimer = new() { Interval = TimeSpan.FromSeconds(30) };
+    private readonly System.Windows.Threading.DispatcherTimer _syncSoon = new() { Interval = TimeSpan.FromSeconds(2) };
     private Widgets.DesktopWidgets? _widgets;
     private readonly Core.Widgets.SnakeKeyGate _snakeGate = new(); // one gate for whichever snake is on the desktop
     private Dock.AppIconCache? _folderIcons; // shared by every app folder
@@ -129,6 +134,7 @@ public partial class App : Application
         _ = _index.RefreshIfStaleAsync(TimeSpan.Zero);
 
         // 4. Dock, then 5. StartWithWindows (only from settings that were actually read).
+        SyncAtStart(); // Plan 9: a newer copy from another PC is in place before anything reads the settings
         var (settings, loadedOk) = StartDock();
         ApplyStartWithWindows(settings, loadedOk);
 
@@ -221,6 +227,9 @@ public partial class App : Application
         // failure here must never take the dock, launcher or notch down.
         try { StartWidgets(); }
         catch (Exception e) { Log.Error("desktop widgets failed to start", e); }
+
+        try { StartSync(); }
+        catch (Exception e) { Log.Error("sync failed to start", e); }
 
         // Quick-settings panel (spec §6.3): Win+A / Win+N (below) and the dock tray. Guarded like the notch: a failure
         // here must never take the dock and launcher down with it (Win+A / Win+N then simply do nothing).
@@ -315,6 +324,85 @@ public partial class App : Application
         }
     }
 
+    // ---- Sync (Plan 9) ----
+
+    private static void SyncAtStart()
+    {
+        try
+        {
+            var folder = new SettingsStore(DataDir).Load().SyncFolder;
+            if (folder is null) return;
+            var outcome = new Sync.SyncService(DataDir, () => folder).RunOnce();
+            Log.Info($"sync at start: reached={outcome.Reached}");
+        }
+        catch (Exception e) { Log.Error("sync at start failed", e); }
+    }
+
+    private void StartSync()
+    {
+        _sync = new Sync.SyncService(DataDir, () => _controller?.Settings.SyncFolder);
+        _syncTimer.Tick += (_, _) => SyncNow();
+        _syncSoon.Tick += (_, _) => { _syncSoon.Stop(); SyncNow(); };
+        _syncTimer.Start();
+        WatchSyncFolder();
+        SyncNow();
+    }
+
+    // The folder's copy changed (another PC, through OneDrive): sync two seconds after the last change.
+    private void WatchSyncFolder()
+    {
+        _syncWatch?.Dispose();
+        _syncWatch = null;
+        if (_controller?.Settings.SyncFolder is not { } folder) return;
+        try
+        {
+            var dir = Path.Combine(folder, Sync.SyncService.SubFolder);
+            Directory.CreateDirectory(dir);
+            var watch = new System.IO.FileSystemWatcher(dir) { NotifyFilter = NotifyFilters.LastWrite | NotifyFilters.FileName | NotifyFilters.Size };
+            void Soon(object? s, FileSystemEventArgs e) => Dispatcher.BeginInvoke(() => { _syncSoon.Stop(); _syncSoon.Start(); });
+            watch.Changed += Soon;
+            watch.Created += Soon;
+            watch.Renamed += (s, e) => Soon(s, e);
+            watch.EnableRaisingEvents = true;
+            _syncWatch = watch;
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException or ArgumentException)
+        {
+            Log.Info("sync: the folder cannot be watched (" + e.GetType().Name + "), checking every 30 s");
+        }
+    }
+
+    private void SyncNow()
+    {
+        if (_sync is null || _controller is not { } dock) return;
+        if (dock.Settings.SyncFolder is null) { _syncStatus = "OFF"; return; }
+        Sync.SyncOutcome outcome;
+        try { outcome = _sync.RunOnce(); }
+        catch (Exception e) { Log.Error("sync failed", e); _syncStatus = "SYNC FAILED"; return; }
+        _syncStatus = outcome.Reached ? $"SYNCED {DateTime.Now:HH:mm}" : "CAN'T REACH THE FOLDER";
+        if (outcome.Pulled.Contains("settings.json"))
+        {
+            var before = dock.Settings;
+            var pulled = new SettingsStore(DataDir).Load();
+            dock.ApplyExternal(pulled);
+            if (_widgets is { } widgets)
+            {
+                if (pulled.WidgetScale != before.WidgetScale) widgets.SetScale(pulled.WidgetScale);
+                if (pulled.WidgetList is { } layout) widgets.Apply(layout);
+            }
+            if (!Equals(pulled.Weather, before.Weather)) _weather?.Start(pulled.Weather);
+        }
+        if (outcome.Pulled.Contains("notes.txt")) _notes?.Reload();
+        if (outcome.Pulled.Contains(Core.Alarms.AlarmStore.FileName)) _alarms?.Reload();
+    }
+
+    private void SetSyncFolder(string? folder)
+    {
+        _controller?.UpdateSettings(s => s with { SyncFolder = folder });
+        WatchSyncFolder();
+        SyncNow();
+    }
+
     // Alarms (Plan 9): a ring loops Windows' alarm sound for up to a minute, shows in the notch and the panel's list, and
     // puts the Snooze / Stop card at the top of the screen (after full screen ends, if it is still ringing then).
     private void StartAlarms()
@@ -397,7 +485,8 @@ public partial class App : Application
                 Path.Combine(DataDir, "wallpapers")),
             new Settings.SettingsWindow.DockEffects(
                 on => { dock.UpdateSettings(s => s with { WindowPreviews = on }); dock.PreviewsEnabled = on; }),
-            _calendar);
+            _calendar,
+            new Settings.SettingsWindow.SyncOptions(() => dock.Settings.SyncFolder, () => _syncStatus, SetSyncFolder));
     }
 
     // Source app of a media session (AUMID or exe) as a short name for the media tile: the launcher index, else the
@@ -505,6 +594,8 @@ public partial class App : Application
             _weather?.Dispose();
             _calendar?.Dispose();
             _alarmTick.Stop();
+            _syncTimer.Stop();
+            _syncWatch?.Dispose();
             try { _alarmSound?.Stop(); } catch { /* exiting */ }
             _widgets?.Dispose();
             _controller?.Dispose();
