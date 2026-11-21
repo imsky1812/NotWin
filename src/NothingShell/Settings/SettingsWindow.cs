@@ -8,6 +8,7 @@ using NothingShell.Core;
 using NothingShell.Core.Forecast;
 using NothingShell.Core.Wallpapers;
 using NothingShell.Forecast;
+using NothingShell.GoogleCalendar;
 using NothingShell.Native;
 using NothingShell.Notch.Dashboard;
 
@@ -29,6 +30,10 @@ public sealed class SettingsWindow : Window
     private readonly TextBlock _cityStatus;
     private readonly Border _startToggle = new(), _keepToggle = new(), _previewToggle = new();
     private DockEffects? _effects;
+    private readonly GoogleCalendarService? _calendar;
+    private readonly StackPanel _calendarHost = new() { Margin = new Thickness(0, 0, 0, 18) };
+    private readonly TextBox _clientId = SettingsFields.Text();
+    private readonly PasswordBox _clientSecret = SettingsFields.Secret();
 
     /// <summary>Plan 5 widget settings: widget size (S/M/L), the wallpapers folder, and entering widget edit mode.</summary>
     /// <param name="GeneratedDir">Where "✦ New" wallpapers are saved (the user's data folder).</param>
@@ -38,9 +43,11 @@ public sealed class SettingsWindow : Window
     public sealed record WidgetOptions(Action<string> SetScale, string? WallpaperDir, Action EditWidgets, string? GeneratedDir = null);
 
     private SettingsWindow(Func<ShellSettings> settings, Action<bool> setStart, Action<bool> setKeep, WeatherService? weather,
-        Action<WeatherPlace> saveWeather, Action quit, WidgetOptions? widgets, DockEffects? effects = null)
+        Action<WeatherPlace> saveWeather, Action quit, WidgetOptions? widgets, DockEffects? effects = null,
+        GoogleCalendarService? calendar = null)
     {
         _effects = effects;
+        _calendar = calendar;
         _settings = settings;
         _setStart = setStart;
         _setKeep = setKeep;
@@ -88,6 +95,17 @@ public sealed class SettingsWindow : Window
         _cityStatus = TileChrome.Label(PlaceText(settings().Weather) ?? "Type a city and press Enter");
         _cityStatus.Margin = new Thickness(2, 8, 0, 18);
         stack.Children.Add(_cityStatus);
+
+        // Google Calendar (Plan 6): the guided setup, sign-in and status.
+        if (calendar is not null)
+        {
+            stack.Children.Add(Section("Google Calendar"));
+            stack.Children.Add(_calendarHost);
+            _clientId.Text = calendar.SavedClientId ?? "";
+            PaintCalendar();
+            calendar.Changed += PaintCalendar;
+            Closed += (_, _) => calendar.Changed -= PaintCalendar;
+        }
 
         if (widgets is not null) AddWidgetSections(stack, widgets);
 
@@ -146,7 +164,8 @@ public sealed class SettingsWindow : Window
 
     /// <summary>Shows the settings window, or brings the open one to the front.</summary>
     public static void ShowOrActivate(Func<ShellSettings> settings, Action<bool> setStart, Action<bool> setKeep,
-        WeatherService? weather, Action<WeatherPlace> saveWeather, Action quit, WidgetOptions? widgets = null, DockEffects? effects = null)
+        WeatherService? weather, Action<WeatherPlace> saveWeather, Action quit, WidgetOptions? widgets = null, DockEffects? effects = null,
+        GoogleCalendarService? calendar = null)
     {
         if (s_open is not null)
         {
@@ -154,7 +173,7 @@ public sealed class SettingsWindow : Window
             ForegroundNative.Activate(new WindowInteropHelper(s_open).Handle);
             return;
         }
-        s_open = new SettingsWindow(settings, setStart, setKeep, weather, saveWeather, quit, widgets, effects);
+        s_open = new SettingsWindow(settings, setStart, setKeep, weather, saveWeather, quit, widgets, effects, calendar);
         s_open.Show();
     }
 
@@ -313,6 +332,76 @@ public sealed class SettingsWindow : Window
         return b;
     }
 
+    // The Google Calendar section: signed in, the status and Refresh / Disconnect; otherwise the four setup steps, the
+    // console link, the client ID and secret, and Connect (Cancel while the browser is open). The ID and secret boxes
+    // are kept across repaints so typing is never lost; they are never logged.
+    private void PaintCalendar()
+    {
+        if (_calendar is not { } c) return;
+        _calendarHost.Children.Clear();
+        if (c.Status == CalendarStatus.SignedIn)
+        {
+            _calendarHost.Children.Add(TileChrome.Label(c.StatusText.Length > 0 ? c.StatusText : "CONNECTED"));
+            var row = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 10, 0, 0) };
+            var refresh = Pill("Refresh");
+            refresh.MouseLeftButtonUp += (_, _) => _ = c.RefreshAsync();
+            var disconnect = Pill("Disconnect");
+            disconnect.Margin = new Thickness(8, 0, 0, 0);
+            disconnect.MouseLeftButtonUp += (_, _) => _ = c.DisconnectAsync();
+            row.Children.Add(refresh);
+            row.Children.Add(disconnect);
+            _calendarHost.Children.Add(row);
+            return;
+        }
+        foreach (var step in SettingsFields.GuideSteps)
+        {
+            var t = TileChrome.Body(step, 12, FontWeights.Normal, TileChrome.Dim);
+            t.TextWrapping = TextWrapping.Wrap;
+            t.Margin = new Thickness(0, 0, 0, 6);
+            _calendarHost.Children.Add(t);
+        }
+        var link = TileChrome.Body("Open Google Cloud Console ›", 13, FontWeights.SemiBold);
+        link.Cursor = Cursors.Hand;
+        link.Margin = new Thickness(0, 4, 0, 12);
+        link.MouseLeftButtonUp += (_, _) => UnelevatedShell.Open(SettingsFields.ConsoleUrl, null, (m, _) => Log.Info("settings: " + m));
+        _calendarHost.Children.Add(link);
+        _calendarHost.Children.Add(SettingsFields.Caption("CLIENT ID"));
+        _calendarHost.Children.Add(SettingsFields.Frame(_clientId));
+        _calendarHost.Children.Add(SettingsFields.Caption(c.HasSavedSecret ? "CLIENT SECRET (EMPTY: THE SAVED ONE IS USED)" : "CLIENT SECRET"));
+        _calendarHost.Children.Add(SettingsFields.Frame(_clientSecret));
+        var connect = Pill(c.Connecting ? "Cancel" : "Connect");
+        connect.HorizontalAlignment = HorizontalAlignment.Left;
+        connect.Margin = new Thickness(0, 12, 0, 0);
+        connect.MouseLeftButtonUp += (_, _) =>
+        {
+            if (c.Connecting) { c.CancelConnect(); return; }
+            _ = ConnectAsync(c);
+        };
+        _calendarHost.Children.Add(connect);
+        var status = TileChrome.Label(c.StatusText.Length > 0 ? c.StatusText
+            : "GOOGLE WILL SAY IT HASN'T VERIFIED THIS APP. IT'S YOURS: ADVANCED, THEN CONTINUE");
+        status.TextWrapping = TextWrapping.Wrap;
+        status.Margin = new Thickness(2, 8, 0, 0);
+        _calendarHost.Children.Add(status);
+    }
+
+    private async Task ConnectAsync(GoogleCalendarService c)
+    {
+        Topmost = false; // the browser comes to the front for the sign-in
+        try
+        {
+            if (await c.ConnectAsync(_clientId.Text, _clientSecret.Password)) _clientSecret.Clear();
+        }
+        finally
+        {
+            if (IsLoaded)
+            {
+                Topmost = true;
+                ForegroundNative.Activate(new WindowInteropHelper(this).Handle);
+            }
+        }
+    }
+
     private static string? PlaceText(WeatherPlace? p) =>
         p is null ? null : string.IsNullOrEmpty(p.Country) ? p.Name : $"{p.Name}, {p.Country}";
 
@@ -373,5 +462,46 @@ public static class SettingsLayout
         var height = Math.Min(actualHeight, maxHeight);
         var top = workArea.Top + (workArea.Height - height) / 2;
         return (Math.Max(workArea.Top + Margin, top), maxHeight);
+    }
+}
+
+/// <summary>The Google Calendar section's text boxes and the guided setup text (Plan 6).</summary>
+public static class SettingsFields
+{
+    public const string ConsoleUrl = "https://console.cloud.google.com/apis/credentials";
+
+    public static readonly string[] GuideSteps =
+    [
+        "1. Open Google Cloud Console and create a project.",
+        "2. In APIs & Services, enable the Google Calendar API.",
+        "3. On the OAuth consent screen choose External, add yourself as a test user, then click Publish app (in Testing, Google signs you out every 7 days).",
+        "4. Under Credentials, create an OAuth client ID of type Desktop app, and paste its ID and secret below.",
+    ];
+
+    public static TextBox Text() => new()
+    {
+        Background = Brushes.Transparent, Foreground = TileChrome.Text, CaretBrush = TileChrome.Text, BorderThickness = new Thickness(0),
+        FontFamily = TileChrome.Font, FontSize = 13, Padding = new Thickness(10, 8, 10, 8),
+    };
+
+    public static PasswordBox Secret() => new()
+    {
+        Background = Brushes.Transparent, Foreground = TileChrome.Text, CaretBrush = TileChrome.Text, BorderThickness = new Thickness(0),
+        FontFamily = TileChrome.Font, FontSize = 13, Padding = new Thickness(10, 8, 10, 8),
+    };
+
+    /// <summary>The rounded #222 frame the weather city box uses; detaches the box from an earlier frame first.</summary>
+    public static Border Frame(Control box)
+    {
+        if (box.Parent is Border old) old.Child = null;
+        return new Border { CornerRadius = new CornerRadius(12), Background = TileChrome.Frozen(0x22, 0x22, 0x22), Child = box, ClipToBounds = true };
+    }
+
+    public static TextBlock Caption(string text)
+    {
+        var t = TileChrome.Label(text);
+        t.FontSize = 10;
+        t.Margin = new Thickness(2, 6, 0, 6);
+        return t;
     }
 }

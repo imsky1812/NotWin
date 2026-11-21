@@ -15,6 +15,11 @@ namespace NothingShell.DragHelper;
 /// release and a press of the held button: the press now belongs to the grip, and the drag starts from it exactly
 /// as if the user had pressed there. If the button is no longer held, nothing is sent and nothing is dropped.
 /// </para>
+/// <para>
+/// The shell's windows sit above every normal app's topmost windows (it runs with UI access), so the shell makes the
+/// notch click-through meanwhile; otherwise the press lands on the notch and never reaches the grip (live log
+/// 2026-11-21, <c>NothingShell.Core.Shelving.DragHandoffHold</c>).
+/// </para>
 /// </summary>
 internal static class Program
 {

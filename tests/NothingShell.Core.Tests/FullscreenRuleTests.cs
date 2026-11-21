@@ -55,4 +55,27 @@ public sealed class FullscreenRuleTests
     [Fact]
     public void SmallWindow_IsNotFullscreen() =>
         Assert.False(FullscreenRule.IsFullscreen(new FullscreenProbe(new RectI(100, 100, 800, 600), Mon, "Notepad", false, false)));
+
+    // User, 2026-11-21: a maximized app in front on the dock's monitor hides the dock; the desktop and other monitors
+    // never do.
+    [Fact]
+    public void MaximizedOn_OnlyAMaximizedWindowOnTheDockMonitor()
+    {
+        var work = new RectI(0, 0, 1920, 1080);
+        var other = new RectI(1920, 0, 3840, 1080);
+        Assert.True(FullscreenRule.IsMaximizedOn(new FullscreenProbe(work, Mon, "Chrome_WidgetWin_1", true, false), Mon));
+        Assert.False(FullscreenRule.IsMaximizedOn(new FullscreenProbe(new RectI(100, 100, 900, 700), Mon, "Chrome_WidgetWin_1", false, false), Mon));
+        Assert.False(FullscreenRule.IsMaximizedOn(new FullscreenProbe(other, other, "Chrome_WidgetWin_1", true, false), Mon));
+        Assert.False(FullscreenRule.IsMaximizedOn(new FullscreenProbe(work, Mon, "WorkerW", true, false), Mon));
+        Assert.False(FullscreenRule.IsMaximizedOn(null, Mon));
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void DecideMaximized_OwnProcessKeepsPrevious(bool previous) =>
+        Assert.Equal(previous, FullscreenRule.DecideMaximized(new FullscreenProbe(Mon, Mon, "HwndWrapper[NothingShell]", false, false), Mon, previous, foregroundIsOwnProcess: true));
+
+    [Fact]
+    public void DecideMaximized_NoForeground_KeepsPrevious() => Assert.True(FullscreenRule.DecideMaximized(null, Mon, previous: true));
 }

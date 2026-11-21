@@ -217,9 +217,45 @@ public static class ShelfDragHandoff
         Mouse.Capture(null); // the pointer is the helper's now
         // The helper must become the foreground window to take the mouse; let the next process do so.
         AllowSetForegroundWindow(-1 /* ASFW_ANY */);
+        var window = Window.GetWindow(from);
+        var hwnd = window is null ? 0 : new System.Windows.Interop.WindowInteropHelper(window).Handle;
         var ok = NothingShell.Native.UnelevatedShell.Open(helper, NothingShell.Core.DragArgs.CommandLine(paths), Path.GetDirectoryName(helper),
             (what, e) => Log.Error(what, e));
         Log.Info($"shelf: drag of {paths.Count} handed to the helper ok={ok}");
+        if (ok && hwnd != 0) HoldClickThrough(hwnd);
         return ok;
     }
+
+    private const int ExTransparent = 0x20, ExLayered = 0x80000, VkLButton = 0x01, VkRButton = 0x02, SmSwapButton = 23;
+
+    // The notch lets clicks through until the drag is over (NothingShell.Core.Shelving.DragHandoffHold says why): the
+    // helper's grip is under it and must take the re-sent press. Only a style this added is taken off again.
+    private static void HoldClickThrough(nint hwnd)
+    {
+        var before = NothingShell.Native.DockWindowNative.GetExStyle(hwnd);
+        if ((before & ExTransparent) != 0) return; // already click-through: nothing to hold or restore
+        NothingShell.Native.DockWindowNative.AddExStyle(hwnd, ExTransparent | ExLayered);
+        var addedLayered = (before & ExLayered) == 0;
+        var clock = System.Diagnostics.Stopwatch.StartNew();
+        var released = 0;
+        var poll = new System.Windows.Threading.DispatcherTimer { Interval = NothingShell.Core.Shelving.DragHandoffHold.Poll };
+        poll.Tick += (_, _) =>
+        {
+            released = PrimaryButtonDown() ? 0 : released + 1;
+            if (!NothingShell.Core.Shelving.DragHandoffHold.ShouldRestore(clock.Elapsed, released)) return;
+            poll.Stop();
+            NothingShell.Native.DockWindowNative.RemoveExStyle(hwnd, ExTransparent | (addedLayered ? ExLayered : 0));
+            Log.Info($"shelf: notch clickable again after {clock.ElapsedMilliseconds} ms");
+        };
+        poll.Start();
+    }
+
+    private static bool PrimaryButtonDown() =>
+        (GetAsyncKeyState(GetSystemMetrics(SmSwapButton) != 0 ? VkRButton : VkLButton) & 0x8000) != 0;
+
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern short GetAsyncKeyState(int vk);
+
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern int GetSystemMetrics(int index);
 }

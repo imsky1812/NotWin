@@ -29,4 +29,15 @@ public static class FullscreenRule
     /// a game or a video, and treating them as one would close the launcher and hide the dock.
     public static bool Decide(FullscreenProbe? probe, bool previous, bool foregroundIsOwnProcess = false)
         => foregroundIsOwnProcess ? previous : probe is { } p ? IsFullscreen(p) : previous;
+
+    /// <summary>
+    /// A maximized app is in front on <paramref name="dockMonitor"/> (user, 2026-11-21: the kept-visible dock then
+    /// slides down). The desktop and windows on other monitors never count.
+    /// </summary>
+    public static bool IsMaximizedOn(FullscreenProbe? probe, RectI dockMonitor) =>
+        probe is { IsMaximized: true } p && p.ClassName is not ("Progman" or "WorkerW" or "Shell_TrayWnd") && p.Monitor == dockMonitor;
+
+    /// <summary>Like <see cref="Decide"/>: no foreground window, or our own window in front, keeps the previous state.</summary>
+    public static bool DecideMaximized(FullscreenProbe? probe, RectI dockMonitor, bool previous, bool foregroundIsOwnProcess = false)
+        => foregroundIsOwnProcess || probe is null ? previous : IsMaximizedOn(probe, dockMonitor);
 }

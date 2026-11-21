@@ -21,8 +21,19 @@ public enum DockClickAction { Launch, Activate, Minimize, ShowWindowList }
 public static class DockItemsBuilder
 {
     /// <summary>
+    /// The id apps are matched by: a Store app's exe path without its version folder (<c>package:Family\exe</c>), so a
+    /// pin made before the app updated itself still matches its windows (user report 2026-11-21: two Spotify icons);
+    /// any other id as it is.
+    /// </summary>
+    public static string MatchKey(string id) =>
+        PackagedApps.FromExePath(id) is { } p ? "package:" + p.Family + "\\" + p.RelativeExe : id;
+
+    /// <summary>Two app ids name the same app (case-insensitive, Store apps across versions).</summary>
+    public static bool SameApp(string a, string b) => string.Equals(MatchKey(a), MatchKey(b), StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
     /// Pinned apps first (pinned order), then running unpinned apps in order of first appearance.
-    /// Windows with an empty title are skipped. App ids compare case-insensitively.
+    /// Windows with an empty title are skipped. App ids compare case-insensitively, Store apps across versions.
     /// </summary>
     public static IReadOnlyList<DockItem> Build(IReadOnlyList<PinnedApp> pinned, IReadOnlyList<AppWindow> windows)
     {
@@ -31,23 +42,25 @@ public static class DockItemsBuilder
         foreach (var w in windows)
         {
             if (string.IsNullOrEmpty(w.Title)) continue;
-            if (!byApp.TryGetValue(w.AppId, out var list))
+            var key = MatchKey(w.AppId);
+            if (!byApp.TryGetValue(key, out var list))
             {
-                byApp[w.AppId] = list = [];
-                order.Add(w.AppId);
+                byApp[key] = list = [];
+                order.Add(key);
             }
             list.Add(w);
         }
 
         var items = new List<DockItem>();
         var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        var pinnedIds = new HashSet<string>(pinned.Select(p => p.AppId), StringComparer.OrdinalIgnoreCase);
-        var claimed = new HashSet<string>(StringComparer.OrdinalIgnoreCase); // running AppIds absorbed by a pin
+        var pinnedIds = new HashSet<string>(pinned.Select(p => MatchKey(p.AppId)), StringComparer.OrdinalIgnoreCase);
+        var claimed = new HashSet<string>(StringComparer.OrdinalIgnoreCase); // running app keys absorbed by a pin
         foreach (var p in pinned)
         {
-            if (!seen.Add(p.AppId)) continue;
+            var pinKey = MatchKey(p.AppId);
+            if (!seen.Add(pinKey)) continue;
             List<AppWindow>? ws = null;
-            if (byApp.TryGetValue(p.AppId, out var exact)) { ws = exact; claimed.Add(p.AppId); }
+            if (byApp.TryGetValue(pinKey, out var exact)) { ws = exact; claimed.Add(pinKey); }
             else if (!string.IsNullOrEmpty(p.TargetExe))
             {
                 // Fallback: an unpinned running app launched from the same exe belongs to this pin.
@@ -55,8 +68,8 @@ public static class DockItemsBuilder
                 {
                     if (pinnedIds.Contains(id) || claimed.Contains(id)) continue;
                     var first = byApp[id][0];
-                    if (!string.Equals(id, first.ExePath, StringComparison.OrdinalIgnoreCase)) continue; // has its own AUMID
-                    if (!string.Equals(first.ExePath, p.TargetExe, StringComparison.OrdinalIgnoreCase)) continue;
+                    if (!string.Equals(first.AppId, first.ExePath, StringComparison.OrdinalIgnoreCase)) continue; // has its own AUMID
+                    if (!string.Equals(MatchKey(first.ExePath), MatchKey(p.TargetExe), StringComparison.OrdinalIgnoreCase)) continue;
                     ws = byApp[id]; claimed.Add(id);
                     break;
                 }
@@ -68,7 +81,7 @@ public static class DockItemsBuilder
         {
             if (claimed.Contains(id) || !seen.Add(id)) continue;
             var ws = byApp[id];
-            items.Add(new DockItem(id, DisplayNameFor(ws[0]), ws[0].ExePath, false, ws));
+            items.Add(new DockItem(ws[0].AppId, DisplayNameFor(ws[0]), ws[0].ExePath, false, ws));
         }
 
         return items;

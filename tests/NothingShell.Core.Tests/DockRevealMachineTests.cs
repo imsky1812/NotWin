@@ -218,4 +218,35 @@ public sealed class DockRevealMachineTests
         Assert.False(m.Visible);
         Assert.Null(m.NextDeadline);
     }
+
+    // User, 2026-11-21: "Keep dock visible" stays up on the desktop and over normal windows; a maximized app in front
+    // makes it behave like auto-hide (slides down when the mouse leaves, the bottom edge brings it back).
+    [Fact]
+    public void KeepVisible_MaximizedFront_HidesAfterIdle_EdgeReveals()
+    {
+        var m = DockRevealMachine.CreateDefault();
+        m.Update(Idle with { KeepVisible = true }, Ms(0));
+        Assert.True(m.Visible);
+        var maximized = Idle with { KeepVisible = true, MaximizedFront = true };
+        m.Update(maximized, Ms(100));
+        Assert.True(m.Visible); // not at once: the idle delay first
+        m.Update(maximized, Ms(600));
+        Assert.False(m.Visible);
+        m.Update(maximized with { CursorAtEdge = true }, Ms(1000));
+        m.Update(maximized with { CursorAtEdge = true }, Ms(1150));
+        Assert.True(m.Visible);
+        // Back to a normal window: pinned visible again.
+        m.Update(Idle with { KeepVisible = true }, Ms(3000));
+        Assert.True(m.Visible);
+        Assert.Null(m.NextDeadline);
+    }
+
+    [Fact]
+    public void KeepVisible_MaximizedFront_OpenPanelStillHoldsTheDock()
+    {
+        var m = DockRevealMachine.CreateDefault();
+        m.Update(Idle with { KeepVisible = true, MaximizedFront = true, PanelOpen = true }, Ms(0));
+        m.Update(Idle with { KeepVisible = true, MaximizedFront = true, PanelOpen = true }, Ms(2000));
+        Assert.True(m.Visible);
+    }
 }

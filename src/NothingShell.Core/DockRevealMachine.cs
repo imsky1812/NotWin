@@ -1,7 +1,9 @@
 namespace NothingShell.Core;
 
+/// <param name="MaximizedFront">A maximized app is in front on the dock's monitor (user, 2026-11-21): a KeepVisible
+/// dock then behaves like auto-hide.</param>
 public readonly record struct DockInputs(
-    bool CursorAtEdge, bool CursorOverDock, bool PanelOpen, bool KeepVisible, bool Fullscreen);
+    bool CursorAtEdge, bool CursorOverDock, bool PanelOpen, bool KeepVisible, bool Fullscreen, bool MaximizedFront = false);
 
 /// <summary>
 /// Deterministic dock show/hide state machine. It never reads a clock: the caller passes <c>now</c>
@@ -35,8 +37,9 @@ public sealed class DockRevealMachine(TimeSpan revealDelay, TimeSpan hideDelay)
             return;
         }
 
-        // 2 + 5. KeepVisible and an open panel both pin the dock visible (rule 1 already handled fullscreen).
-        if (input.KeepVisible || input.PanelOpen)
+        // 2 + 5. KeepVisible and an open panel both pin the dock visible (rule 1 already handled fullscreen). With a
+        //    maximized app in front KeepVisible does not pin (user, 2026-11-21): the edge / idle rules below apply.
+        if ((input.KeepVisible && !input.MaximizedFront) || input.PanelOpen)
         {
             Visible = true;
             _edgeSince = null;
