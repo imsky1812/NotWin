@@ -17,17 +17,18 @@ namespace NothingShell.Notch.Dashboard.Tiles;
 public sealed class NotesTile : ITileView
 {
     private static readonly Brush PlaceholderBrush = TileChrome.Frozen(0x66, 0x66, 0x66);
-    private readonly NotesStore _store;
+    private readonly SharedNotes _notes;
     private readonly Func<IDashboardHost> _host;
     private readonly DispatcherTimer _save;
     private string _text;
     private bool _dirty;
 
-    public NotesTile(NotesStore store, Func<IDashboardHost> host)
+    public NotesTile(SharedNotes notes, Func<IDashboardHost> host)
     {
-        _store = store;
+        _notes = notes;
         _host = host;
-        _text = store.Load();
+        _text = notes.Text;
+        _notes.Changed += OnShared;
         _save = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(500) };
         _save.Tick += (_, _) => Flush();
     }
@@ -132,13 +133,23 @@ public sealed class NotesTile : ITileView
         _save.Stop();
         if (!_dirty) return;
         _dirty = false;
-        try { _store.Save(_text); }
-        catch (Exception e) { Log.Error($"saving the note failed (length={_text.Length})", e); }
+        _notes.Set(_text, this); // the desktop Notes widget shows it too (Plan 9)
     }
 
     public void Opened() { }
 
     public void Closed() => Flush();
 
-    public void Dispose() => Flush();
+    // Changed somewhere else (the desktop widget, a sync): shown next time the tile is built, unless typing here.
+    private void OnShared(object? from)
+    {
+        if (ReferenceEquals(from, this) || _dirty) return;
+        _text = _notes.Text;
+    }
+
+    public void Dispose()
+    {
+        Flush();
+        _notes.Changed -= OnShared;
+    }
 }

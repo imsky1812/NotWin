@@ -94,6 +94,7 @@ public sealed class AddPicker : Window
         WidgetKind.Folder => "App folder",
         WidgetKind.Agenda => "Up next",
         WidgetKind.TicTacToe => "Tic-tac-toe",
+        WidgetKind.Notes => "Notes",
         _ => kind.ToString(),
     };
 
@@ -104,6 +105,7 @@ public sealed class AddPicker : Window
         WidgetKind.Folder => "folder",
         WidgetKind.Snake or WidgetKind.TicTacToe => "gamepad",
         WidgetKind.Media => "note",
+        WidgetKind.Notes => "book",
         WidgetKind.Weather => "plant",
         WidgetKind.Clock or WidgetKind.Timer => "cup",
         _ => "star",

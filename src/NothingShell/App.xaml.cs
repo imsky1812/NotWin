@@ -30,6 +30,7 @@ public partial class App : Application
     private readonly Power.KeepAwakeService _awake = new();
     private Forecast.WeatherService? _weather;
     private GoogleCalendar.GoogleCalendarService? _calendar;
+    private Notch.Dashboard.SharedNotes? _notes; // the notch tile and the desktop widget share one note (Plan 9)
     private Widgets.DesktopWidgets? _widgets;
     private readonly Core.Widgets.SnakeKeyGate _snakeGate = new(); // one gate for whichever snake is on the desktop
     private Dock.AppIconCache? _folderIcons; // shared by every app folder
@@ -167,7 +168,7 @@ public partial class App : Application
                 Core.Notch.TileKind.Timer => new Notch.Dashboard.Tiles.TimerTile(timer),
                 Core.Notch.TileKind.Media when _media is not null => new Notch.Dashboard.Tiles.MediaTile(_media, MediaAppName),
                 Core.Notch.TileKind.Clipboard when _clips is not null => new Notch.Dashboard.Tiles.ClipboardTile(_clips, () => _notch!),
-                Core.Notch.TileKind.Notes => new Notch.Dashboard.Tiles.NotesTile(new NotesStore(DataDir), () => _notch!),
+                Core.Notch.TileKind.Notes => new Notch.Dashboard.Tiles.NotesTile(_notes ??= new Notch.Dashboard.SharedNotes(new NotesStore(DataDir)), () => _notch!),
                 Core.Notch.TileKind.KeepAwake => new Notch.Dashboard.Tiles.KeepAwakeTile(_awake),
                 Core.Notch.TileKind.Weather when _weather is not null => new Notch.Dashboard.Tiles.WeatherTile(_weather, () => _notch?.RequestSettings()),
                 Core.Notch.TileKind.Shelf => new Notch.Dashboard.Tiles.ShelfTile(new Core.Shelving.ShelfStore(DataDir), new Dock.AppIconCache()),
@@ -284,6 +285,7 @@ public partial class App : Application
             case Core.Widgets.WidgetKind.Timer: return _timer is null ? null : new Widgets.TimerWidget(_timer);
             case Core.Widgets.WidgetKind.Calendar: return new Widgets.CalendarWidget(_calendar, () => _widgets?.Editing == true);
             case Core.Widgets.WidgetKind.Agenda: return new Widgets.AgendaWidget(_calendar);
+            case Core.Widgets.WidgetKind.Notes: return new Widgets.NotesWidget(_notes ??= new Notch.Dashboard.SharedNotes(new NotesStore(DataDir)));
             case Core.Widgets.WidgetKind.TicTacToe:
                 return new Widgets.TicTacToeWidget(() => dock.Settings.TicTacToeScore, score => dock.UpdateSettings(s => s with { TicTacToeScore = score }));
             case Core.Widgets.WidgetKind.Snake:

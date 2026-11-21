@@ -163,7 +163,7 @@ public sealed class WidgetLayoutTests
         Assert.True(WidgetRules.IsRepeatable(Photo));
         Assert.True(WidgetRules.IsRepeatable(Folder));
         Assert.False(WidgetRules.IsRepeatable(Clock));
-        Assert.Equal([Photo, Folder, Clock, Snake, WidgetKind.TicTacToe, WidgetKind.Timer, Calendar, WidgetKind.Agenda, Weather, Media, Battery], WidgetRules.PickerOrder);
+        Assert.Equal([Photo, Folder, Clock, Snake, WidgetKind.TicTacToe, WidgetKind.Timer, Calendar, WidgetKind.Agenda, WidgetKind.Notes, Weather, Media, Battery], WidgetRules.PickerOrder);
     }
 
     [Fact]
@@ -198,9 +198,9 @@ public sealed class WidgetLayoutTests
     public void Addable_HidesPresentOneOffs_AlwaysOffersPhotoAndFolder()
     {
         var l = DesktopLayout.Sanitize(null, 1600, 900, Ids());
-        Assert.Equal([Photo, Folder, WidgetKind.TicTacToe, WidgetKind.Agenda], l.Addable());
+        Assert.Equal([Photo, Folder, WidgetKind.TicTacToe, WidgetKind.Agenda, WidgetKind.Notes], l.Addable());
         var snake = l.Widgets.Single(p => p.Kind == Snake).Id;
-        Assert.Equal([Photo, Folder, Snake, WidgetKind.TicTacToe, WidgetKind.Agenda], l.Remove(snake).Addable());
+        Assert.Equal([Photo, Folder, Snake, WidgetKind.TicTacToe, WidgetKind.Agenda, WidgetKind.Notes], l.Remove(snake).Addable());
     }
 
     [Fact]
@@ -270,5 +270,15 @@ public sealed class WidgetLayoutTests
         var order = WidgetRules.PickerOrder.ToList();
         Assert.Equal(order.IndexOf(WidgetKind.Calendar) + 1, order.IndexOf(WidgetKind.Agenda));
         Assert.Equal(9, (int)WidgetKind.Agenda); // appended: saved layouts keep their kinds
+    }
+
+    // Plan 9: Notes — 2×2 default, 2×1, 4×2; once per desktop; right after Up next in the picker.
+    [Fact]
+    public void Notes_SizesAndPicker()
+    {
+        Assert.Equal([new WidgetSize(2, 2), new WidgetSize(2, 1), new WidgetSize(4, 2)], WidgetRules.Sizes(WidgetKind.Notes));
+        Assert.Equal(11, (int)WidgetKind.Notes);
+        var order = WidgetRules.PickerOrder.ToList();
+        Assert.Equal(order.IndexOf(WidgetKind.Agenda) + 1, order.IndexOf(WidgetKind.Notes));
     }
 }
