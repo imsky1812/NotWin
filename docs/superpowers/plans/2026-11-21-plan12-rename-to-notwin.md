@@ -109,21 +109,21 @@ a legacy-cleanup step for the old name.
   `feat: carry data over from Nothing Shell; drop its leftover start entry`.
 
 ### Task 4: Installer legacy cleanup
-**Files:** Modify `build/install.ps1` and `build/uninstall.ps1`.
+**Files:** Modify `build/install.ps1` (the elevated part; building is `build/build.ps1`, not elevated, since the
+security fixes) and `build/uninstall.ps1`.
 
-**Steps:**
-- [ ] **install.ps1:** before the process-stop step, add `Remove-LegacyNothingShell`. It runs only if
-  `C:\Program Files\NothingShell` exists or the `NothingShell` package or Run value exists. In order, it:
+- [ ] **install.ps1:** after the signature check of the staging folder and before stopping the running copy, add
+  `Remove-LegacyNothingShell`. It runs only if `C:\Program Files\NothingShell` exists or the `NothingShell` package
+  or Run value exists. In order, it:
   1. stops `NothingShell.Watchdog`, then `NothingShell`;
-  2. if `C:\Program Files\NothingShell\NothingShell.Watchdog.exe` exists, runs it with
-     `--restore-now --state "%AppData%\NothingShell"` and waits;
+  2. gives the taskbar back with the **new, staged** `NotWin.Watchdog.exe --restore-now --state
+     "%AppData%\NothingShell"` — never the old exe, whose delete follows links (security review #2);
   3. removes the Run value `NothingShell`;
   4. runs `Get-AppxPackage -Name NothingShell | Remove-AppxPackage`;
   5. deletes `C:\Program Files\NothingShell`.
 
   Each step writes one line to the console, and none of them stops the install.
-- [ ] **Check:** `pwsh -NoProfile -Command "[System.Management.Automation.Language.Parser]::ParseFile(...)"` reports
-  0 parse errors for both scripts.
+- [ ] **Check:** a parse check of both scripts reports 0 errors.
 - [ ] Commit `build: installer removes the old Nothing Shell install before installing NotWin`.
 
 ### Task 5: Docs, hands-on, memory
