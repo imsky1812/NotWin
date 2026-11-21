@@ -91,4 +91,53 @@ public sealed class DataMigrationTests : IDisposable
         Put(New, "settings.json");
         Assert.True(DataMigration.HasData(New));
     }
+
+    // Review: a copy cut short (crash, power loss) must be finished on the next start, not left half done.
+    [Fact]
+    public void HasData_MigrationInProgress_IsNoData()
+    {
+        Put(New, "settings.json");
+        Put(New, DataMigration.InProgressMarker);
+        Assert.False(DataMigration.HasData(New));
+    }
+
+    [Fact]
+    public void Run_Finished_LeavesOnlyTheDoneMarker()
+    {
+        Put(Old, "settings.json");
+        DataMigration.Run(Old, New);
+        Assert.False(File.Exists(Path.Combine(New, DataMigration.InProgressMarker)));
+        Assert.True(File.Exists(Path.Combine(New, DataMigration.Marker)));
+        Assert.True(DataMigration.HasData(New));
+    }
+
+    // Review: an unreadable folder in the old data must not stop the rest of the copy.
+    [Fact]
+    public void Run_UnreadableSourceFolder_CopiesTheRest()
+    {
+        if (!OperatingSystem.IsWindows()) return;
+        Put(Old, "settings.json");
+        Put(Old, @"locked\x.txt");
+        var locked = new DirectoryInfo(Path.Combine(Old, "locked"));
+        var me = System.Security.Principal.WindowsIdentity.GetCurrent().User!;
+        var deny = new System.Security.AccessControl.FileSystemAccessRule(me,
+            System.Security.AccessControl.FileSystemRights.ListDirectory | System.Security.AccessControl.FileSystemRights.ReadData,
+            System.Security.AccessControl.AccessControlType.Deny);
+        var acl = locked.GetAccessControl();
+        acl.AddAccessRule(deny);
+        locked.SetAccessControl(acl);
+        try
+        {
+            var (copied, _) = DataMigration.Run(Old, New);
+            Assert.Equal(1, copied);
+            Assert.True(File.Exists(Path.Combine(New, "settings.json")));
+            Assert.True(File.Exists(Path.Combine(New, DataMigration.Marker)));
+        }
+        finally
+        {
+            acl = locked.GetAccessControl();
+            acl.RemoveAccessRule(deny);
+            locked.SetAccessControl(acl);
+        }
+    }
 }

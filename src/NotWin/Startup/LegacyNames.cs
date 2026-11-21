@@ -8,4 +8,7 @@ public static class LegacyNames
 {
     public const string DataFolder = "NothingShell";
     public const string RunValue = "NothingShell";
+
+    /// <summary>The old single-instance mutex: while it exists, Nothing Shell is still running and NotWin stays out.</summary>
+    public const string InstanceMutex = @"Local\NothingShell.Instance";
 }

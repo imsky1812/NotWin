@@ -15,9 +15,19 @@ public static class DataMigration
     public static readonly IReadOnlySet<string> Skip =
         new HashSet<string>(["taskbar-restore.json", "log.txt", "log.1.txt", "draghelper.log"], StringComparer.OrdinalIgnoreCase);
 
-    /// <summary>The folder holds data (a file other than the skipped logs / state), so nothing is carried over.</summary>
+    /// <summary>Written first and removed last: while it exists, a copy was cut short and the next start finishes it.</summary>
+    public const string InProgressMarker = "migration-in-progress.txt";
+
+    // Unreadable folders are skipped instead of ending the walk (review 2026-11-21).
+    private static readonly EnumerationOptions Walk = new() { RecurseSubdirectories = true, IgnoreInaccessible = true, AttributesToSkip = 0 };
+
+    /// <summary>
+    /// The folder holds data (a file other than the skipped logs / state), so nothing is carried over. A copy that was
+    /// cut short (<see cref="InProgressMarker"/> still there) counts as no data, so it is finished.
+    /// </summary>
     public static bool HasData(string dir) =>
-        Directory.Exists(dir) && Directory.EnumerateFiles(dir, "*", SearchOption.AllDirectories)
+        Directory.Exists(dir) && !File.Exists(Path.Combine(dir, InProgressMarker)) &&
+        Directory.EnumerateFiles(dir, "*", Walk)
             .Select(f => Path.GetRelativePath(dir, f))
             .Any(rel => rel.Contains(Path.DirectorySeparatorChar) || !Skip.Contains(rel));
 
@@ -30,7 +40,9 @@ public static class DataMigration
     {
         int copied = 0, failed = 0;
         Directory.CreateDirectory(newDir);
-        foreach (var source in Directory.EnumerateFiles(oldDir, "*", SearchOption.AllDirectories))
+        var inProgress = Path.Combine(newDir, InProgressMarker);
+        File.WriteAllText(inProgress, DateTime.Now.ToString("O")); // repeating the copy is safe: it never overwrites
+        foreach (var source in Directory.EnumerateFiles(oldDir, "*", Walk))
         {
             var relative = Path.GetRelativePath(oldDir, source);
             if (!relative.Contains(Path.DirectorySeparatorChar) && Skip.Contains(relative)) continue;
@@ -48,6 +60,7 @@ public static class DataMigration
             }
         }
         File.WriteAllText(Path.Combine(newDir, Marker), $"copied {copied}, failed {failed}, {DateTime.Now:O}");
+        File.Delete(inProgress);
         return (copied, failed);
     }
 }

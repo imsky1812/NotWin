@@ -14,6 +14,14 @@ public static class SingleInstance
         return true;
     }
 
+    /// <summary>Another process in this session holds the named mutex (used to spot a running Nothing Shell).</summary>
+    public static bool IsHeld(string name)
+    {
+        if (!Mutex.TryOpenExisting(name, out var m)) return false;
+        m.Dispose();
+        return true;
+    }
+
     public static void Release()
     {
         var m = _mutex;

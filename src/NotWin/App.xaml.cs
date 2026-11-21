@@ -70,6 +70,16 @@ public partial class App : Application
             Shutdown(0);
             return;
         }
+        // Plan 12: never run next to a still-running Nothing Shell (two docks, and its folder would be copied while it is
+        // still writing it). install.ps1 stops it first; any other start just exits.
+        if (SingleInstance.IsHeld(NotWin.Startup.LegacyNames.InstanceMutex))
+        {
+            Log.Info("Nothing Shell is still running: exiting (install.ps1 replaces it)");
+            _secondInstance = true;
+            SingleInstance.Release();
+            Shutdown(0);
+            return;
+        }
         // Plan 12: carry the data over from the old name once, before anything writes into the new folder.
         MigrateFromNothingShell();
 

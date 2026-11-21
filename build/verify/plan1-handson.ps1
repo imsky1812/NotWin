@@ -679,7 +679,7 @@ $fatal = $null
 try {
     Clear-Host
     Write-Host ''
-    Write-Host '  NOTHING SHELL - HANDS-ON CHECK (about 20-30 minutes)' -ForegroundColor Cyan
+    Write-Host '  NOTWIN - HANDS-ON CHECK (about 20-30 minutes)' -ForegroundColor Cyan
     Write-Host '  I will start and stop the app and some small test programs, and ask you'
     Write-Host '  simple yes/no questions about what you see. The Windows taskbar will'
     Write-Host '  disappear on purpose several times; it always comes back at the end.'

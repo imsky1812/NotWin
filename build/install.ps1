@@ -96,10 +96,17 @@ function Remove-LegacyNothingShell([string]$stagedWatchdog) {
         Write-Host '  stopped the old shell and watchdog'
     } catch { Write-Warning "  could not stop the old shell: $($_.Exception.Message)" }
 
+    $restored = $false
     try {
         $p = Start-Process -FilePath $stagedWatchdog -ArgumentList '--restore-now', '--state', ('"{0}"' -f (Join-Path $env:APPDATA 'NothingShell')) -Wait -PassThru
+        $restored = $p.ExitCode -eq 0
         Write-Host "  taskbar given back for the old install (exit $($p.ExitCode))"
     } catch { Write-Warning "  taskbar restore for the old install failed: $($_.Exception.Message)" }
+    if (-not $restored) {
+        # Keep the old install in place so this step runs again next time and the saved taskbar setting is not lost.
+        Write-Warning '  the old install is left in place until its taskbar setting is given back; run install.ps1 again.'
+        return
+    }
 
     try {
         Remove-ItemProperty -Path $runKey -Name 'NothingShell' -ErrorAction SilentlyContinue
