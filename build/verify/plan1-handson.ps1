@@ -1368,7 +1368,7 @@ try {
 
     # ================================================================ RESERVE (task 15)
     if (Test-Section 'Reserve') {
-        Write-Step 'RESERVE: keep the dock visible and reserve screen space'
+        Write-Step 'RESERVE: keep the dock visible (slides down for maximized and full-screen apps)'
         $app = Start-App
         Start-Sleep -Seconds 2
         $waRun = [NsWin]::WorkArea(); $mon = [NsWin]::PrimaryMonitor()
@@ -1387,7 +1387,7 @@ try {
             $fb = [NsWin]::FrameBounds($np[0])
             if ($fb -and $waKeep) { $npM.frame = ($fb -join ','); $npM.workArea = ($waKeep -join ','); $fills = ([math]::Abs($fb[3] - $waKeep[3]) -le 3) -and ($fb[3] -lt $mon[3] - 40) }
         }
-        [void](Ask-Check 'RS.3' 'A maximized window ends ABOVE the dock' 'Look at the maximized Notepad.' 'Does Notepad end above the dock (the dock is not covering its bottom)?' `
+        [void](Ask-Check 'RS.3' 'A maximized window gets the whole screen; the dock slides down' 'Look at the maximized Notepad, then touch the bottom edge, then restore Notepad to a normal window.' 'Did Notepad reach the bottom with the dock hidden, did the edge bring the dock back, and did the dock stay up once Notepad was a normal window?' `
             -Measured $npM -MeasuredPass $fills -AnswerRequired $false)
         Close-Hwnds $np
         $fsOff = Get-LogLength $AppLog
@@ -1415,7 +1415,7 @@ try {
         $reMs = Wait-Until { (([NsWin]::WorkArea()) -join ',') -eq ($waBefore -join ',') } 15000 200
         Start-Sleep -Seconds 2
         $waAfter = [NsWin]::WorkArea()
-        $a = Ask-YN 'Is the dock still showing, with the space under it still reserved (windows stop above it)?'
+        $a = Ask-YN 'With no maximized window in front, is the dock still showing?'
         [void](Complete-Check -Id 'RS.6' -Description 'Explorer restart: reservation still there' `
             -Measured @{ workAreaBefore = ($waBefore -join ','); workAreaAfter = ($waAfter -join ','); taskbarCreatedLoggedMs = $tcMs; trayHiddenAgainMs = $hideMs; workAreaBackMs = $reMs } `
             -MeasuredPass (($waAfter -join ',') -eq ($waBefore -join ',') -and $hideMs -ge 0) -Answer $a -Expect 'y' -AnswerRequired $false)

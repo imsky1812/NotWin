@@ -27,6 +27,12 @@ public sealed class FullscreenMonitor : IDisposable
     /// <summary>Raised only on transitions, on the UI thread.</summary>
     public event Action<bool>? Changed;
 
+    /// <summary>A maximized app is in front on the primary (dock) monitor (user, 2026-11-21).</summary>
+    public bool IsMaximizedFront { get; private set; }
+
+    /// <summary>Raised only on transitions of <see cref="IsMaximizedFront"/>, on the UI thread.</summary>
+    public event Action<bool>? MaximizedChanged;
+
     public FullscreenMonitor()
     {
         _foreground = FullscreenNative.GetForeground();
@@ -91,7 +97,15 @@ public sealed class FullscreenMonitor : IDisposable
     private void Evaluate()
     {
         var probe = FullscreenNative.Probe();
-        var now = FullscreenRule.Decide(probe, IsFullscreen, FullscreenNative.IsForegroundOwnProcess());
+        var own = FullscreenNative.IsForegroundOwnProcess();
+        var maximized = FullscreenRule.DecideMaximized(probe, Native.DockWindowNative.GetPrimaryMonitor().Bounds, IsMaximizedFront, own);
+        if (maximized != IsMaximizedFront)
+        {
+            IsMaximizedFront = maximized;
+            Log.Info($"maximized app in front={maximized}");
+            MaximizedChanged?.Invoke(maximized);
+        }
+        var now = FullscreenRule.Decide(probe, IsFullscreen, own);
         // What decided it (for the next time detection looks wrong): class, maximized, frame, QUNS, geometry.
         if (now != IsFullscreen && probe is { } p)
             Log.Info($"fullscreen probe: class={p.ClassName} maximized={p.IsMaximized} hasFrame={p.HasFrame} quns={p.QunsSaysFullscreen} " +

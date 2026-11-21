@@ -2,7 +2,7 @@
 
 A personal Windows 11 shell layer styled after Nothing OS. Phase 1 replaces the Windows taskbar with a
 floating dock: start and search buttons, pinned and running apps, and a tray with Wi-Fi, volume, battery
-and the clock. It hides until the mouse touches the bottom edge, or stays visible with its space reserved.
+and the clock. It hides until the mouse touches the bottom edge, or (Keep dock visible) stays up on the desktop and over normal windows and slides down only for maximized and full-screen apps.
 Later phases add the launcher, quick settings and notifications, the notch, and desktop widgets
 (see `docs/superpowers/specs/2026-11-17-nothing-shell-design.md`).
 

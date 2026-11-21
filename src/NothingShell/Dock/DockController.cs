@@ -310,12 +310,15 @@ public sealed class DockController : IDisposable
         catch (Exception e) { Log.Error("start-with-windows registry update failed", e); }
     }
 
-    /// <summary>Keep-visible: the dock stays up and reserves its strip as an appbar; off: it floats and nothing is reserved.</summary>
+    /// <summary>
+    /// Keep-visible: the dock stays up on the desktop and over normal windows, and slides down for maximized and
+    /// full-screen apps. Nothing is reserved any more (user, 2026-11-21: a maximized app gets the whole screen height),
+    /// so a strip reserved by an older build is given back.
+    /// </summary>
     private void ApplyKeepVisible(bool on)
     {
         _reveal.SetKeepVisible(on);
-        if (on) _appBar.Register(_dock, DockWindowNative.GetPrimaryMonitor().Bounds);
-        else _appBar.Unregister();
+        _appBar.Unregister();
     }
 
     private void ClosePopup() => _popup?.CloseIfOpen();

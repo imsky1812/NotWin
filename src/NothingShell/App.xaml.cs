@@ -383,6 +383,9 @@ public partial class App : Application
 
         _fullscreen = new FullscreenMonitor();
         _reveal.SetFullscreen(_fullscreen.IsFullscreen);
+        // A maximized app in front lets a kept-visible dock slide down (user, 2026-11-21).
+        _reveal.SetMaximizedFront(_fullscreen.IsMaximizedFront);
+        _fullscreen.MaximizedChanged += maximized => _reveal?.SetMaximizedFront(maximized);
 
         var selfTest = false;
 #if DEBUG

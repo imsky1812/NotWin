@@ -66,6 +66,16 @@ public sealed class DockReveal : IDisposable
         Evaluate(on ? "fullscreen-on" : "fullscreen-off");
     }
 
+    /// <summary>A maximized app is in front on the dock's monitor: a kept-visible dock behaves like auto-hide.</summary>
+    public void SetMaximizedFront(bool on)
+    {
+        if (_maximizedFront == on) return;
+        _maximizedFront = on;
+        Evaluate(on ? "maximized-on" : "maximized-off");
+    }
+
+    private bool _maximizedFront;
+
     public void SetKeepVisible(bool on)
     {
         if (_keepVisible == on) return;
@@ -107,7 +117,8 @@ public sealed class DockReveal : IDisposable
             CursorOverDock: _hoverDock || overPill,
             PanelOpen: _panelOpen,
             KeepVisible: _keepVisible,
-            Fullscreen: _fullscreen);
+            Fullscreen: _fullscreen,
+            MaximizedFront: _maximizedFront);
         LastInputs = inputs;
 
         var now = Stopwatch.GetElapsedTime(_epoch);
