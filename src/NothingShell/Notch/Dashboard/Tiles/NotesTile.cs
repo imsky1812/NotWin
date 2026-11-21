@@ -21,7 +21,8 @@ public sealed class NotesTile : ITileView
     private readonly Func<IDashboardHost> _host;
     private readonly DispatcherTimer _save;
     private string _text;
-    private bool _dirty;
+    private bool _dirty, _quiet;
+    private readonly List<WeakReference<TextBox>> _boxes = []; // the boxes now on screen (tile, editor overlay)
 
     public NotesTile(SharedNotes notes, Func<IDashboardHost> host)
     {
@@ -104,10 +105,13 @@ public sealed class NotesTile : ITileView
             Margin = new Thickness(2, 8, 0, 0), IsHitTestVisible = false,
             Visibility = _text.Length == 0 ? Visibility.Visible : Visibility.Collapsed,
         };
+        _boxes.RemoveAll(w => !w.TryGetTarget(out _));
+        _boxes.Add(new WeakReference<TextBox>(box));
         box.TextChanged += (_, _) =>
         {
+            placeholder.Visibility = box.Text.Length == 0 ? Visibility.Visible : Visibility.Collapsed;
+            if (_quiet) return; // shown from elsewhere, not typed
             _text = box.Text;
-            placeholder.Visibility = _text.Length == 0 ? Visibility.Visible : Visibility.Collapsed;
             _dirty = true;
             _save.Stop();
             _save.Start();
@@ -140,11 +144,19 @@ public sealed class NotesTile : ITileView
 
     public void Closed() => Flush();
 
-    // Changed somewhere else (the desktop widget, a sync): shown next time the tile is built, unless typing here.
+    // Changed somewhere else (the desktop widget, a sync): shown at once in the open boxes (Plan 10), unless
+    // something is being typed here.
     private void OnShared(object? from)
     {
         if (ReferenceEquals(from, this) || _dirty) return;
         _text = _notes.Text;
+        _quiet = true;
+        try
+        {
+            foreach (var w in _boxes)
+                if (w.TryGetTarget(out var box) && !box.IsKeyboardFocused && box.Text != _text) box.Text = _text;
+        }
+        finally { _quiet = false; }
     }
 
     public void Dispose()
