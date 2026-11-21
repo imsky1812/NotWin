@@ -163,7 +163,7 @@ public sealed class WidgetLayoutTests
         Assert.True(WidgetRules.IsRepeatable(Photo));
         Assert.True(WidgetRules.IsRepeatable(Folder));
         Assert.False(WidgetRules.IsRepeatable(Clock));
-        Assert.Equal([Photo, Folder, Clock, Snake, WidgetKind.Timer, Calendar, WidgetKind.Agenda, Weather, Media, Battery], WidgetRules.PickerOrder);
+        Assert.Equal([Photo, Folder, Clock, Snake, WidgetKind.TicTacToe, WidgetKind.Timer, Calendar, WidgetKind.Agenda, Weather, Media, Battery], WidgetRules.PickerOrder);
     }
 
     [Fact]
@@ -198,9 +198,9 @@ public sealed class WidgetLayoutTests
     public void Addable_HidesPresentOneOffs_AlwaysOffersPhotoAndFolder()
     {
         var l = DesktopLayout.Sanitize(null, 1600, 900, Ids());
-        Assert.Equal([Photo, Folder, WidgetKind.Agenda], l.Addable());
+        Assert.Equal([Photo, Folder, WidgetKind.TicTacToe, WidgetKind.Agenda], l.Addable());
         var snake = l.Widgets.Single(p => p.Kind == Snake).Id;
-        Assert.Equal([Photo, Folder, Snake, WidgetKind.Agenda], l.Remove(snake).Addable());
+        Assert.Equal([Photo, Folder, Snake, WidgetKind.TicTacToe, WidgetKind.Agenda], l.Remove(snake).Addable());
     }
 
     [Fact]
