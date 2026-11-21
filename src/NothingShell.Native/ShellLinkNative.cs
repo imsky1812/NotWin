@@ -84,18 +84,32 @@ public static unsafe class ShellLinkNative
         finally { PInvoke.PropVariantClear(&pv); }
     }
 
+    /// <summary>Diagnostics sink for launches (the native layer has no logger of its own).</summary>
+    public static Action<string, Exception?>? OnError { get; set; }
+
     /// <summary>
-    /// ShellExecuteEx "open" on a file path, a .lnk or a shell: item, without waiting (ASYNCOK) and without error UI.
-    /// Returns false (never throws) if the shell rejected the request.
+    /// Opens a file path, a .lnk, a shell: item or a URI the way the desktop would: through Explorer, so the program
+    /// runs at the user's normal integrity rather than inheriting this uiAccess process's High token (Chromium browsers
+    /// quit at once under it — live bug 2026-11-19). Falls back to a direct ShellExecuteEx (logged) only when Explorer's
+    /// desktop is not available, e.g. while Explorer restarts. Returns false (never throws) if both fail.
     /// </summary>
     public static bool Open(string path)
     {
         LastError = 0;
+        // Files and exes start in their own folder (apps that load files relative to the working directory break
+        // otherwise); shell: and ms-settings: items have no folder.
+        string? dir;
+        try { dir = System.IO.Path.IsPathRooted(path) ? System.IO.Path.GetDirectoryName(path) : null; }
+        catch (ArgumentException) { dir = null; }
+        if (UnelevatedShell.Open(path, dir, OnError)) return true;
+        OnError?.Invoke("launch: Explorer unavailable, starting directly (inherits this process's integrity)", null);
+        return OpenDirect(path, dir);
+    }
+
+    private static bool OpenDirect(string path, string? dir)
+    {
         try
         {
-            // Files and exes start in their own folder (apps that load files relative to the working directory
-            // break otherwise); shell: and ms-settings: items have no folder.
-            var dir = System.IO.Path.IsPathRooted(path) ? System.IO.Path.GetDirectoryName(path) : null;
             fixed (char* file = path)
             fixed (char* verb = "open")
             fixed (char* folder = dir)

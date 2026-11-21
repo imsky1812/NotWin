@@ -17,7 +17,13 @@ namespace NothingShell.Notch;
 /// </summary>
 public partial class NotchWindow : Window
 {
-    private const double BandWidth = 480, BandHeight = 112; // DIPs: room for the 420x64 pill plus its shadow
+    // DIPs: room for the open 770x326 pill (3 rows) plus its shadow. Click-through except while open, so the big band
+    // costs nothing when closed.
+    private const double BandWidth = 800, BandHeight = 360, PillTop = 8, DashboardWidth = 770;
+    private const double SmallBandWidth = 480, SmallBandHeight = 112; // closed states (420x64 notification + shadow)
+    private bool _bigBand;
+    private readonly DispatcherTimer _shrink = new() { Interval = TimeSpan.FromMilliseconds(360) };
+    private const int WsExTransparent = 0x00000020;
     private static readonly Duration Resize = new(TimeSpan.FromMilliseconds(300));
     private static readonly KeySpline Ease = new(0.2, 0.8, 0.2, 1);
     private static readonly TimeSpan FillDelay = TimeSpan.FromMilliseconds(300), FillStep = TimeSpan.FromMilliseconds(70);
@@ -34,6 +40,28 @@ public partial class NotchWindow : Window
     private long _nextBind;
     private nint _hwnd;
     private NotchState _shown = NotchState.Resting;
+    private RectI _band;
+    private double _scale = 1;
+    private double _pillW = 196, _pillH = 34;
+    private double _openHeight = 232;
+    private bool _typing;
+    private nint _typingFrom; // the window that had the keyboard before Notes took it (final review #1)
+    private readonly Dashboard.GridTimerView _timerGrid = new(22, 5);
+
+    /// <summary>Right-click on the open notch (spec §6.7: Settings).</summary>
+    public event Action? SettingsRequested;
+
+    /// <summary>Esc while the notch has keyboard focus.</summary>
+    public event Action? EscPressed;
+
+    /// <summary>The window lost activation while typing (click elsewhere): the controller releases the "text" hold.</summary>
+    public event Action? TypingEnded;
+
+    /// <summary>Sideways scrolling over the open notch (WM_MOUSEHWHEEL: two-finger touchpad swipe, tilt wheel).</summary>
+    public event Action<int>? HorizontalScroll;
+
+    /// <summary>Files were dropped on the notch (WM_DROPFILES; works across UIPI from Explorer).</summary>
+    public event Action<string[]>? FilesDropped;
 
     public NotchWindow()
     {
@@ -42,10 +70,26 @@ public partial class NotchWindow : Window
         {
             var hwnd = new WindowInteropHelper(this).Handle;
             DockWindowNative.ApplyDockStyles(hwnd);
-            // Plan 3's notch has no click or hover behaviour: make the whole band click-through (WS_EX_TRANSPARENT),
-            // so the pill's soft shadow never swallows clicks on the title bars below. Plan 4 (hover dashboard) revisits.
-            DockWindowNative.AddExStyle(hwnd, 0x00000020);
+            // Click-through until the dashboard opens, so the pill's soft shadow never swallows clicks below it.
+            DockWindowNative.AddExStyle(hwnd, WsExTransparent);
+            // File drops from Explorer (Medium) into this uiAccess (High) process: WM_DROPFILES, not OLE (ND.9).
+            FileDropNative.Enable(hwnd);
+            HwndSource.FromHwnd(hwnd)?.AddHook(DropHook);
         };
+        Pill.MouseRightButtonUp += (_, e) =>
+        {
+            if (_shown != NotchState.Open) return;
+            e.Handled = true;
+            SettingsRequested?.Invoke();
+        };
+        PreviewKeyDown += (_, e) =>
+        {
+            if (e.Key != System.Windows.Input.Key.Escape) return;
+            e.Handled = true;
+            EscPressed?.Invoke();
+        };
+        Deactivated += (_, _) => { if (_typing) TypingEnded?.Invoke(); };
+
         // 20 fps while the music state is visible, off otherwise (spec §7).
         _eq = new DispatcherTimer(DispatcherPriority.Render) { Interval = TimeSpan.FromMilliseconds(50) };
         _eq.Tick += (_, _) => StepEqualizer();
@@ -59,6 +103,15 @@ public partial class NotchWindow : Window
             if (PowerBar.Lit >= _fillTarget) { _fill.Stop(); return; }
             PowerBar.Lit++;
         };
+        TimerGridHost.Child = _timerGrid;
+        _shrink.Tick += (_, _) =>
+        {
+            _shrink.Stop();
+            if (_shown == NotchState.Open || !_bigBand) return;
+            _bigBand = false;
+            Place();
+        };
+        TrackClip.SizeChanged += (_, _) => UpdateMarquee();
         PowerBar.On = Lit;
         PowerBar.Off = Frozen(0x2A, 0x2A, 0x2A);
         PowerBar.Accent = _accent;
@@ -84,10 +137,73 @@ public partial class NotchWindow : Window
         if (_hwnd == 0) return;
         var (mon, dpi) = DockWindowNative.GetPrimaryMonitor();
         var s = dpi / 96.0;
-        var w = (int)Math.Round(BandWidth * s);
-        var h = (int)Math.Round(BandHeight * s);
+        // The big band only while the dashboard is open: a layered window redraws its whole surface on every frame
+        // (equalizer, scrolling title), so the closed states keep the small one.
+        var w = (int)Math.Round((_bigBand ? BandWidth : SmallBandWidth) * s);
+        var h = (int)Math.Round((_bigBand ? BandHeight : SmallBandHeight) * s);
         var x = mon.Left + (mon.Right - mon.Left - w) / 2;
-        DockWindowNative.PlaceTopmost(_hwnd, new RectI(x, mon.Top, x + w, mon.Top + h));
+        _band = new RectI(x, mon.Top, x + w, mon.Top + h);
+        _scale = s;
+        DockWindowNative.PlaceTopmost(_hwnd, _band);
+    }
+
+    // ---- hit areas (physical pixels, for the global mouse feed) ----
+
+    /// <summary>
+    /// The pill of the current state, extended up to the top of the screen (pushing the mouse against the top edge
+    /// counts as resting on the notch), in physical pixels.
+    /// </summary>
+    public bool OverPill(PointI p) => Inside(p, _pillW, _pillH);
+
+    /// <summary>The open dashboard's area (physical pixels), also extended to the top edge.</summary>
+    public bool OverOpenArea(PointI p) => _shown == NotchState.Open && Inside(p, DashboardWidth, _openHeight);
+
+    private bool Inside(PointI p, double w, double h)
+    {
+        if (_band.Right <= _band.Left) return false;
+        var cx = (_band.Left + _band.Right) / 2.0;
+        var half = w * _scale / 2;
+        var bottom = _band.Top + (PillTop + h) * _scale;
+        return p.X >= cx - half && p.X < cx + half && p.Y >= _band.Top && p.Y < bottom;
+    }
+
+    // ---- open dashboard ----
+
+    /// <summary>Sets the open layer's content and height (the pill animates to it while open).</summary>
+    public void SetOpenContent(FrameworkElement root, double height)
+    {
+        if (!ReferenceEquals(OpenLayer.Content, root)) OpenLayer.Content = root;
+        OpenLayer.Width = DashboardWidth;
+        _openHeight = height;
+        if (_shown != NotchState.Open) return;
+        _pillH = height;
+        Animate(Pill, HeightProperty, height);
+    }
+
+    /// <summary>Lets a text box in the dashboard take the keyboard: the window becomes activatable and comes to front.</summary>
+    public void ActivateForTyping()
+    {
+        if (_hwnd == 0 || _typing) return;
+        _typing = true;
+        _typingFrom = ForegroundNative.Current();
+        DockWindowNative.RemoveExStyle(_hwnd, DockWindowNative.WsExNoActivate);
+        Focusable = true;
+        ForegroundNative.Activate(_hwnd);
+        Activate();
+    }
+
+    /// <summary>Back to a no-activate window (typing ended or the notch closed).</summary>
+    public void EndTyping()
+    {
+        if (_hwnd == 0 || !_typing) return;
+        _typing = false;
+        System.Windows.Input.Keyboard.ClearFocus();
+        Focusable = false;
+        DockWindowNative.AddExStyle(_hwnd, DockWindowNative.WsExNoActivate);
+        // Esc / closing must not leave the keyboard on the notch: give it back to the app the user was in.
+        if (Core.Shell.ForegroundHandBack.Target(_typingFrom, ForegroundNative.Current(), _hwnd, ForegroundNative.Exists) is { } back)
+            ForegroundNative.Activate(back);
+        _typingFrom = 0;
     }
 
     // ---- content ----
@@ -105,6 +221,13 @@ public partial class NotchWindow : Window
     }
 
     public void SetOpening(string name) => OpeningName.Text = name;
+
+    /// <summary>The live Timer state's content (270x34: mini grid + dot countdown).</summary>
+    public void SetTimer(double fraction, string text, bool running, bool flash)
+    {
+        _timerGrid.Show(fraction, running, flash);
+        TimerText.Text = text;
+    }
 
     /// <summary>
     /// Fills the plugged-in / unplugged card (<paramref name="charging"/> = the charger is in). Plugging in fills the
@@ -128,10 +251,40 @@ public partial class NotchWindow : Window
         else PowerBar.Lit = _fillTarget;
     }
 
-    public void SetMusicArt(ImageSource? art)
+    private static readonly Brush ArtPlaceholder = Frozen(0x3A, 0x3A, 0x3A);
+
+    /// <summary>The music state's art (a circle; grey without art) and "title · artist" (title only if no artist).</summary>
+    public void SetMusic(ImageSource? art, string? title, string? artist)
     {
-        Art.Source = art;
-        Art.Visibility = art is null ? Visibility.Collapsed : Visibility.Visible; // placeholder: the grey box itself
+        ArtCircle.Fill = art is null ? ArtPlaceholder : new ImageBrush(art) { Stretch = Stretch.UniformToFill };
+        var t = title ?? "";
+        var a = artist ?? "";
+        if (TrackTitle.Text == t && TrackArtist.Text == a) return;
+        TrackTitle.Text = t;
+        TrackDot.Text = t.Length > 0 && a.Length > 0 ? "  ·  " : "";
+        TrackArtist.Text = a;
+        UpdateMarquee();
+    }
+
+    // Long "title · artist" drifts left and back with pauses, only while the music state shows (30 fps cap).
+    private void UpdateMarquee()
+    {
+        TrackShift.BeginAnimation(TranslateTransform.XProperty, null);
+        TrackShift.X = 0;
+        if (_shown != NotchState.Music) return;
+        TrackText.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+        var overflow = TrackText.DesiredSize.Width - TrackClip.ActualWidth;
+        if (overflow <= 2 || TrackClip.ActualWidth <= 0) return;
+        var travel = TimeSpan.FromSeconds(overflow / 25); // 25 DIP/s
+        var hold = TimeSpan.FromSeconds(2);
+        var anim = new DoubleAnimationUsingKeyFrames { RepeatBehavior = RepeatBehavior.Forever };
+        anim.KeyFrames.Add(new DiscreteDoubleKeyFrame(0, KeyTime.FromTimeSpan(TimeSpan.Zero)));
+        anim.KeyFrames.Add(new LinearDoubleKeyFrame(0, KeyTime.FromTimeSpan(hold)));
+        anim.KeyFrames.Add(new LinearDoubleKeyFrame(-overflow, KeyTime.FromTimeSpan(hold + travel)));
+        anim.KeyFrames.Add(new LinearDoubleKeyFrame(-overflow, KeyTime.FromTimeSpan(hold + travel + hold)));
+        anim.KeyFrames.Add(new LinearDoubleKeyFrame(0, KeyTime.FromTimeSpan(hold + travel + hold + travel)));
+        Timeline.SetDesiredFrameRate(anim, 30);
+        TrackShift.BeginAnimation(TranslateTransform.XProperty, anim);
     }
 
     public void SetNotification(NotchNotification n, ImageSource? icon)
@@ -146,6 +299,8 @@ public partial class NotchWindow : Window
     {
         if (state == NotchState.Hidden)
         {
+            SetClickThrough(true);
+            EndTyping();
             StopEqualizer();
             StopPower();
             Hide();
@@ -155,25 +310,35 @@ public partial class NotchWindow : Window
         if (!IsVisible) Show(); // ShowActivated=false: never steals focus
         if (state == _shown) return;
         _shown = state;
+        if (state == NotchState.Open && !_bigBand) { _shrink.Stop(); _bigBand = true; Place(); }
+        else if (state != NotchState.Open && _bigBand) { _shrink.Stop(); _shrink.Start(); } // after the close animation
 
         var (w, h, r) = state switch
         {
-            NotchState.Music => (300.0, 34.0, 20.0),
+            NotchState.Music => (340.0, 34.0, 20.0),
             NotchState.Timer => (270.0, 34.0, 20.0),
             NotchState.Opening => (300.0, 34.0, 20.0),
             NotchState.Power => (300.0, 34.0, 20.0),
             NotchState.Notification => (420.0, 64.0, 30.0),
+            NotchState.Open => (DashboardWidth, _openHeight, 34.0),
             _ => (196.0, 34.0, 20.0),
         };
+        _pillW = w;
+        _pillH = h;
+        SetClickThrough(state != NotchState.Open);
+        if (state != NotchState.Open) EndTyping();
+        OpenLayer.IsHitTestVisible = state == NotchState.Open;
         Animate(Pill, WidthProperty, w);
         Animate(Pill, HeightProperty, h);
         Pill.CornerRadius = new CornerRadius(r);
 
-        Fade(RestLayer, state is NotchState.Resting or NotchState.Timer);
+        Fade(RestLayer, state == NotchState.Resting);
+        Fade(TimerLayer, state == NotchState.Timer);
         Fade(OpeningLayer, state == NotchState.Opening);
         Fade(MusicLayer, state == NotchState.Music);
         Fade(NotifyLayer, state == NotchState.Notification);
         Fade(PowerLayer, state == NotchState.Power);
+        Fade(OpenLayer, state == NotchState.Open);
 
         if (state == NotchState.Power && _charging)
             _accent.BeginAnimation(SolidColorBrush.OpacityProperty, new DoubleAnimation(1, 0.35, new Duration(TimeSpan.FromMilliseconds(600)))
@@ -185,6 +350,31 @@ public partial class NotchWindow : Window
 
         if (state == NotchState.Music) StartEqualizer();
         else StopEqualizer(); // the equalizer and its meter only run while it is visible (spec §7)
+        UpdateMarquee();
+    }
+
+    private nint DropHook(nint hwnd, int msg, nint wParam, nint lParam, ref bool handled)
+    {
+        const int WmMouseHWheel = 0x020E;
+        if (msg == WmMouseHWheel)
+        {
+            if (_shown == NotchState.Open) HorizontalScroll?.Invoke((short)((long)wParam >> 16 & 0xFFFF));
+            handled = true;
+            return 0;
+        }
+        if (msg != FileDropNative.WmDropFiles) return 0;
+        handled = true;
+        var paths = FileDropNative.Read(wParam);
+        if (paths.Length > 0) FilesDropped?.Invoke(paths);
+        return 0;
+    }
+
+    private void SetClickThrough(bool on)
+    {
+        if (_hwnd == 0) return;
+        if (!on) FileDropNative.RevokeOle(_hwnd); // opening: make sure no OLE target shadows WM_DROPFILES
+        if (on) DockWindowNative.AddExStyle(_hwnd, WsExTransparent);
+        else DockWindowNative.RemoveExStyle(_hwnd, WsExTransparent);
     }
 
     private void StopPower()

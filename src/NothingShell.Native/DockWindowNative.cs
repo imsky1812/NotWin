@@ -42,6 +42,14 @@ public static unsafe class DockWindowNative
         PInvoke.SetWindowLongPtr(h, WINDOW_LONG_PTR_INDEX.GWL_EXSTYLE, ex | bits);
     }
 
+    /// <summary>Clears <paramref name="bits"/> from the window's extended style.</summary>
+    public static void RemoveExStyle(nint hwnd, int bits)
+    {
+        var h = (HWND)hwnd;
+        var ex = (nint)PInvoke.GetWindowLongPtr(h, WINDOW_LONG_PTR_INDEX.GWL_EXSTYLE);
+        PInvoke.SetWindowLongPtr(h, WINDOW_LONG_PTR_INDEX.GWL_EXSTYLE, ex & ~(nint)bits);
+    }
+
     public static int GetExStyle(nint hwnd) =>
         (int)(nint)PInvoke.GetWindowLongPtr((HWND)hwnd, WINDOW_LONG_PTR_INDEX.GWL_EXSTYLE);
 

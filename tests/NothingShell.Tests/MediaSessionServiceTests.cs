@@ -13,6 +13,11 @@ public sealed class MediaSessionServiceTests
         public string? AppId { get; set; } = "Spotify.exe";
         public Stream? Thumb { get; set; }
         public Task<Stream?> ThumbnailAsync() => Task.FromResult(Thumb);
+        public (TimeSpan Position, TimeSpan Duration, DateTimeOffset At) Timeline { get; set; }
+        public int PlayPauseCalls, NextCalls, PreviousCalls;
+        public Task<bool> PlayPauseAsync() { PlayPauseCalls++; return Task.FromResult(true); }
+        public Task<bool> NextAsync() { NextCalls++; return Task.FromResult(true); }
+        public Task<bool> PreviousAsync() { PreviousCalls++; return Task.FromResult(true); }
         public event Action? Changed;
         public void Raise() => Changed?.Invoke();
     }
@@ -59,6 +64,48 @@ public sealed class MediaSessionServiceTests
     {
         var s = await Started(new FakeManager { Current = new FakeSession { PlaybackPlaying = true, Thumb = null } });
         Assert.Null(s.Current.Art);
+    }
+
+    [Fact]
+    public async Task PlayPause_CallsCurrentSession()
+    {
+        var session = new FakeSession { PlaybackPlaying = true };
+        var s = await Started(new FakeManager { Current = session });
+        Assert.True(await s.PlayPauseAsync());
+        Assert.True(await s.NextAsync());
+        Assert.True(await s.PreviousAsync());
+        Assert.Equal((1, 1, 1), (session.PlayPauseCalls, session.NextCalls, session.PreviousCalls));
+    }
+
+    [Fact]
+    public async Task Snapshot_HasTimeline()
+    {
+        var at = new DateTimeOffset(2026, 11, 19, 10, 0, 0, TimeSpan.Zero);
+        var session = new FakeSession
+        {
+            PlaybackPlaying = true, Title = "Kids",
+            Timeline = (TimeSpan.FromSeconds(102), TimeSpan.FromSeconds(238), at),
+        };
+        var s = await Started(new FakeManager { Current = session });
+        Assert.Equal(TimeSpan.FromSeconds(102), s.Current.Position);
+        Assert.Equal(TimeSpan.FromSeconds(238), s.Current.Duration);
+        Assert.Equal(at, s.Current.PositionAt);
+    }
+
+    [Fact]
+    public async Task PausedSession_StillHasTitle()
+    {
+        var s = await Started(new FakeManager { Current = new FakeSession { PlaybackPlaying = false, Title = "Kids" } });
+        Assert.Equal("Kids", s.Current.Title); // the media tile shows a paused track
+    }
+
+    [Fact]
+    public async Task NoSession_ControlsReturnFalse()
+    {
+        var s = await Started(new FakeManager());
+        Assert.False(await s.PlayPauseAsync());
+        Assert.False(await s.NextAsync());
+        Assert.False(await s.PreviousAsync());
     }
 
     [Fact]

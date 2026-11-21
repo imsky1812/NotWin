@@ -25,6 +25,9 @@ public sealed class LauncherController : IDisposable
     /// <summary>Raised after a launch with the item's display name (Plan 3's notch shows "Opening ‹name›…").</summary>
     public event Action<string>? Launched;
 
+    /// <summary>The launcher was shown (true) or hidden (false), by any path (Win, Esc, a launch, losing focus).</summary>
+    public event Action<bool>? VisibleChanged;
+
     public LauncherController(AppIndex index, FileSearchService files)
     {
         _index = index;
@@ -83,6 +86,7 @@ public sealed class LauncherController : IDisposable
         _vm.LaunchRequested += OnLaunchRequested;
         _window = new LauncherWindow(_vm);
         _window.Closed += (_, _) => _windowClosed = true;
+        _window.IsVisibleChanged += (_, e) => VisibleChanged?.Invoke((bool)e.NewValue);
         _window.Dismissed += Close;
         _window.PowerRequested += OnPower;
         return _window;

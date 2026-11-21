@@ -179,6 +179,7 @@ public sealed class DockController : IDisposable
         var start = _settings.StartWithWindows;
         ShowPopup(anchor,
         [
+            new PopupRow("Settings…", () => SettingsRequested?.Invoke()),
             new PopupRow("Keep taskbar visible", () => SetKeepVisible(!keep), keep),
             new PopupRow("Start with Windows", () => SetStartWithWindows(!start), start),
             new PopupRow("Quit Nothing Shell", _quit),
@@ -196,7 +197,10 @@ public sealed class DockController : IDisposable
         catch (Exception e) { Log.Error("saving settings failed", e); }
     }
 
-    private void SetKeepVisible(bool on)
+    /// <summary>"Settings…" in the start button's right-click menu.</summary>
+    public event Action? SettingsRequested;
+
+    public void SetKeepVisible(bool on)
     {
         _settings = _settings with { KeepDockVisible = on };
         try { _store.Save(_settings); }
@@ -204,7 +208,7 @@ public sealed class DockController : IDisposable
         ApplyKeepVisible(on);
     }
 
-    private void SetStartWithWindows(bool on)
+    public void SetStartWithWindows(bool on)
     {
         _settings = _settings with { StartWithWindows = on };
         try { _store.Save(_settings); }

@@ -12,13 +12,13 @@
 param(
     # Run only these sections. Default (no -Only): reinstall + Dock, Apps, Tray, Reserve, Startup.
     # Example: -Only KeySpike,Notify
-    [ValidateSet('Task8', 'KeySpike', 'Overflow', 'Desktop', 'Notify', 'Dock', 'Apps', 'Tray', 'Reserve', 'Launcher', 'Notch', 'Panel', 'Startup')]
+    [ValidateSet('Task8', 'KeySpike', 'Overflow', 'Desktop', 'Notify', 'Dock', 'Apps', 'Tray', 'Reserve', 'Launcher', 'Notch', 'Panel', 'Dash', 'Startup')]
     [string[]]$Only,
     # With -Only the reinstall step is skipped unless -Reinstall is given.
     [switch]$Reinstall
 )
 $ErrorActionPreference = 'Stop'
-$Sections = if ($Only) { @($Only) } else { @('Notch', 'Panel', 'Launcher', 'Dock', 'Reserve', 'Startup') }
+$Sections = if ($Only) { @($Only) } else { @('Dash', 'Notch', 'Panel', 'Launcher', 'Dock', 'Reserve', 'Startup') }
 
 # =====================================================================================
 # HELPERS (everything above the "END HELPERS" marker is safe to dot-source for testing)
@@ -723,7 +723,7 @@ try {
     Write-Good 'Install done.'
     } else {
         Write-Info 'Skipping the reinstall (use -Reinstall to force it).'
-        if ((Test-Section 'Task8') -or (Test-Section 'Overflow') -or (Test-Section 'Dock') -or (Test-Section 'Apps') -or (Test-Section 'Tray') -or (Test-Section 'Reserve') -or (Test-Section 'Launcher') -or (Test-Section 'Notch') -or (Test-Section 'Panel') -or (Test-Section 'Startup')) {
+        if ((Test-Section 'Task8') -or (Test-Section 'Overflow') -or (Test-Section 'Dock') -or (Test-Section 'Apps') -or (Test-Section 'Tray') -or (Test-Section 'Reserve') -or (Test-Section 'Launcher') -or (Test-Section 'Notch') -or (Test-Section 'Panel') -or (Test-Section 'Dash') -or (Test-Section 'Startup')) {
             if (-not (Test-Path $AppExe) -or -not (Test-Path $Watchdog)) { throw 'The app is not installed. Run again with -Reinstall.' }
         }
     }
@@ -744,7 +744,7 @@ try {
     Write-Step 'STEP 1: close Fenn'
     $fenn = @(Get-Process -Name 'fenn' -ErrorAction SilentlyContinue)
     $fennSkipped = $false
-    $needFennGone = (Test-Section 'Task8') -or (Test-Section 'Overflow') -or (Test-Section 'Dock') -or (Test-Section 'Apps') -or (Test-Section 'Tray') -or (Test-Section 'Reserve') -or (Test-Section 'Launcher') -or (Test-Section 'Notch') -or (Test-Section 'Panel')
+    $needFennGone = (Test-Section 'Task8') -or (Test-Section 'Overflow') -or (Test-Section 'Dock') -or (Test-Section 'Apps') -or (Test-Section 'Tray') -or (Test-Section 'Reserve') -or (Test-Section 'Launcher') -or (Test-Section 'Notch') -or (Test-Section 'Panel') -or (Test-Section 'Dash')
     if ($fenn.Count -gt 0 -and $needFennGone) {
         Write-Do 'Please quit Fenn now: find its icon in the tray (bottom right), right-click it and choose Quit.'
         Write-Info 'I will wait until it is gone.  (Press S here to continue anyway - results may then be wrong.)'
@@ -1575,6 +1575,76 @@ try {
         Complete-Quit 'NP.quit' $app 'notch + panel section (--quit)'
     }
 
+    # ================================================================ DASH (Plan 4: notch dashboard, timer, settings)
+    if (Test-Section 'Dash') {
+        Write-Step 'DASH: notch dashboard (hover), timer, media, clipboard, notes, edit mode, shelf, weather, tools, settings'
+        $logOff = Get-LogLength $AppLog
+        $app = Start-App
+        [void](Wait-Until { (Get-LogSince $AppLog $logOff) -match 'dock ready' } 15000 250)
+
+        $o = Get-LogLength $AppLog
+        [void](Ask-Check 'ND.1' 'Hover opens the dashboard; sweeping past does not; leaving closes it' `
+            'Rest the mouse on the notch (top centre) for a moment. Move away. Then sweep the mouse quickly across the notch to a browser tab.' `
+            'Did resting open the dashboard, moving away close it, and the quick sweep NOT open it?' `
+            -Measured @{ openLogged = ((Get-LogSince $AppLog $o) -match 'notch state=Open') })
+        [void](Ask-Check 'ND.2' 'Pages and Settings' 'Open the dashboard. Click the second page dot (bottom right), scroll the wheel back to page 1. Then right-click the notch.' `
+            'Did the pages switch (dots and wheel), and did right-click open the Settings window?')
+
+        $o = Get-LogLength $AppLog
+        Write-Do 'TIMER: on the Timer tile press - until it shows 01:00, then press play. Close the dashboard and wait ~1 minute.'
+        Wait-Enter 'Press Enter after the timer has ended'
+        $l = Get-LogSince $AppLog $o
+        [void](Ask-Check 'ND.3' 'Timer: live state, flash, "Time is up" in notch and panel' 'Open the panel (Win+A) and look at NOTIFICATIONS.' `
+            'While running, did the notch show a small dot grid + countdown? At zero did it flash, show "Timer / Time is up", and is it listed in the panel?' `
+            -Measured @{ finishedLogged = ($l -match 'timer finished'); timerState = ($l -match 'notch state=Timer') })
+
+        [void](Ask-Check 'ND.4' 'Media tile' 'Play music, open the dashboard and look at the Media tile. Try previous / pause / next.' `
+            'Did it show the track, artist, source app and moving progress dots, and did the buttons control the player?')
+
+        [void](Ask-Check 'ND.5' 'Clipboard history' 'Copy two different bits of text (Ctrl+C). Open the dashboard: click the older one, then paste somewhere. Then copy a password from your password manager.' `
+            'Were both copies listed, did clicking copy it again, and was the password NOT added?')
+        [void](Ask-Check 'ND.6' 'Notes' 'Click into the Notes tile, type a line, move the mouse away from the notch while still typing, then press Esc.' `
+            'Did the notch stay open while you typed, and close on Esc?')
+        [void](Ask-Check 'ND.7' 'Edit mode' 'Click EDIT. Click a tile''s size chip, remove a tile with the red x, bring it back with + Add, then click DONE.' `
+            'Did resizing, removing and adding back work, and did the notch stay open until DONE?')
+
+        $o = Get-LogLength $AppLog
+        Write-Do 'KEEP AWAKE: go to page 2 and turn Keep awake ON.'
+        Wait-Enter
+        $req = (& powercfg /requests 2>&1 | Out-String)
+        [void](Complete-Check -Id 'ND.8' -Description 'Keep awake registers a display/system request' `
+            -Measured @{ listed = ($req -match 'NothingShell'); logged = ((Get-LogSince $AppLog $o) -match 'keep awake=True') } `
+            -MeasuredPass ($req -match 'NothingShell'))
+        Write-Do 'Turn Keep awake OFF again.'
+        Wait-Enter
+
+        [void](Ask-Check 'ND.9' 'File shelf' 'Drag a file from File Explorer onto the notch (it opens; the shelf page shows). Drop it on the Shelf tile. Then drag the chip out onto the desktop.' `
+            'Was the file added to the shelf, and did dragging it out copy it to the desktop?')
+        [void](Ask-Check 'ND.10' 'Weather' 'Open Settings (right-click the notch), type your city, press Enter. Look at the Weather tile on page 2.' `
+            'Did Settings find the city, and does the tile show the temperature in dots with high/low?')
+
+        $shots = Join-Path ([Environment]::GetFolderPath('MyPictures')) 'Screenshots'
+        $before = Get-Date
+        [void](Ask-Check 'ND.11' 'Grab text, Color, Snip' 'Page 2: Grab text -> drag over some text, paste it in Notepad. Color -> click a pixel, paste. Snip -> drag a region, paste in Paint.' `
+            'Did Grab text copy the text, Color copy a #hex, and Snip copy the image (each with a card in the notch)?' `
+            -Measured @{ snipSaved = (@(Get-ChildItem $shots -Filter 'Nothing Shell *.png' -ErrorAction SilentlyContinue | Where-Object { $_.LastWriteTime -ge $before }).Count -gt 0) })
+        [void](Ask-Check 'ND.12' 'Phone and Draw' 'Page 2: click Phone, then Draw.' 'Did Phone Link open (or a card say it is not installed), and did Snipping Tool open?')
+
+        Write-Do 'FULL SCREEN: start a 1:00 timer, then open a YouTube video full screen (f) and wait until the timer has ended; also try resting the mouse at the top centre.'
+        Wait-Enter 'Press Enter after leaving full screen'
+        [void](Ask-Check 'ND.13' 'Full screen: no dashboard, time-up only in the panel' 'Open the panel (Win+A).' `
+            'In full screen: did the notch stay hidden (no dashboard on hover, no "Time is up" card), and is "Time is up" listed in the panel?')
+
+        # Persistence: restart once, then check what was saved.
+        [void](Quit-App $app)
+        $logOff = Get-LogLength $AppLog
+        $app = Start-App
+        [void](Wait-Until { (Get-LogSince $AppLog $logOff) -match 'dock ready' } 15000 250)
+        [void](Ask-Check 'ND.R' 'Saved across a restart' 'Nothing Shell was just restarted. Open the dashboard.' `
+            'Are the timer length, clipboard items, your note, the edited layout, the shelf file and the weather city all still there?')
+        Complete-Quit 'ND.quit' $app 'dash section (--quit)'
+    }
+
     # ================================================================ STARTUP (task 16)
     if (Test-Section 'Startup') {
         Write-Step 'STARTUP: Fenn guard, single instance, start with Windows'
@@ -1632,7 +1702,7 @@ try {
     }
 
     # ================================================================ LAST QUESTION
-    if ((Test-Section 'Dock') -or (Test-Section 'Apps') -or (Test-Section 'Tray') -or (Test-Section 'Reserve') -or (Test-Section 'Launcher') -or (Test-Section 'Notch') -or (Test-Section 'Panel') -or (Test-Section 'Startup')) {
+    if ((Test-Section 'Dock') -or (Test-Section 'Apps') -or (Test-Section 'Tray') -or (Test-Section 'Reserve') -or (Test-Section 'Launcher') -or (Test-Section 'Notch') -or (Test-Section 'Panel') -or (Test-Section 'Dash') -or (Test-Section 'Startup')) {
         Write-Step 'LAST QUESTION'
         Write-Host '  Keep Nothing Shell as your taskbar from now on?' -ForegroundColor Cyan
         Write-Host '    y = Nothing Shell starts at sign-in and keeps running (Fenn must stay closed)'

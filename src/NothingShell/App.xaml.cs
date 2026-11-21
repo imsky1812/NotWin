@@ -24,6 +24,12 @@ public partial class App : Application
     private Launcher.LauncherController? _launcher;
     private Launcher.AppIndex? _index;
     private Notch.NotchController? _notch;
+    private Timing.TimerService? _timer;
+    private Clips.ClipboardService? _clips;
+    private readonly Power.KeepAwakeService _awake = new();
+    private Forecast.WeatherService? _weather;
+
+    private static string DataDir => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "NothingShell");
     private Media.MediaSessionService? _media;
     private Notifications.NotificationService? _notifications;
     private Panel.QuickPanelController? _panel;
@@ -99,6 +105,9 @@ public partial class App : Application
 #if DEBUG
         Theme.FontCheck.Run(Resources);
 #endif
+        // App launches go through Explorer (normal integrity); report any fallback.
+        ShellLinkNative.OnError = (message, ex) => { if (ex is null) Log.Info(message); else Log.Error(message, ex); };
+
         // Low-level hooks (mouse edge, Win key) run on their own message-loop thread so a busy UI thread can't
         // make Windows drop them.
         _hooks = new HookThread("NothingShell.Hooks");
@@ -122,14 +131,44 @@ public partial class App : Application
         // Notch (spec §6.4): resting time/battery, "Opening ‹name›…" after a launch; hidden in full screen.
         try
         {
-            _notch = new Notch.NotchController(_tray!);
+            var dockCtl = _controller;
+            _notch = new Notch.NotchController(_tray!, _mouse,
+                dockCtl is null ? null : () => dockCtl.Settings,
+                dockCtl is null ? null : dockCtl.UpdateSettings);
             _notch.SetFullscreen(_fullscreen!.IsFullscreen);
+
+            // The shared timer (spec §6.6): notch tile + live state now, the desktop widget in Plan 5.
+            var minutes = dockCtl?.Settings.TimerMinutes ?? 25;
+            _timer = new Timing.TimerService(minutes, m => dockCtl?.UpdateSettings(s => s with { TimerMinutes = m }));
+            _notch.AttachTimer(_timer);
+            _weather = new Forecast.WeatherService(DataDir);
+            _notch.SettingsRequested += ShowSettings;
+            if (dockCtl is not null) dockCtl.SettingsRequested += ShowSettings;
+            _weather.Start(dockCtl?.Settings.Weather);
+            try { _clips = new Clips.ClipboardService(DataDir); }
+            catch (Exception e) { Log.Error("clipboard history failed to start", e); }
+            var timer = _timer;
+            var tools = new Tools.ToolRunner(_notch, () => _notch?.RequestSettings());
+            _notch.TileFactory = kind => kind switch
+            {
+                Core.Notch.TileKind.Timer => new Notch.Dashboard.Tiles.TimerTile(timer),
+                Core.Notch.TileKind.Media when _media is not null => new Notch.Dashboard.Tiles.MediaTile(_media, MediaAppName),
+                Core.Notch.TileKind.Clipboard when _clips is not null => new Notch.Dashboard.Tiles.ClipboardTile(_clips, () => _notch!),
+                Core.Notch.TileKind.Notes => new Notch.Dashboard.Tiles.NotesTile(new NotesStore(DataDir), () => _notch!),
+                Core.Notch.TileKind.KeepAwake => new Notch.Dashboard.Tiles.KeepAwakeTile(_awake),
+                Core.Notch.TileKind.Weather when _weather is not null => new Notch.Dashboard.Tiles.WeatherTile(_weather, () => _notch?.RequestSettings()),
+                Core.Notch.TileKind.Shelf => new Notch.Dashboard.Tiles.ShelfTile(new Core.Shelving.ShelfStore(DataDir), new Dock.AppIconCache()),
+                Core.Notch.TileKind.GrabText or Core.Notch.TileKind.Color or Core.Notch.TileKind.Snip
+                    or Core.Notch.TileKind.Phone or Core.Notch.TileKind.Draw or Core.Notch.TileKind.Settings
+                    => new Notch.Dashboard.Tiles.ToolTile(kind, tools.Run),
+                _ => new Notch.Dashboard.PlaceholderTile(kind),
+            };
             _fullscreen.Changed += fs => _notch?.SetFullscreen(fs);
             _launcher.Launched += name => _notch?.Opening(name);
 
             // Music state: the system media session (Changed arrives on this UI thread).
             _media = new Media.MediaSessionService();
-            _media.Changed += snap => _notch?.SetMusic(snap.Playing, snap.Art);
+            _media.Changed += snap => _notch?.SetMusic(snap.Playing, snap.Art, snap.Title, snap.Artist);
             _ = _media.StartAsync();
 
             // Notifications: shown in the notch for 3.6 s (and listed in the panel, Task 12).
@@ -139,6 +178,13 @@ public partial class App : Application
                 new Core.Notch.NotchNotification(item.AppId, item.AppName, item.Text),
                 string.IsNullOrEmpty(item.AppId) ? null : notchIcons.Get(item.AppId, 40));
             _ = _notifications.StartAsync();
+            var notifications = _notifications;
+            _timer.Finished += () =>
+            {
+                Log.Info("timer finished");
+                _notch?.NotifyLocal("Timer", "Time is up", "timer");
+                notifications.AddLocal("Timer", "Time is up"); // kept in the panel, also when full screen hid the notch
+            };
         }
         catch (Exception e) { Log.Error("notch failed to start", e); }
         if (_dock is not null)
@@ -147,6 +193,7 @@ public partial class App : Application
             _dock.SearchClicked += _launcher.Toggle;
         }
         _fullscreen!.Changed += fs => { if (fs) { _launcher?.Close(); _panel?.Close(); } };
+        _launcher.VisibleChanged += _ => UpdateNotchCover();
 
         // Quick-settings panel (spec §6.3): Win+A / Win+N (below) and the dock tray. Guarded like the notch: a failure
         // here must never take the dock and launcher down with it (Win+A / Win+N then simply do nothing).
@@ -165,6 +212,7 @@ public partial class App : Application
                 panel.Opening += () => _ = notes.RefreshAsync();
             }
             _panel = panel;
+            panel.Window.IsVisibleChanged += (_, _) => UpdateNotchCover(); // after it is really shown / hidden
             if (_dock is not null) _dock.TrayClicked += panel.Toggle;
         }
         catch (Exception e) { Log.Error("quick-settings panel failed to start", e); }
@@ -180,6 +228,34 @@ public partial class App : Application
             // Without the hook Win simply opens Windows' Start, which is a safe fallback.
             Log.Error("win key hook failed; Win opens Windows' Start", e);
         }
+    }
+
+    // The open dashboard must never sit on top of the launcher or the panel (user feedback 2026-11-19).
+    private void UpdateNotchCover() =>
+        _notch?.SetCovered(_launcher?.IsOpen == true || _panel?.IsOpen == true);
+
+    // Settings window (spec §6.7): the dock controller is the one settings writer.
+    private void ShowSettings()
+    {
+        var dock = _controller;
+        if (dock is null) { Log.Info("settings: no dock controller, nothing to edit"); return; }
+        Settings.SettingsWindow.ShowOrActivate(() => dock.Settings, dock.SetStartWithWindows, dock.SetKeepVisible, _weather,
+            place =>
+            {
+                dock.UpdateSettings(s => s with { Weather = place });
+                _weather?.Start(place);
+            },
+            () => Shutdown());
+    }
+
+    // Source app of a media session (AUMID or exe) as a short name for the media tile: the launcher index, else the
+    // exe name without ".exe", else "Media".
+    private string MediaAppName(string? id)
+    {
+        if (string.IsNullOrWhiteSpace(id)) return "Media";
+        if (_index?.FindApp(id) is { } app) return app.Name;
+        var file = Path.GetFileName(id);
+        return file.EndsWith(".exe", StringComparison.OrdinalIgnoreCase) ? Path.GetFileNameWithoutExtension(file) : "Media";
     }
 
     private static void ApplyStartWithWindows(ShellSettings settings, bool loadedOk)
@@ -266,6 +342,10 @@ public partial class App : Application
             _notifications?.Dispose();
             _panel?.Dispose();
             _notch?.Dispose();
+            _timer?.Dispose();
+            _clips?.Dispose();
+            _awake.Dispose(); // keep awake never outlives the shell
+            _weather?.Dispose();
             _controller?.Dispose();
             _tray?.Dispose();
             _mouse?.Dispose();

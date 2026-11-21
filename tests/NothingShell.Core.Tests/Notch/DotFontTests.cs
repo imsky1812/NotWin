@@ -16,6 +16,10 @@ public sealed class DotFontTests
     }
 
     [Fact]
+    public void DotFont_HasMinus() =>
+        Assert.Equal(["00000", "00000", "00000", "11111", "00000", "00000", "00000"], DotFont.GlyphRows('-')!);
+
+    [Fact]
     public void Colon_IsOneWide() =>
         Assert.Equal(["0", "0", "1", "0", "1", "0", "0"], DotFont.GlyphRows(':')!);
 

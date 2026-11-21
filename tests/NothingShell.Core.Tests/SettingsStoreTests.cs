@@ -75,6 +75,42 @@ public sealed class SettingsStoreTests : IDisposable
     }
 
     [Fact]
+    public void SaveThenLoad_RoundTripsNotchLayout()
+    {
+        var store = new SettingsStore(_dir);
+        Assert.Null(store.Load().NotchLayout);
+        var layout = NothingShell.Core.Notch.DashboardLayout.Default.Remove(0, 1);
+        store.Save(new ShellSettings { NotchLayout = layout });
+        var back = store.Load().NotchLayout!;
+        Assert.Equal(layout.Pages[0], back.Pages[0]);
+        Assert.Equal(layout.Pages[1], back.Pages[1]);
+        Assert.Equal(layout.Removed, back.Removed);
+        Assert.Contains("\"timer\"", File.ReadAllText(Path.Combine(_dir, "settings.json"))); // names, not numbers
+    }
+
+    [Fact]
+    public void SaveThenLoad_RoundTripsWeatherPlace()
+    {
+        var store = new SettingsStore(_dir);
+        Assert.Null(store.Load().Weather);
+        var place = new NothingShell.Core.Forecast.WeatherPlace("Delhi", "India", 28.65195, 77.23149);
+        store.Save(new ShellSettings { Weather = place });
+        Assert.Equal(place, store.Load().Weather);
+    }
+
+    [Fact]
+    public void Load_UnknownTileKind_KeepsTheRestOfTheSettings()
+    {
+        Directory.CreateDirectory(_dir);
+        File.WriteAllText(Path.Combine(_dir, "settings.json"),
+            "{\"pinsImported\":true,\"notchLayout\":{\"pages\":[[{\"kind\":\"scanQr\",\"size\":\"one\"},{\"kind\":\"timer\",\"size\":\"big\"}]],\"removed\":[]}}");
+        var s = new SettingsStore(_dir).Load();
+        Assert.True(s.PinsImported);
+        var page = NothingShell.Core.Notch.DashboardLayout.Sanitize(s.NotchLayout).Pages[0];
+        Assert.Equal([new NothingShell.Core.Notch.TileSpec(NothingShell.Core.Notch.TileKind.Timer, NothingShell.Core.Notch.TileSize.Big)], page);
+    }
+
+    [Fact]
     public void Load_NullPinnedApps_BecomesEmpty()
     {
         Directory.CreateDirectory(_dir);
