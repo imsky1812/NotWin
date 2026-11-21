@@ -37,6 +37,9 @@ public sealed class WindowPreviewCard
     public event Action<bool>? PointerOver;
 
     public IReadOnlyList<PreviewCell> Cells => _cells;
+
+    /// <summary>The card's window while open (tests close it from outside).</summary>
+    public Window? WindowForTests => _window;
     public bool IsOpen => _window is not null;
 
     /// <summary>The widest the row gets before it scrolls: six previews.</summary>
@@ -96,6 +99,15 @@ public sealed class WindowPreviewCard
                 WindowStyle = WindowStyle.None, ResizeMode = ResizeMode.NoResize, ShowInTaskbar = false, ShowActivated = false, Topmost = true,
                 SizeToContent = SizeToContent.WidthAndHeight, Background = CardBrush, Left = -32000, Top = -32000,
                 Content = new Border { Padding = new Thickness(12), BorderBrush = TileChrome.FrozenArgb(0x21, 0xFF, 0xFF, 0xFF), BorderThickness = new Thickness(1.5), Child = scroller },
+            };
+            // Closed by something else (Windows, the owner going): tidy up and say so, or the dock stays held up.
+            w.Closed += (_, _) =>
+            {
+                if (!ReferenceEquals(_window, w)) return; // Close() did it and has already told everyone
+                foreach (var t in _thumbs) t.Dispose();
+                _thumbs.Clear();
+                _window = null;
+                Closed?.Invoke();
             };
             w.MouseEnter += (_, _) => PointerOver?.Invoke(true);
             w.MouseLeave += (_, _) => PointerOver?.Invoke(false);

@@ -52,4 +52,19 @@ public sealed class WindowPreviewCardTests
         Assert.Equal("Notes — a very long window title that goes on", title.Text);
         Assert.Equal(System.Windows.TextTrimming.CharacterEllipsis, title.TextTrimming);
     });
+
+    // Review minor (Plan 7): when the card's window is closed by something other than Close() (Windows, its owner
+    // going), Closed still fires once, so the dock is not held up for good.
+    [Fact]
+    public void Card_ClosedFromOutside_RaisesClosedOnce() => OnSta(() =>
+    {
+        var card = new WindowPreviewCard();
+        var closed = 0;
+        card.Closed += () => closed++;
+        card.Show(Windows(1), new RectI(100, 900, 140, 940), 0);
+        Assert.True(card.IsOpen);
+        card.WindowForTests!.Close();
+        Assert.False(card.IsOpen);
+        Assert.Equal(1, closed);
+    });
 }

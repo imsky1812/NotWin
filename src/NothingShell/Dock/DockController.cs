@@ -52,7 +52,9 @@ public sealed class DockController : IDisposable
         _dock.ItemContext += OnItemContext;
         _dock.TrayClicked += OnTrayClicked;
         // A dock popup left open would sit on top of Windows' overflow flyout: close it first.
-        _dock.OverflowClicked += () => { ClosePopup(); OverflowOpener.Open(); };
+        _dock.OverflowClicked += () => { ClosePopup(); ClosePreview(); OverflowOpener.Open(); };
+        _dock.StartClicked += ClosePreview;
+        _dock.SearchClicked += ClosePreview;
         _dock.StartContext += OnStartContext;
         _dock.PlacementChanged += _appBar.Refresh;
         _appBar.GrantedChanged += g =>
@@ -64,7 +66,12 @@ public sealed class DockController : IDisposable
     }
 
     // The tray opens Nothing Shell's quick-settings panel (App wires TrayClicked to it); close any dock menu first.
-    private void OnTrayClicked() => ClosePopup();
+    // The tray panel, the launcher and the start-button menu never open under a preview card (review minor, Plan 7).
+    private void OnTrayClicked()
+    {
+        ClosePopup();
+        ClosePreview();
+    }
 
     public void Start()
     {
@@ -264,6 +271,7 @@ public sealed class DockController : IDisposable
     private void OnStartContext(FrameworkElement anchor)
     {
         ClosePopup();
+        ClosePreview();
         var keep = _settings.KeepDockVisible;
         var start = _settings.StartWithWindows;
         ShowPopup(anchor,
