@@ -30,6 +30,17 @@ public partial class App : Application
     private readonly Power.KeepAwakeService _awake = new();
     private Forecast.WeatherService? _weather;
     private GoogleCalendar.GoogleCalendarService? _calendar;
+    private Notch.Dashboard.SharedNotes? _notes; // the notch tile and the desktop widget share one note (Plan 9)
+    private Alarms.AlarmService? _alarms;
+    private readonly System.Windows.Threading.DispatcherTimer _alarmTick = new() { Interval = TimeSpan.FromSeconds(1) };
+    private readonly System.Windows.Threading.DispatcherTimer _alarmQuiet = new() { Interval = TimeSpan.FromSeconds(60) };
+    private System.Windows.Media.MediaPlayer? _alarmSound;
+    private Alarms.AlarmRingWindow? _ringWindow;
+    private Sync.SyncService? _sync;
+    private string _syncStatus = "OFF";
+    private System.IO.FileSystemWatcher? _syncWatch;
+    private readonly System.Windows.Threading.DispatcherTimer _syncTimer = new() { Interval = TimeSpan.FromSeconds(30) };
+    private readonly System.Windows.Threading.DispatcherTimer _syncSoon = new() { Interval = TimeSpan.FromSeconds(2) };
     private Widgets.DesktopWidgets? _widgets;
     private readonly Core.Widgets.SnakeKeyGate _snakeGate = new(); // one gate for whichever snake is on the desktop
     private Dock.AppIconCache? _folderIcons; // shared by every app folder
@@ -123,6 +134,7 @@ public partial class App : Application
         _ = _index.RefreshIfStaleAsync(TimeSpan.Zero);
 
         // 4. Dock, then 5. StartWithWindows (only from settings that were actually read).
+        SyncAtStart(); // Plan 9: a newer copy from another PC is in place before anything reads the settings
         var (settings, loadedOk) = StartDock();
         ApplyStartWithWindows(settings, loadedOk);
 
@@ -151,6 +163,9 @@ public partial class App : Application
             _notch.SettingsRequested += ShowSettings;
             if (dockCtl is not null) dockCtl.SettingsRequested += ShowSettings;
             _weather.Start(dockCtl?.Settings.Weather);
+            // Alarms (Plan 9): checked every second; guarded like the calendar.
+            try { StartAlarms(); }
+            catch (Exception e) { Log.Error("alarms failed to start", e); }
             // Google Calendar (Plan 6): guarded, a failure leaves the calendar widget showing plain dates.
             try
             {
@@ -167,7 +182,7 @@ public partial class App : Application
                 Core.Notch.TileKind.Timer => new Notch.Dashboard.Tiles.TimerTile(timer),
                 Core.Notch.TileKind.Media when _media is not null => new Notch.Dashboard.Tiles.MediaTile(_media, MediaAppName),
                 Core.Notch.TileKind.Clipboard when _clips is not null => new Notch.Dashboard.Tiles.ClipboardTile(_clips, () => _notch!),
-                Core.Notch.TileKind.Notes => new Notch.Dashboard.Tiles.NotesTile(new NotesStore(DataDir), () => _notch!),
+                Core.Notch.TileKind.Notes => new Notch.Dashboard.Tiles.NotesTile(_notes ??= new Notch.Dashboard.SharedNotes(new NotesStore(DataDir)), () => _notch!),
                 Core.Notch.TileKind.KeepAwake => new Notch.Dashboard.Tiles.KeepAwakeTile(_awake),
                 Core.Notch.TileKind.Weather when _weather is not null => new Notch.Dashboard.Tiles.WeatherTile(_weather, () => _notch?.RequestSettings()),
                 Core.Notch.TileKind.Shelf => new Notch.Dashboard.Tiles.ShelfTile(new Core.Shelving.ShelfStore(DataDir), new Dock.AppIconCache()),
@@ -212,6 +227,9 @@ public partial class App : Application
         // failure here must never take the dock, launcher or notch down.
         try { StartWidgets(); }
         catch (Exception e) { Log.Error("desktop widgets failed to start", e); }
+
+        try { StartSync(); }
+        catch (Exception e) { Log.Error("sync failed to start", e); }
 
         // Quick-settings panel (spec §6.3): Win+A / Win+N (below) and the dock tray. Guarded like the notch: a failure
         // here must never take the dock and launcher down with it (Win+A / Win+N then simply do nothing).
@@ -284,6 +302,10 @@ public partial class App : Application
             case Core.Widgets.WidgetKind.Timer: return _timer is null ? null : new Widgets.TimerWidget(_timer);
             case Core.Widgets.WidgetKind.Calendar: return new Widgets.CalendarWidget(_calendar, () => _widgets?.Editing == true);
             case Core.Widgets.WidgetKind.Agenda: return new Widgets.AgendaWidget(_calendar);
+            case Core.Widgets.WidgetKind.Notes: return new Widgets.NotesWidget(_notes ??= new Notch.Dashboard.SharedNotes(new NotesStore(DataDir)));
+            case Core.Widgets.WidgetKind.Alarm: return _alarms is null ? null : new Alarms.AlarmWidget(_alarms);
+            case Core.Widgets.WidgetKind.TicTacToe:
+                return new Widgets.TicTacToeWidget(() => dock.Settings.TicTacToeScore, score => dock.UpdateSettings(s => s with { TicTacToeScore = score }));
             case Core.Widgets.WidgetKind.Snake:
                 return _snake = new Widgets.SnakeWidget(_snakeGate, dock.Settings.SnakeBest,
                     best => dock.UpdateSettings(s => s with { SnakeBest = Math.Max(s.SnakeBest, best) }));
@@ -300,6 +322,147 @@ public partial class App : Application
                 return new Widgets.FolderWidget(p.Id, p.Config, () => index.Apps, index.FindApp, _folderIcons, save);
             default: return null;
         }
+    }
+
+    // ---- Sync (Plan 9) ----
+
+    private static void SyncAtStart()
+    {
+        try
+        {
+            var folder = new SettingsStore(DataDir).Load().SyncFolder;
+            if (folder is null) return;
+            var outcome = new Sync.SyncService(DataDir, () => folder).RunOnce();
+            Log.Info($"sync at start: reached={outcome.Reached}");
+        }
+        catch (Exception e) { Log.Error("sync at start failed", e); }
+    }
+
+    private void StartSync()
+    {
+        _sync = new Sync.SyncService(DataDir, () => _controller?.Settings.SyncFolder);
+        _syncTimer.Tick += (_, _) => SyncNow();
+        _syncSoon.Tick += (_, _) => { _syncSoon.Stop(); SyncNow(); };
+        _syncTimer.Start();
+        WatchSyncFolder();
+        SyncNow();
+    }
+
+    // The folder's copy changed (another PC, through OneDrive): sync two seconds after the last change.
+    private void WatchSyncFolder()
+    {
+        _syncWatch?.Dispose();
+        _syncWatch = null;
+        if (_controller?.Settings.SyncFolder is null || _sync is null) return;
+        try
+        {
+            if (_sync.WatchDirectory() is not { } dir) return; // the folder is gone: never recreated; the 30 s check reports it
+            var watch = new System.IO.FileSystemWatcher(dir) { NotifyFilter = NotifyFilters.LastWrite | NotifyFilters.FileName | NotifyFilters.Size };
+            void Soon(object? s, FileSystemEventArgs e) => Dispatcher.BeginInvoke(() => { _syncSoon.Stop(); _syncSoon.Start(); });
+            watch.Changed += Soon;
+            watch.Created += Soon;
+            watch.Renamed += (s, e) => Soon(s, e);
+            watch.EnableRaisingEvents = true;
+            _syncWatch = watch;
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException or ArgumentException)
+        {
+            Log.Info("sync: the folder cannot be watched (" + e.GetType().Name + "), checking every 30 s");
+        }
+    }
+
+    private void SyncNow()
+    {
+        if (_sync is null || _controller is not { } dock) return;
+        if (dock.Settings.SyncFolder is null) { _syncStatus = "OFF"; return; }
+        Sync.SyncOutcome outcome;
+        try { outcome = _sync.RunOnce(); }
+        catch (Exception e) { Log.Error("sync failed", e); _syncStatus = "SYNC FAILED"; return; }
+        _syncStatus = outcome.Reached ? $"SYNCED {DateTime.Now:HH:mm}" : "CAN'T REACH THE FOLDER";
+        if (outcome.Pulled.Contains("settings.json"))
+        {
+            var before = dock.Settings;
+            var pulled = new SettingsStore(DataDir).Load();
+            dock.ApplyExternal(pulled);
+            if (_widgets is { } widgets)
+            {
+                if (pulled.WidgetScale != before.WidgetScale) widgets.SetScale(pulled.WidgetScale);
+                if (pulled.WidgetList is { } layout) widgets.Apply(layout);
+            }
+            if (!Equals(pulled.Weather, before.Weather)) _weather?.Start(pulled.Weather);
+        }
+        if (outcome.Pulled.Contains("notes.txt")) _notes?.Reload();
+        if (outcome.Pulled.Contains(Core.Alarms.AlarmStore.FileName)) _alarms?.Reload();
+    }
+
+    private void SetSyncFolder(string? folder)
+    {
+        _controller?.UpdateSettings(s => s with { SyncFolder = folder });
+        WatchSyncFolder();
+        SyncNow();
+    }
+
+    // Alarms (Plan 9): a ring loops Windows' alarm sound for up to a minute, shows in the notch and the panel's list, and
+    // puts the Snooze / Stop card at the top of the screen (after full screen ends, if it is still ringing then).
+    private void StartAlarms()
+    {
+        var alarms = new Alarms.AlarmService(new Core.Alarms.AlarmStore(DataDir), () => DateTime.Now);
+        _alarms = alarms;
+        _alarmTick.Tick += (_, _) =>
+        {
+            try { alarms.Check(); }
+            catch (Exception e) { Log.Error("alarm check failed", e); }
+        };
+        _alarmTick.Start();
+        _alarmQuiet.Tick += (_, _) => { _alarmQuiet.Stop(); alarms.Stop(); };
+        alarms.Ringing += alarm =>
+        {
+            var time = $"{alarm.Hour:00}:{alarm.Minute:00}";
+            try
+            {
+                _alarmSound ??= new System.Windows.Media.MediaPlayer();
+                var player = _alarmSound;
+                player.Open(new Uri(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Windows), "Media", "Alarm01.wav")));
+                player.MediaEnded -= LoopAlarm;
+                player.MediaEnded += LoopAlarm;
+                player.Play();
+            }
+            catch (Exception e) { Log.Error("alarm sound failed", e); }
+            _alarmQuiet.Stop();
+            _alarmQuiet.Start();
+            _notch?.NotifyLocal("Alarm", time, "timer");
+            _notifications?.AddLocal("Alarm", time);
+            if (_fullscreen?.IsFullscreen != true) ShowRing(alarm);
+        };
+        alarms.Quiet += () =>
+        {
+            _alarmQuiet.Stop();
+            try { _alarmSound?.Stop(); } catch (Exception e) { Log.Error("alarm sound stop failed", e); }
+            var ring = _ringWindow;
+            _ringWindow = null;
+            try { ring?.Close(); } catch (InvalidOperationException) { }
+        };
+        if (_fullscreen is not null)
+            _fullscreen.Changed += fs => { if (!fs && alarms.RingingNow is { } a && _ringWindow is null) ShowRing(a); };
+    }
+
+    private void LoopAlarm(object? sender, EventArgs e)
+    {
+        if (_alarms?.RingingNow is null || _alarmSound is not { } p) return;
+        p.Position = TimeSpan.Zero;
+        p.Play();
+    }
+
+    private void ShowRing(Core.Alarms.Alarm alarm)
+    {
+        if (_alarms is not { } alarms) return;
+        try
+        {
+            _ringWindow?.Close();
+            _ringWindow = new Alarms.AlarmRingWindow(alarm, alarms.Snooze, alarms.Stop);
+            _ringWindow.Show();
+        }
+        catch (Exception e) { Log.Error("alarm card failed", e); }
     }
 
     // Settings window (spec §6.7): the dock controller is the one settings writer.
@@ -321,7 +484,8 @@ public partial class App : Application
                 Path.Combine(DataDir, "wallpapers")),
             new Settings.SettingsWindow.DockEffects(
                 on => { dock.UpdateSettings(s => s with { WindowPreviews = on }); dock.PreviewsEnabled = on; }),
-            _calendar);
+            _calendar,
+            new Settings.SettingsWindow.SyncOptions(() => dock.Settings.SyncFolder, () => _syncStatus, SetSyncFolder));
     }
 
     // Source app of a media session (AUMID or exe) as a short name for the media tile: the launcher index, else the
@@ -428,6 +592,10 @@ public partial class App : Application
             _awake.Dispose(); // keep awake never outlives the shell
             _weather?.Dispose();
             _calendar?.Dispose();
+            _alarmTick.Stop();
+            _syncTimer.Stop();
+            _syncWatch?.Dispose();
+            try { _alarmSound?.Stop(); } catch { /* exiting */ }
             _widgets?.Dispose();
             _controller?.Dispose();
             _tray?.Dispose();

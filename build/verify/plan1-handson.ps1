@@ -12,7 +12,7 @@
 param(
     # Run only these sections. Default (no -Only): reinstall + Dock, Apps, Tray, Reserve, Startup.
     # Example: -Only KeySpike,Notify
-    [ValidateSet('Task8', 'KeySpike', 'Overflow', 'Desktop', 'Notify', 'Dock', 'Apps', 'Tray', 'Reserve', 'Launcher', 'Notch', 'Panel', 'Dash', 'Widgets', 'Calendar', 'Startup')]
+    [ValidateSet('Task8', 'KeySpike', 'Overflow', 'Desktop', 'Notify', 'Dock', 'Apps', 'Tray', 'Reserve', 'Launcher', 'Notch', 'Panel', 'Dash', 'Widgets', 'Calendar', 'Plan9', 'Startup')]
     [string[]]$Only,
     # With -Only the reinstall step is skipped unless -Reinstall is given.
     [switch]$Reinstall
@@ -1719,6 +1719,28 @@ try {
         [void](Ask-Check 'DD.6' 'Previews switch off' 'Settings > Shell: turn off "Window previews in the dock", hover a running app, then turn it back on.' `
             'With it off, did hovering show just the name?')
         Complete-Quit 'DD.quit' $app 'dock effects section (--quit)'
+    }
+
+    # ================================================================ PLAN 9: new widgets and sync
+    if (Test-Section 'Plan9') {
+        Write-Step 'PLAN 9: tic-tac-toe, notes, alarm, folder pictures, sync'
+        $logOff = Get-LogLength $AppLog
+        $app = Start-App
+        [void](Wait-Until { (Get-LogSince $AppLog $logOff) -match 'dock ready' } 15000 250)
+        [void](Ask-Check 'P9.1' 'Tic-tac-toe' 'Edit widgets > Add > Tic-tac-toe. Play two games (try to win one, lose or draw one).' `
+            'Did Nothing answer each move, block your wins, show who won, and count the score under the board?')
+        [void](Ask-Check 'P9.2' 'Notes in both places' 'Add > Notes. Click it, type a line, press Esc. Then open the notch Notes tile.' `
+            'Did the widget show your line, and did the notch tile show the same text (and the other way round)?')
+        [void](Ask-Check 'P9.3' 'Alarm rings' 'Add > Alarm. Click it, add an alarm, set it to the next minute (e.g. 14:05), switch it on, close with Esc and wait.' `
+            'At that minute: sound, "Alarm" in the notch, the Snooze / Stop card at the top and a red flashing widget? Did Snooze silence it and ring again 5 minutes later, and Stop end it?')
+        [void](Ask-Check 'P9.4' 'Folder pictures' 'In edit mode, click an app folder a few times.' `
+            'Did the new pictures (rocket, heart, moon, sun, code, book, bolt, ghost) come round?')
+        [void](Ask-Check 'P9.5' 'Sync' 'Settings > Sync > Choose folder… and pick an empty test folder. Then open "<that folder>\Nothing Shell sync".' `
+            'Does it hold settings.json, notes.txt (and alarms.json once you made one), and does Settings say SYNCED hh:mm?')
+        $p9Log = Get-LogSince $AppLog $logOff
+        if ($p9Log -match 'sync: \d+ pulled, \d+ pushed') { Write-Good 'log shows a sync (counts only)' } else { Write-Bad 'no "sync: ..." line in the log' }
+        [void](Ask-Check 'P9.6' 'Sync off' 'Settings > Sync > Turn off.' 'Does Settings show the "Choose folder…" text again?')
+        Complete-Quit 'P9.quit' $app 'plan 9 section (--quit)'
     }
 
     # ================================================================ GOOGLE CALENDAR (Plan 6)

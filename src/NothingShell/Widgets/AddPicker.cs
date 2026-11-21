@@ -93,6 +93,9 @@ public sealed class AddPicker : Window
         WidgetKind.Photo => "Photo frame",
         WidgetKind.Folder => "App folder",
         WidgetKind.Agenda => "Up next",
+        WidgetKind.TicTacToe => "Tic-tac-toe",
+        WidgetKind.Notes => "Notes",
+        WidgetKind.Alarm => "Alarm",
         _ => kind.ToString(),
     };
 
@@ -101,10 +104,11 @@ public sealed class AddPicker : Window
     {
         WidgetKind.Photo => "camera",
         WidgetKind.Folder => "folder",
-        WidgetKind.Snake => "gamepad",
+        WidgetKind.Snake or WidgetKind.TicTacToe => "gamepad",
         WidgetKind.Media => "note",
+        WidgetKind.Notes => "book",
         WidgetKind.Weather => "plant",
-        WidgetKind.Clock or WidgetKind.Timer => "cup",
+        WidgetKind.Clock or WidgetKind.Timer or WidgetKind.Alarm => "cup",
         _ => "star",
     };
 }

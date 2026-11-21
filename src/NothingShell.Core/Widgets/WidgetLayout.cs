@@ -6,7 +6,7 @@ namespace NothingShell.Core.Widgets;
 /// <summary>Desktop widgets (spec §6.5).</summary>
 [JsonConverter(typeof(TolerantEnumConverter<WidgetKind>))]
 /// <remarks>Saved as numbers: new kinds are only ever appended (Agenda = "Up next", Plan 6b).</remarks>
-public enum WidgetKind { Clock, Snake, Timer, Calendar, Weather, Media, Battery, Photo, Folder, Agenda }
+public enum WidgetKind { Clock, Snake, Timer, Calendar, Weather, Media, Battery, Photo, Folder, Agenda, TicTacToe, Notes, Alarm }
 
 /// <summary>A widget's size in grid cells (136 px cells with 12 px gaps, unscaled; spec §5).</summary>
 public readonly record struct WidgetSize(int W, int H)
@@ -41,6 +41,9 @@ public static class WidgetRules
         WidgetKind.Timer => [S22, S11, S21],
         WidgetKind.Calendar => [S22, S21, S11],
         WidgetKind.Agenda => [S22, S21, S42],
+        WidgetKind.TicTacToe => [S22, S33],
+        WidgetKind.Notes => [S22, S21, S42],
+        WidgetKind.Alarm => [S21, S11],
         WidgetKind.Weather => [S21, S11, S22],
         WidgetKind.Media => [S21, S11, S22],
         WidgetKind.Photo => [S22, S11, S33],
@@ -54,8 +57,8 @@ public static class WidgetRules
     /// <summary>The order of the edit mode's ＋ Add picker.</summary>
     public static IReadOnlyList<WidgetKind> PickerOrder { get; } =
     [
-        WidgetKind.Photo, WidgetKind.Folder, WidgetKind.Clock, WidgetKind.Snake, WidgetKind.Timer, WidgetKind.Calendar,
-        WidgetKind.Agenda, WidgetKind.Weather, WidgetKind.Media, WidgetKind.Battery,
+        WidgetKind.Photo, WidgetKind.Folder, WidgetKind.Clock, WidgetKind.Snake, WidgetKind.TicTacToe, WidgetKind.Timer, WidgetKind.Calendar,
+        WidgetKind.Agenda, WidgetKind.Notes, WidgetKind.Alarm, WidgetKind.Weather, WidgetKind.Media, WidgetKind.Battery,
     ];
 }
 

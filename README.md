@@ -93,6 +93,18 @@ notifications. `uninstall.ps1` removes it. Use `-NoTimestamp` to skip the signin
     added, and trips or bookings Gmail put in your calendar; no holidays or birthdays. 2×2 lists the next four, 2×1
     shows the next one large, 4×2 the next six. "IN 25 MIN" / "NOW" in red when it is soon; click an event to open it
     in Google Calendar.
+  - **Tic-tac-toe:** you are X (red dots) against Nothing (O). Click a square; at the end a click starts a new game,
+    and who opens alternates. The score is kept.
+  - **Notes:** the notch's note on the desktop; click it to edit in a small window next to it (Esc closes). Both show
+    the same text.
+  - **Alarm:** the next alarm and when it rings; click to add or change alarms (time, days, on/off). A ring plays
+    Windows' alarm sound for up to a minute, shows in the notch and the panel, and puts Snooze 5 min / Stop at the top
+    of the screen; clicking the ringing widget stops it. Alarms ring only while the PC is awake and Nothing Shell runs.
+  - **Folder pictures:** sixteen dot pictures now (rocket, heart, moon, sun, code, book, bolt, ghost added).
+- **Sync:** Settings > Sync > Choose folder… (e.g. a OneDrive folder) keeps your settings, pins, widget layout, notes
+  and alarms in `<folder>\Nothing Shell sync`; another PC with Nothing Shell and the same folder picks them up (at
+  start and while running). When both PCs changed something, the newer copy wins. The Google sign-in, the calendar
+  cache, photo-frame photos, start-with-Windows and the wallpaper stay on each PC.
   - **Snake:** click the board to play; arrows or WASD steer, Space pauses / restarts. While you play, those keys go
     only to the snake; clicking anywhere else, switching windows or Esc pauses it and gives the keys back. The best
     score is saved.

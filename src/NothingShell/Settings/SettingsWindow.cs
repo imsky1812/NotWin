@@ -40,11 +40,14 @@ public sealed class SettingsWindow : Window
     /// <summary>Plan 7 switch: window previews in the dock.</summary>
     public sealed record DockEffects(Action<bool> SetPreviews);
 
+    /// <summary>Plan 9 sync: the folder (null = off), the status line, and choosing / clearing the folder.</summary>
+    public sealed record SyncOptions(Func<string?> Folder, Func<string> Status, Action<string?> SetFolder);
+
     public sealed record WidgetOptions(Action<string> SetScale, string? WallpaperDir, Action EditWidgets, string? GeneratedDir = null);
 
     private SettingsWindow(Func<ShellSettings> settings, Action<bool> setStart, Action<bool> setKeep, WeatherService? weather,
         Action<WeatherPlace> saveWeather, Action quit, WidgetOptions? widgets, DockEffects? effects = null,
-        GoogleCalendarService? calendar = null)
+        GoogleCalendarService? calendar = null, SyncOptions? sync = null)
     {
         _effects = effects;
         _calendar = calendar;
@@ -109,6 +112,44 @@ public sealed class SettingsWindow : Window
 
         if (widgets is not null) AddWidgetSections(stack, widgets);
 
+        // Sync (Plan 9): settings, notes and alarms kept in a folder you pick, for your other PCs.
+        if (sync is not null)
+        {
+            stack.Children.Add(Section("Sync"));
+            var host = new StackPanel { Margin = new Thickness(0, 0, 0, 18) };
+            stack.Children.Add(host);
+            void PaintSync()
+            {
+                host.Children.Clear();
+                var folder = sync.Folder();
+                var about = TileChrome.Body(folder is null
+                    ? "Keep settings, pins, widgets, notes and alarms in a folder (e.g. OneDrive) so your other PCs get them. The Google sign-in and photos stay on each PC."
+                    : folder, 12, FontWeights.Normal, TileChrome.Dim);
+                about.TextWrapping = TextWrapping.Wrap;
+                host.Children.Add(about);
+                var row = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 10, 0, 0) };
+                var choose = Pill(folder is null ? "Choose folder…" : "Change…");
+                choose.MouseLeftButtonUp += (_, _) =>
+                {
+                    var dialog = new Microsoft.Win32.OpenFolderDialog { Title = "Choose a folder to sync Nothing Shell through" };
+                    if (dialog.ShowDialog(this) == true) { sync.SetFolder(dialog.FolderName); PaintSync(); }
+                };
+                row.Children.Add(choose);
+                if (folder is not null)
+                {
+                    var off = Pill("Turn off");
+                    off.Margin = new Thickness(8, 0, 0, 0);
+                    off.MouseLeftButtonUp += (_, _) => { sync.SetFolder(null); PaintSync(); };
+                    row.Children.Add(off);
+                }
+                host.Children.Add(row);
+                var status = TileChrome.Label(sync.Status());
+                status.Margin = new Thickness(2, 8, 0, 0);
+                host.Children.Add(status);
+            }
+            PaintSync();
+        }
+
         stack.Children.Add(Section("Shell"));
         stack.Children.Add(ToggleRow("Start with Windows", _startToggle, () => _settings().StartWithWindows, _setStart));
         stack.Children.Add(ToggleRow("Keep dock visible", _keepToggle, () => _settings().KeepDockVisible, _setKeep));
@@ -165,7 +206,7 @@ public sealed class SettingsWindow : Window
     /// <summary>Shows the settings window, or brings the open one to the front.</summary>
     public static void ShowOrActivate(Func<ShellSettings> settings, Action<bool> setStart, Action<bool> setKeep,
         WeatherService? weather, Action<WeatherPlace> saveWeather, Action quit, WidgetOptions? widgets = null, DockEffects? effects = null,
-        GoogleCalendarService? calendar = null)
+        GoogleCalendarService? calendar = null, SyncOptions? sync = null)
     {
         if (s_open is not null)
         {
@@ -173,7 +214,7 @@ public sealed class SettingsWindow : Window
             ForegroundNative.Activate(new WindowInteropHelper(s_open).Handle);
             return;
         }
-        s_open = new SettingsWindow(settings, setStart, setKeep, weather, saveWeather, quit, widgets, effects, calendar);
+        s_open = new SettingsWindow(settings, setStart, setKeep, weather, saveWeather, quit, widgets, effects, calendar, sync);
         s_open.Show();
     }
 

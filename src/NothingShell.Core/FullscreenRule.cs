@@ -27,8 +27,10 @@ public static class FullscreenRule
     /// </summary>
     /// Our own windows in front (the launcher covers the whole monitor) keep the previous state too: they are not
     /// a game or a video, and treating them as one would close the launcher and hide the dock.
-    public static bool Decide(FullscreenProbe? probe, bool previous, bool foregroundIsOwnProcess = false)
-        => foregroundIsOwnProcess ? previous : probe is { } p ? IsFullscreen(p) : previous;
+    /// While Windows is <paramref name="locked"/> the answer is always full screen (user report 2026-11-21: the shell's
+    /// raised windows showed over the lock screen).
+    public static bool Decide(FullscreenProbe? probe, bool previous, bool foregroundIsOwnProcess = false, bool locked = false)
+        => locked || (foregroundIsOwnProcess ? previous : probe is { } p ? IsFullscreen(p) : previous);
 
     /// <summary>
     /// A maximized app is in front on <paramref name="dockMonitor"/> (user, 2026-11-21: the kept-visible dock then
