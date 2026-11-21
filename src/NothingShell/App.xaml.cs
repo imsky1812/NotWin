@@ -353,11 +353,10 @@ public partial class App : Application
     {
         _syncWatch?.Dispose();
         _syncWatch = null;
-        if (_controller?.Settings.SyncFolder is not { } folder) return;
+        if (_controller?.Settings.SyncFolder is null || _sync is null) return;
         try
         {
-            var dir = Path.Combine(folder, Sync.SyncService.SubFolder);
-            Directory.CreateDirectory(dir);
+            if (_sync.WatchDirectory() is not { } dir) return; // the folder is gone: never recreated; the 30 s check reports it
             var watch = new System.IO.FileSystemWatcher(dir) { NotifyFilter = NotifyFilters.LastWrite | NotifyFilters.FileName | NotifyFilters.Size };
             void Soon(object? s, FileSystemEventArgs e) => Dispatcher.BeginInvoke(() => { _syncSoon.Stop(); _syncSoon.Start(); });
             watch.Changed += Soon;

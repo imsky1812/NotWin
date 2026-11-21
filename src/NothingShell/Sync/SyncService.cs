@@ -24,6 +24,19 @@ public sealed class SyncService(string dataDir, Func<string?> folder)
 
     public DateTime? LastSynced { get; private set; }
 
+    /// <summary>
+    /// The folder's "Nothing Shell sync" folder to watch, created inside the chosen folder only while that one exists
+    /// (review: a folder that went away, e.g. OneDrive unlinked, is never recreated as a plain local one); else null.
+    /// </summary>
+    public string? WatchDirectory()
+    {
+        var root = folder();
+        if (string.IsNullOrWhiteSpace(root) || !Directory.Exists(root)) return null;
+        var dir = Path.Combine(root, SubFolder);
+        Directory.CreateDirectory(dir);
+        return dir;
+    }
+
     public SyncOutcome RunOnce()
     {
         var root = folder();
@@ -34,11 +47,14 @@ public sealed class SyncService(string dataDir, Func<string?> folder)
             var remoteDir = Path.Combine(root, SubFolder);
             Directory.CreateDirectory(remoteDir);
             var state = LoadState();
+            var before = new Dictionary<string, string>(state);
             List<string> pulled = [], pushed = [];
             foreach (var name in Files)
             {
                 var localPath = Path.Combine(dataDir, name);
                 var remotePath = Path.Combine(remoteDir, name);
+                // An online-only OneDrive file would be downloaded right now, with the shell waiting: next time.
+                if (OnlineOnly(remotePath)) continue;
                 var local = Side(localPath, name);
                 var remote = Side(remotePath, name);
                 state.TryGetValue(name, out var last);
@@ -59,7 +75,7 @@ public sealed class SyncService(string dataDir, Func<string?> folder)
                         break;
                 }
             }
-            SaveState(state);
+            if (state.Count != before.Count || state.Any(kv => !before.TryGetValue(kv.Key, out var v) || v != kv.Value)) SaveState(state);
             LastSynced = DateTime.Now;
             if (pulled.Count + pushed.Count > 0) Log.Info($"sync: {pulled.Count} pulled, {pushed.Count} pushed");
             return new SyncOutcome(true, pulled, pushed);
@@ -71,9 +87,15 @@ public sealed class SyncService(string dataDir, Func<string?> folder)
         }
     }
 
-    // Settings come in merged with this PC's own fields; notes and alarms are copied as they are.
+    // Settings come in merged with this PC's own fields; notes and alarms are copied as they are (alarms only when
+    // the file reads, so a half-written copy never replaces them).
     private bool Pull(string name, string remotePath, string localPath)
     {
+        if (name == Core.Alarms.AlarmStore.FileName)
+        {
+            try { _ = JsonSerializer.Deserialize<List<Core.Alarms.Alarm>>(File.ReadAllText(remotePath), Json) ?? throw new JsonException("null"); }
+            catch (JsonException) { Log.Info("sync: the folder's alarms could not be read, skipped"); return false; }
+        }
         if (name != SettingsFile)
         {
             CopyAtomic(remotePath, localPath);
@@ -102,13 +124,17 @@ public sealed class SyncService(string dataDir, Func<string?> folder)
         try
         {
             if (JsonSerializer.Deserialize<ShellSettings>(bytes, Json) is { } s)
-            {
-                var shared = s with { StartWithWindows = true, SyncFolder = null, PinsImported = false };
-                return SyncRule.Hash(JsonSerializer.SerializeToUtf8Bytes(shared, Json));
-            }
+                return SyncRule.Hash(JsonSerializer.SerializeToUtf8Bytes(SyncRule.Shared(s), Json));
         }
         catch (JsonException) { }
         return SyncRule.Hash(bytes);
+    }
+
+    private static bool OnlineOnly(string path)
+    {
+        const FileAttributes RecallOnOpen = (FileAttributes)0x00040000, RecallOnDataAccess = (FileAttributes)0x00400000;
+        try { return File.Exists(path) && (File.GetAttributes(path) & (FileAttributes.Offline | RecallOnOpen | RecallOnDataAccess)) != 0; }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException) { return true; }
     }
 
     private static void CopyAtomic(string from, string to)

@@ -172,14 +172,14 @@ public sealed class AlarmWidget : IDesktopWidget
 
 /// <summary>
 /// The alarm editor (Plan 9): a row per alarm (time box — red when it can't be read —, S M T W T F S chips, on/off, ✕)
-/// and ＋ Add (the next full hour, once, on). Every change is saved at once.
+/// and ＋ Add (the next full hour, once, on). Every change is saved at once, starting from the service's current list
+/// (review: never a copy taken when the editor opened, which would undo a ring or a sync).
 /// </summary>
 public sealed class AlarmEditorPopup : EditorPopupWindow
 {
     private static readonly string[] DayLetters = ["S", "M", "T", "W", "T", "F", "S"];
     private readonly AlarmService _alarms;
     private readonly StackPanel _rows;
-    private List<Alarm> _list;
 
     public AlarmEditorPopup(AlarmService alarms) : this(alarms, new StackPanel()) { }
 
@@ -187,13 +187,11 @@ public sealed class AlarmEditorPopup : EditorPopupWindow
     {
         _alarms = alarms;
         _rows = rows;
-        _list = [.. alarms.Alarms];
         add.MouseLeftButtonUp += (_, e) =>
         {
             e.Handled = true;
             var at = DateTime.Now.AddHours(1);
-            _list.Add(new Alarm(Guid.NewGuid().ToString("N"), at.Hour, 0, 0, true));
-            Save();
+            _alarms.Set([.. _alarms.Alarms, new Alarm(Guid.NewGuid().ToString("N"), at.Hour, 0, 0, true)]);
             Rebuild();
         };
         Rebuild();
@@ -211,19 +209,28 @@ public sealed class AlarmEditorPopup : EditorPopupWindow
         return new StackPanel { Children = { head, rows, add } };
     }
 
-    private void Save() => _alarms.Set([.. _list]);
-
-    private void Replace(Alarm a, Alarm with)
+    // One change to the alarm with this id, applied to the current list and saved; false when it is gone.
+    private bool Edit(string id, Func<Alarm, Alarm> change)
     {
-        var i = _list.FindIndex(x => x.Id == a.Id);
-        if (i >= 0) _list[i] = with;
+        var list = _alarms.Alarms.ToList();
+        var i = list.FindIndex(x => x.Id == id);
+        if (i < 0) return false;
+        list[i] = change(list[i]);
+        _alarms.Set(list);
+        return true;
     }
+
+    private Alarm? Current(string id) => _alarms.Alarms.FirstOrDefault(x => x.Id == id);
+
+    /// <summary>Sets the time from what was typed; false (nothing saved) when it can't be read.</summary>
+    public bool SetTime(string id, string text) =>
+        AlarmRules.ParseTime(text) is { } t && Edit(id, a => a with { Hour = t.H, Minute = t.M });
 
     private void Rebuild()
     {
         _rows.Children.Clear();
-        if (_list.Count == 0) _rows.Children.Add(TileChrome.Body("No alarms yet.", 13, FontWeights.Normal, TileChrome.Dim));
-        foreach (var alarm in _list.ToList()) _rows.Children.Add(Row(alarm));
+        if (_alarms.Alarms.Count == 0) _rows.Children.Add(TileChrome.Body("No alarms yet.", 13, FontWeights.Normal, TileChrome.Dim));
+        foreach (var alarm in _alarms.Alarms) _rows.Children.Add(Row(alarm));
     }
 
     private FrameworkElement Row(Alarm alarm)
@@ -236,23 +243,25 @@ public sealed class AlarmEditorPopup : EditorPopupWindow
             BorderThickness = new Thickness(1), BorderBrush = Brushes.Transparent, Padding = new Thickness(6, 4, 6, 4),
             VerticalAlignment = VerticalAlignment.Center,
         };
+        var bad = TileChrome.FrozenArgb(0x40, 0xE8, 0x23, 0x1F);
+        var normal = box.Background;
         box.TextChanged += (_, _) =>
         {
-            var current = _list.FirstOrDefault(x => x.Id == alarm.Id);
-            if (current is null) return;
-            if (AlarmRules.ParseTime(box.Text) is { } t)
-            {
-                box.BorderBrush = Brushes.Transparent;
-                Replace(current, current with { Hour = t.H, Minute = t.M });
-                Save();
-            }
-            else box.BorderBrush = TileChrome.Red;
+            // Red text on a red tint while it can't be read (the focused border colour is the template's, not ours).
+            var ok = SetTime(alarm.Id, box.Text);
+            box.Foreground = ok ? TileChrome.Text : TileChrome.Red;
+            box.Background = ok ? normal : bad;
         };
         DockPanel.SetDock(box, System.Windows.Controls.Dock.Left);
         row.Children.Add(box);
 
         var remove = new TextBlock { Text = "✕", FontSize = 12, Foreground = TileChrome.Dim, Cursor = Cursors.Hand, Margin = new Thickness(8, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center, Background = Brushes.Transparent };
-        remove.MouseLeftButtonUp += (_, e) => { e.Handled = true; _list.RemoveAll(x => x.Id == alarm.Id); Save(); Rebuild(); };
+        remove.MouseLeftButtonUp += (_, e) =>
+        {
+            e.Handled = true;
+            _alarms.Set([.. _alarms.Alarms.Where(x => x.Id != alarm.Id)]);
+            Rebuild();
+        };
         DockPanel.SetDock(remove, System.Windows.Controls.Dock.Right);
         row.Children.Add(remove);
 
@@ -260,11 +269,7 @@ public sealed class AlarmEditorPopup : EditorPopupWindow
         toggle.MouseLeftButtonUp += (_, e) =>
         {
             e.Handled = true;
-            if (_list.FirstOrDefault(x => x.Id == alarm.Id) is not { } current) return;
-            var flipped = current with { On = !current.On };
-            Replace(current, flipped);
-            toggle.Child = TileChrome.Toggle(flipped.On);
-            Save();
+            if (Edit(alarm.Id, a => a with { On = !a.On }) && Current(alarm.Id) is { } now) toggle.Child = TileChrome.Toggle(now.On);
         };
         DockPanel.SetDock(toggle, System.Windows.Controls.Dock.Right);
         row.Children.Add(toggle);
@@ -285,11 +290,7 @@ public sealed class AlarmEditorPopup : EditorPopupWindow
             chip.MouseLeftButtonUp += (_, e) =>
             {
                 e.Handled = true;
-                if (_list.FirstOrDefault(x => x.Id == alarm.Id) is not { } current) return;
-                var next = current with { Days = current.Days ^ bit };
-                Replace(current, next);
-                Paint((next.Days & bit) != 0);
-                Save();
+                if (Edit(alarm.Id, a => a with { Days = a.Days ^ bit }) && Current(alarm.Id) is { } now) Paint((now.Days & bit) != 0);
             };
             days.Children.Add(chip);
         }

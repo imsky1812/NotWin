@@ -27,7 +27,9 @@ public sealed class SyncRuleTests
         Assert.Equal(SyncAction.Push, SyncRule.Decide(Side("a"), Side(null), null));
         Assert.Equal(SyncAction.Pull, SyncRule.Decide(Side(null), Side("b"), null));
         Assert.Equal(SyncAction.None, SyncRule.Decide(Side(null), Side(null), null));
-        Assert.Equal(SyncAction.Pull, SyncRule.Decide(Side("a", 1), Side("b", 2), null)); // both there: newer wins
+        // Both there on the first sync: the folder wins (review: a PC joining must not push its fresh defaults).
+        Assert.Equal(SyncAction.Pull, SyncRule.Decide(Side("a", 1), Side("b", 2), null));
+        Assert.Equal(SyncAction.Pull, SyncRule.Decide(Side("a", 9), Side("b", 2), null));
     }
 
     [Fact]
@@ -53,4 +55,38 @@ public sealed class SyncRuleTests
     [Fact]
     public void Hash_IsHexSha256() =>
         Assert.Equal("ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad", SyncRule.Hash("abc"u8.ToArray()));
+
+    // Review: photo-frame photos are files on this PC; their names never come from another PC.
+    [Fact]
+    public void Merge_KeepsThisPcsPhotos()
+    {
+        var mine = new ShellSettings { WidgetList = new([new(NothingShell.Core.Widgets.WidgetKind.Photo, new(2, 2), 0, 0, "f1", new(Photos: ["mine.jpg"]))]) };
+        var theirs = new ShellSettings
+        {
+            WidgetList = new([
+                new(NothingShell.Core.Widgets.WidgetKind.Photo, new(2, 2), 74, 0, "f1", new("circle", ["theirs.jpg"])),
+                new(NothingShell.Core.Widgets.WidgetKind.Photo, new(2, 2), 296, 0, "f2", new(Photos: ["other.jpg"])),
+            ]),
+        };
+        var merged = SyncRule.Merge(mine, theirs).WidgetList!.Widgets;
+        Assert.Equal(["mine.jpg"], merged[0].Config!.Photos);
+        Assert.Equal("circle", merged[0].Config!.Shape);   // the rest of the frame follows the other PC
+        Assert.Equal(74, merged[0].X);
+        Assert.Null(merged[1].Config!.Photos);              // a frame new to this PC starts empty here
+    }
+
+    [Fact]
+    public void Shared_BlanksPerPcFieldsAndPhotos()
+    {
+        var s = new ShellSettings
+        {
+            StartWithWindows = false, SyncFolder = "x", PinsImported = true,
+            WidgetList = new([new(NothingShell.Core.Widgets.WidgetKind.Photo, new(2, 2), 0, 0, "f1", new(Photos: ["a.jpg"]))]),
+        };
+        var shared = SyncRule.Shared(s);
+        Assert.True(shared.StartWithWindows);
+        Assert.Null(shared.SyncFolder);
+        Assert.False(shared.PinsImported);
+        Assert.Null(shared.WidgetList!.Widgets[0].Config!.Photos);
+    }
 }

@@ -10,8 +10,11 @@ namespace NothingShell.Alarms;
 public sealed class AlarmService(AlarmStore store, Func<DateTime> now)
 {
     public static readonly TimeSpan SnoozeFor = TimeSpan.FromMinutes(5);
+
+    /// <summary>A ring more than this late (the PC slept through it) does not sound (review, Plan 9).</summary>
+    public static readonly TimeSpan Late = TimeSpan.FromMinutes(5);
     private DateTime _lastCheck = now();
-    private (Alarm Alarm, DateTime At)? _snoozed;
+    private readonly List<(Alarm Alarm, DateTime At)> _snoozed = [];
 
     public IReadOnlyList<Alarm> Alarms { get; private set; } = store.Load();
 
@@ -42,17 +45,26 @@ public sealed class AlarmService(AlarmStore store, Func<DateTime> now)
     public void Check()
     {
         var t = now();
-        var due = AlarmRules.Due(Alarms, _lastCheck, t);
+        var cutoff = t - Late;
+        var from = _lastCheck > cutoff ? _lastCheck : cutoff;
+        var due = AlarmRules.Due(Alarms, from, t);
+        var missed = _lastCheck < cutoff ? AlarmRules.Due(Alarms, _lastCheck, cutoff) : [];
         _lastCheck = t;
+        if (missed.Count > 0) Log.Info($"alarm: {missed.Count} missed while the PC was asleep or busy");
+        var passed = due.Concat(missed).Where(a => a.Days == 0).Select(a => a.Id).ToHashSet();
+        if (passed.Count > 0) Set([.. Alarms.Select(a => passed.Contains(a.Id) ? a with { On = false } : a)]);
+        _snoozed.RemoveAll(s => s.At < cutoff); // a snooze the PC slept through
         Alarm? ring = due.FirstOrDefault();
-        if (ring is null && _snoozed is { } s && s.At <= t)
+        if (ring is null)
         {
-            ring = s.Alarm;
-            _snoozed = null;
+            var i = _snoozed.FindIndex(s => s.At <= t);
+            if (i >= 0)
+            {
+                ring = _snoozed[i].Alarm;
+                _snoozed.RemoveAt(i);
+            }
         }
         if (ring is null) return;
-        if (due.Any(a => a.Days == 0))
-            Set([.. Alarms.Select(a => a.Days == 0 && due.Any(d => d.Id == a.Id) ? a with { On = false } : a)]);
         RingingNow = ring;
         Log.Info($"alarm ringing ({due.Count} due)");
         Ringing?.Invoke(ring);
@@ -62,7 +74,7 @@ public sealed class AlarmService(AlarmStore store, Func<DateTime> now)
     public void Snooze()
     {
         if (RingingNow is not { } a) return;
-        _snoozed = (a, now() + SnoozeFor);
+        _snoozed.Add((a, now() + SnoozeFor));
         RingingNow = null;
         Quiet?.Invoke();
         Changed?.Invoke();
@@ -77,5 +89,5 @@ public sealed class AlarmService(AlarmStore store, Func<DateTime> now)
     }
 
     /// <summary>When a snoozed alarm rings again (shown on the widget), or null.</summary>
-    public DateTime? SnoozedUntil => _snoozed?.At;
+    public DateTime? SnoozedUntil => _snoozed.Count == 0 ? null : _snoozed.Min(s => s.At);
 }

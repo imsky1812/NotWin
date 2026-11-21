@@ -88,4 +88,49 @@ public sealed class AlarmServiceTests : IDisposable
         Assert.Equal(1, changed);
         Assert.Equal("b", new AlarmStore(_dir).Load().Single().Id);
     }
+
+    // Review: after the PC slept, an alarm more than 5 minutes late does not ring (a "once" alarm still turns off).
+    [Fact]
+    public void AfterSleep_StaleAlarm_DoesNotRing_OnceTurnsOff()
+    {
+        var s = Service(new Alarm("a", 7, 0, 0, true));
+        var rings = 0;
+        s.Ringing += _ => rings++;
+        _now = new DateTime(2026, 11, 21, 9, 30, 0);
+        s.Check();
+        Assert.Equal(0, rings);
+        Assert.False(s.Alarms.Single().On);
+    }
+
+    [Fact]
+    public void ALittleLate_StillRings()
+    {
+        var s = Service(new Alarm("a", 7, 0, 0b1111111, true));
+        var rings = 0;
+        s.Ringing += _ => rings++;
+        _now = new DateTime(2026, 11, 21, 7, 3, 0);
+        s.Check();
+        Assert.Equal(1, rings);
+    }
+
+    // Review minor (re-graded: an alarm silently lost): snoozing a second alarm keeps the first one's snooze.
+    [Fact]
+    public void TwoSnoozes_BothRingAgain()
+    {
+        var s = Service(new Alarm("a", 7, 0, 0b1111111, true), new Alarm("b", 7, 2, 0b1111111, true));
+        var rung = new List<string>();
+        s.Ringing += a => rung.Add(a.Id);
+        _now = new DateTime(2026, 11, 21, 7, 0, 0);
+        s.Check();
+        s.Snooze();                       // a again at 07:05
+        _now = _now.AddMinutes(2);
+        s.Check();
+        s.Snooze();                       // b again at 07:07
+        _now = _now.AddMinutes(3);
+        s.Check();                        // 07:05: a
+        s.Stop();
+        _now = _now.AddMinutes(2);
+        s.Check();                        // 07:07: b
+        Assert.Equal(["a", "b", "a", "b"], rung);
+    }
 }

@@ -82,6 +82,7 @@ public sealed class NotesEditorPopup : EditorPopupWindow
     private readonly SharedNotes _notes;
     private readonly TextBox _box;
     private readonly DispatcherTimer _save = new() { Interval = TimeSpan.FromMilliseconds(500) };
+    private bool _dirty, _quiet;
 
     public NotesEditorPopup(SharedNotes notes) : this(notes, MakeBox(notes.Text)) { }
 
@@ -89,16 +90,42 @@ public sealed class NotesEditorPopup : EditorPopupWindow
     {
         _notes = notes;
         _box = box;
-        _save.Tick += (_, _) => Save();
-        _box.TextChanged += (_, _) => { _save.Stop(); _save.Start(); };
-        Closing += (_, _) => Save();
+        _save.Tick += (_, _) => SaveIfEdited();
+        _box.TextChanged += (_, _) =>
+        {
+            if (_quiet) return;
+            _dirty = true;
+            _save.Stop();
+            _save.Start();
+        };
+        _notes.Changed += OnShared;
+        Closing += (_, _) => SaveIfEdited();
+        Closed += (_, _) => _notes.Changed -= OnShared;
         Loaded += (_, _) => { _box.Focus(); _box.CaretIndex = _box.Text.Length; };
     }
 
-    private void Save()
+    /// <summary>The text in the box (tests).</summary>
+    public string EditorText => _box.Text;
+
+    /// <summary>
+    /// Saves what was typed. Nothing is written when nothing was typed (review: closing must never put back an old
+    /// copy over a note that changed elsewhere, e.g. a sync).
+    /// </summary>
+    public void SaveIfEdited()
     {
         _save.Stop();
+        if (!_dirty) return;
+        _dirty = false;
         _notes.Set(_box.Text, this);
+    }
+
+    // The note changed elsewhere (the notch tile, a sync): shown here unless something is being typed.
+    private void OnShared(object? from)
+    {
+        if (ReferenceEquals(from, this) || _dirty) return;
+        _quiet = true;
+        try { _box.Text = _notes.Text; }
+        finally { _quiet = false; }
     }
 
     private static TextBox MakeBox(string text) => new()
