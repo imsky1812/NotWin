@@ -65,6 +65,16 @@ public static unsafe class DockWindowNative
         return (new RectI(r.left, r.top, r.right, r.bottom), dpi);
     }
 
+    /// <summary>The full bounds of the monitor showing most of <paramref name="r"/> (physical px; the nearest one).</summary>
+    public static RectI MonitorOf(RectI r)
+    {
+        var mon = PInvoke.MonitorFromPoint(new System.Drawing.Point((r.Left + r.Right) / 2, (r.Top + r.Bottom) / 2), MONITOR_FROM_FLAGS.MONITOR_DEFAULTTONEAREST);
+        var mi = new MONITORINFO { cbSize = (uint)sizeof(MONITORINFO) };
+        if (!PInvoke.GetMonitorInfo(mon, ref mi)) return GetPrimaryMonitor().Bounds;
+        var m = mi.rcMonitor;
+        return new RectI(m.left, m.top, m.right, m.bottom);
+    }
+
     /// <summary>
     /// Raw low-level-hook points can lie outside every monitor (the cursor clip is applied after the hook);
     /// pull such points back onto the nearest monitor so "pushing against the bottom edge" reads as the edge row.

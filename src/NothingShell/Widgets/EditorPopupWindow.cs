@@ -57,9 +57,8 @@ public class EditorPopupWindow : Window
         var w = (int)Math.Ceiling(ActualWidth * scale);
         var h = (int)Math.Ceiling(ActualHeight * scale);
         var gap = (int)Math.Round(10 * scale);
-        var (mon, _) = DockWindowNative.GetPrimaryMonitor();
-        var left = widget.Right + gap + w <= mon.Right ? widget.Right + gap : Math.Max(mon.Left, widget.Left - gap - w);
-        var top = Math.Clamp(widget.Top, mon.Top, Math.Max(mon.Top, mon.Bottom - h));
+        // On the widget's own screen (Plan 10), not clamped to the main one.
+        var (left, top) = PopupPlacement.NextTo(widget, DockWindowNative.MonitorOf(widget), w, h, gap);
         var hwnd = new WindowInteropHelper(this).Handle;
         DockWindowNative.PlaceTopmost(hwnd, new RectI(left, top, left + w, top + h));
         Opacity = 1;
