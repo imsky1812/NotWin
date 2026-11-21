@@ -163,7 +163,7 @@ public sealed class WidgetLayoutTests
         Assert.True(WidgetRules.IsRepeatable(Photo));
         Assert.True(WidgetRules.IsRepeatable(Folder));
         Assert.False(WidgetRules.IsRepeatable(Clock));
-        Assert.Equal([Photo, Folder, Clock, Snake, WidgetKind.TicTacToe, WidgetKind.Timer, Calendar, WidgetKind.Agenda, WidgetKind.Notes, Weather, Media, Battery], WidgetRules.PickerOrder);
+        Assert.Equal([Photo, Folder, Clock, Snake, WidgetKind.TicTacToe, WidgetKind.Timer, Calendar, WidgetKind.Agenda, WidgetKind.Notes, WidgetKind.Alarm, Weather, Media, Battery], WidgetRules.PickerOrder);
     }
 
     [Fact]
@@ -198,9 +198,9 @@ public sealed class WidgetLayoutTests
     public void Addable_HidesPresentOneOffs_AlwaysOffersPhotoAndFolder()
     {
         var l = DesktopLayout.Sanitize(null, 1600, 900, Ids());
-        Assert.Equal([Photo, Folder, WidgetKind.TicTacToe, WidgetKind.Agenda, WidgetKind.Notes], l.Addable());
+        Assert.Equal([Photo, Folder, WidgetKind.TicTacToe, WidgetKind.Agenda, WidgetKind.Notes, WidgetKind.Alarm], l.Addable());
         var snake = l.Widgets.Single(p => p.Kind == Snake).Id;
-        Assert.Equal([Photo, Folder, Snake, WidgetKind.TicTacToe, WidgetKind.Agenda, WidgetKind.Notes], l.Remove(snake).Addable());
+        Assert.Equal([Photo, Folder, Snake, WidgetKind.TicTacToe, WidgetKind.Agenda, WidgetKind.Notes, WidgetKind.Alarm], l.Remove(snake).Addable());
     }
 
     [Fact]
@@ -280,5 +280,15 @@ public sealed class WidgetLayoutTests
         Assert.Equal(11, (int)WidgetKind.Notes);
         var order = WidgetRules.PickerOrder.ToList();
         Assert.Equal(order.IndexOf(WidgetKind.Agenda) + 1, order.IndexOf(WidgetKind.Notes));
+    }
+
+    // Plan 9: Alarm — 2×1 default, 1×1; once per desktop; right after Notes in the picker.
+    [Fact]
+    public void Alarm_SizesAndPicker()
+    {
+        Assert.Equal([new WidgetSize(2, 1), new WidgetSize(1, 1)], WidgetRules.Sizes(WidgetKind.Alarm));
+        Assert.Equal(12, (int)WidgetKind.Alarm);
+        var order = WidgetRules.PickerOrder.ToList();
+        Assert.Equal(order.IndexOf(WidgetKind.Notes) + 1, order.IndexOf(WidgetKind.Alarm));
     }
 }

@@ -31,6 +31,11 @@ public partial class App : Application
     private Forecast.WeatherService? _weather;
     private GoogleCalendar.GoogleCalendarService? _calendar;
     private Notch.Dashboard.SharedNotes? _notes; // the notch tile and the desktop widget share one note (Plan 9)
+    private Alarms.AlarmService? _alarms;
+    private readonly System.Windows.Threading.DispatcherTimer _alarmTick = new() { Interval = TimeSpan.FromSeconds(1) };
+    private readonly System.Windows.Threading.DispatcherTimer _alarmQuiet = new() { Interval = TimeSpan.FromSeconds(60) };
+    private System.Windows.Media.MediaPlayer? _alarmSound;
+    private Alarms.AlarmRingWindow? _ringWindow;
     private Widgets.DesktopWidgets? _widgets;
     private readonly Core.Widgets.SnakeKeyGate _snakeGate = new(); // one gate for whichever snake is on the desktop
     private Dock.AppIconCache? _folderIcons; // shared by every app folder
@@ -152,6 +157,9 @@ public partial class App : Application
             _notch.SettingsRequested += ShowSettings;
             if (dockCtl is not null) dockCtl.SettingsRequested += ShowSettings;
             _weather.Start(dockCtl?.Settings.Weather);
+            // Alarms (Plan 9): checked every second; guarded like the calendar.
+            try { StartAlarms(); }
+            catch (Exception e) { Log.Error("alarms failed to start", e); }
             // Google Calendar (Plan 6): guarded, a failure leaves the calendar widget showing plain dates.
             try
             {
@@ -286,6 +294,7 @@ public partial class App : Application
             case Core.Widgets.WidgetKind.Calendar: return new Widgets.CalendarWidget(_calendar, () => _widgets?.Editing == true);
             case Core.Widgets.WidgetKind.Agenda: return new Widgets.AgendaWidget(_calendar);
             case Core.Widgets.WidgetKind.Notes: return new Widgets.NotesWidget(_notes ??= new Notch.Dashboard.SharedNotes(new NotesStore(DataDir)));
+            case Core.Widgets.WidgetKind.Alarm: return _alarms is null ? null : new Alarms.AlarmWidget(_alarms);
             case Core.Widgets.WidgetKind.TicTacToe:
                 return new Widgets.TicTacToeWidget(() => dock.Settings.TicTacToeScore, score => dock.UpdateSettings(s => s with { TicTacToeScore = score }));
             case Core.Widgets.WidgetKind.Snake:
@@ -304,6 +313,69 @@ public partial class App : Application
                 return new Widgets.FolderWidget(p.Id, p.Config, () => index.Apps, index.FindApp, _folderIcons, save);
             default: return null;
         }
+    }
+
+    // Alarms (Plan 9): a ring loops Windows' alarm sound for up to a minute, shows in the notch and the panel's list, and
+    // puts the Snooze / Stop card at the top of the screen (after full screen ends, if it is still ringing then).
+    private void StartAlarms()
+    {
+        var alarms = new Alarms.AlarmService(new Core.Alarms.AlarmStore(DataDir), () => DateTime.Now);
+        _alarms = alarms;
+        _alarmTick.Tick += (_, _) =>
+        {
+            try { alarms.Check(); }
+            catch (Exception e) { Log.Error("alarm check failed", e); }
+        };
+        _alarmTick.Start();
+        _alarmQuiet.Tick += (_, _) => { _alarmQuiet.Stop(); alarms.Stop(); };
+        alarms.Ringing += alarm =>
+        {
+            var time = $"{alarm.Hour:00}:{alarm.Minute:00}";
+            try
+            {
+                _alarmSound ??= new System.Windows.Media.MediaPlayer();
+                var player = _alarmSound;
+                player.Open(new Uri(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Windows), "Media", "Alarm01.wav")));
+                player.MediaEnded -= LoopAlarm;
+                player.MediaEnded += LoopAlarm;
+                player.Play();
+            }
+            catch (Exception e) { Log.Error("alarm sound failed", e); }
+            _alarmQuiet.Stop();
+            _alarmQuiet.Start();
+            _notch?.NotifyLocal("Alarm", time, "timer");
+            _notifications?.AddLocal("Alarm", time);
+            if (_fullscreen?.IsFullscreen != true) ShowRing(alarm);
+        };
+        alarms.Quiet += () =>
+        {
+            _alarmQuiet.Stop();
+            try { _alarmSound?.Stop(); } catch (Exception e) { Log.Error("alarm sound stop failed", e); }
+            var ring = _ringWindow;
+            _ringWindow = null;
+            try { ring?.Close(); } catch (InvalidOperationException) { }
+        };
+        if (_fullscreen is not null)
+            _fullscreen.Changed += fs => { if (!fs && alarms.RingingNow is { } a && _ringWindow is null) ShowRing(a); };
+    }
+
+    private void LoopAlarm(object? sender, EventArgs e)
+    {
+        if (_alarms?.RingingNow is null || _alarmSound is not { } p) return;
+        p.Position = TimeSpan.Zero;
+        p.Play();
+    }
+
+    private void ShowRing(Core.Alarms.Alarm alarm)
+    {
+        if (_alarms is not { } alarms) return;
+        try
+        {
+            _ringWindow?.Close();
+            _ringWindow = new Alarms.AlarmRingWindow(alarm, alarms.Snooze, alarms.Stop);
+            _ringWindow.Show();
+        }
+        catch (Exception e) { Log.Error("alarm card failed", e); }
     }
 
     // Settings window (spec §6.7): the dock controller is the one settings writer.
@@ -432,6 +504,8 @@ public partial class App : Application
             _awake.Dispose(); // keep awake never outlives the shell
             _weather?.Dispose();
             _calendar?.Dispose();
+            _alarmTick.Stop();
+            try { _alarmSound?.Stop(); } catch { /* exiting */ }
             _widgets?.Dispose();
             _controller?.Dispose();
             _tray?.Dispose();
