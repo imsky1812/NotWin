@@ -35,7 +35,7 @@ public static class LauncherIcons
     {
         if (s_gear is not null) return s_gear;
         // Line gear (stroke #F2F2F2) drawn once as a frozen DrawingImage.
-        var pen = new Pen(new SolidColorBrush(Color.FromRgb(0xF2, 0xF2, 0xF2)), 1.8) { StartLineCap = PenLineCap.Round, EndLineCap = PenLineCap.Round };
+        var pen = new Pen(new SolidColorBrush(Color.FromRgb(0xE8, 0xE8, 0xE8)), 1.8) { StartLineCap = PenLineCap.Round, EndLineCap = PenLineCap.Round };
         var g = new GeometryGroup();
         g.Children.Add(new EllipseGeometry(new Point(12, 12), 3, 3));
         for (var i = 0; i < 8; i++)

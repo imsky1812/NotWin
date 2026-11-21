@@ -13,13 +13,13 @@
         WindowStartupLocation="Manual"
         UseLayoutRounding="True"
         TextOptions.TextFormattingMode="Display"
-        FontFamily="{StaticResource Font.Geist}"
+        FontFamily="{StaticResource Font.Grotesk}"
         FontSize="13"
         Foreground="{StaticResource Brush.Text}">
     <Window.Resources>
         <Style TargetType="ScrollBar" BasedOn="{StaticResource ScrollBar.Thin}" />
         <Style x:Key="Label" TargetType="TextBlock">
-            <Setter Property="FontFamily" Value="{StaticResource Font.GeistMono}" />
+            <Setter Property="FontFamily" Value="{StaticResource Font.Mono}" />
             <Setter Property="FontWeight" Value="Medium" />
             <Setter Property="FontSize" Value="10" />
             <Setter Property="Foreground" Value="{StaticResource Brush.Dim}" />

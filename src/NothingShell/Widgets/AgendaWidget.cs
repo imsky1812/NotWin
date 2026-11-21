@@ -103,7 +103,6 @@ public sealed class AgendaWidget : IDesktopWidget
         var (when, soon) = CalendarFeed.Countdown(e, now, TimeZoneInfo.Local);
         var stack = new StackPanel { Margin = new Thickness(0, 0, 0, 9) };
         var label = TileChrome.Label(when, soon ? TileChrome.Red : null);
-        label.FontSize = 9;
         stack.Children.Add(label);
         var title = TileChrome.Body(e.Title, 13, FontWeights.SemiBold);
         title.TextTrimming = TextTrimming.CharacterEllipsis;

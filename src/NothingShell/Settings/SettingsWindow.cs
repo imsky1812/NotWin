@@ -330,7 +330,7 @@ public sealed class SettingsWindow : Window
             var tile = new Border
             {
                 Height = 96, CornerRadius = new CornerRadius(10), Margin = new Thickness(0, 0, 8, 8), Cursor = Cursors.Hand,
-                Background = TileChrome.Frozen(0x22, 0x22, 0x22), BorderBrush = TileChrome.FrozenArgb(0x55, 0xF2, 0xF2, 0xF2),
+                Background = TileChrome.Frozen(0x22, 0x22, 0x22), BorderBrush = TileChrome.FrozenArgb(0x55, 0xE8, 0xE8, 0xE8),
                 BorderThickness = new Thickness(1.5), ToolTip = "Make a new Nothing-style wallpaper", Child = label,
             };
             var busy = false;
@@ -466,7 +466,7 @@ public sealed class SettingsWindow : Window
     private static TextBlock Section(string text)
     {
         var t = TileChrome.Label(text);
-        t.FontSize = 10;
+        t.FontSize = 11;
         t.Margin = new Thickness(2, 0, 0, 8);
         return t;
     }
@@ -541,7 +541,7 @@ public static class SettingsFields
     public static TextBlock Caption(string text)
     {
         var t = TileChrome.Label(text);
-        t.FontSize = 10;
+        t.FontSize = 11;
         t.Margin = new Thickness(2, 6, 0, 6);
         return t;
     }

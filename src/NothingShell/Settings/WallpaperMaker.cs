@@ -15,7 +15,7 @@ public static class WallpaperMaker
 {
     public const int Keep = 12;
     private const string Prefix = "nothing_new_";
-    private static readonly Brush Red = Freeze(new SolidColorBrush(Color.FromRgb(0xE8, 0x23, 0x1F)));
+    private static readonly Brush Red = Freeze(new SolidColorBrush(Color.FromRgb(0xD7, 0x19, 0x21)));
 
     /// <summary>Renders and saves; returns the PNG's path.</summary>
     public static string Make(WallRecipe recipe, int width, int height, string dir)

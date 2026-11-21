@@ -157,7 +157,7 @@ public sealed class NotificationsSection
         {
             Background = new SolidColorBrush(Color.FromRgb(0x26, 0x26, 0x26)), CornerRadius = new CornerRadius(12),
             Padding = new Thickness(10, 6, 10, 6), Cursor = Cursors.Hand,
-            Child = new TextBlock { Text = text.ToUpperInvariant(), FontFamily = (FontFamily)Application.Current.FindResource("Font.GeistMono"), FontSize = 10, FontWeight = FontWeights.Medium },
+            Child = new TextBlock { Text = text.ToUpperInvariant(), FontFamily = (FontFamily)Application.Current.FindResource("Font.Mono"), FontSize = 11, FontWeight = FontWeights.Medium },
         };
         b.MouseLeftButtonUp += (_, _) => onClick();
         return b;
@@ -165,7 +165,7 @@ public sealed class NotificationsSection
 
     private static TextBlock Label(string text) => new()
     {
-        Text = text, FontFamily = (FontFamily)Application.Current.FindResource("Font.GeistMono"), FontSize = 10,
+        Text = text, FontFamily = (FontFamily)Application.Current.FindResource("Font.Mono"), FontSize = 11,
         FontWeight = FontWeights.Medium, Foreground = (Brush)Application.Current.FindResource("Brush.Dim"), VerticalAlignment = VerticalAlignment.Center,
     };
 

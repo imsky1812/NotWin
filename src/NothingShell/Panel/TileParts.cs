@@ -13,7 +13,7 @@ namespace NothingShell.Panel;
 public sealed class Tile : Border
 {
     private static readonly Brush OffBg = Freeze(new SolidColorBrush(Color.FromRgb(0x26, 0x26, 0x26)));
-    private static readonly Brush OnBg = Freeze(new SolidColorBrush(Color.FromRgb(0xF2, 0xF2, 0xF2)));
+    private static readonly Brush OnBg = Freeze(new SolidColorBrush(Color.FromRgb(0xE8, 0xE8, 0xE8)));
     private static readonly Brush Dark = Freeze(new SolidColorBrush(Color.FromRgb(0x11, 0x11, 0x11)));
     private static readonly Brush DarkDim = Freeze(new SolidColorBrush(Color.FromRgb(0x55, 0x55, 0x55)));
     private readonly TextBlock _title, _sub;
@@ -33,7 +33,7 @@ public sealed class Tile : Border
         _title = new TextBlock { Text = title, FontSize = 13, FontWeight = FontWeights.Medium };
         _sub = new TextBlock
         {
-            FontFamily = (FontFamily)Application.Current.FindResource("Font.GeistMono"), FontSize = 10, FontWeight = FontWeights.Medium,
+            FontFamily = (FontFamily)Application.Current.FindResource("Font.Mono"), FontSize = 11, FontWeight = FontWeights.Medium,
             TextTrimming = TextTrimming.CharacterEllipsis,
         };
         var text = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Children = { _title, _sub } };
@@ -98,8 +98,8 @@ public sealed class TileList : Border
     {
         var label = new TextBlock
         {
-            Text = action?.ToUpperInvariant() ?? "", FontFamily = (FontFamily)Application.Current.FindResource("Font.GeistMono"),
-            FontSize = 10, FontWeight = FontWeights.Medium, Foreground = (Brush)Application.Current.FindResource("Brush.Dim"),
+            Text = action?.ToUpperInvariant() ?? "", FontFamily = (FontFamily)Application.Current.FindResource("Font.Mono"),
+            FontSize = 11, FontWeight = FontWeights.Medium, Foreground = (Brush)Application.Current.FindResource("Brush.Dim"),
             VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(10, 0, 0, 0),
         };
         DockPanel.SetDock(label, System.Windows.Controls.Dock.Right);

@@ -51,7 +51,7 @@ public sealed class DashboardView : IDisposable
         _editIcon.Margin = new Thickness(0, 0, 6, 0);
         _editLabel = new TextBlock
         {
-            Text = "EDIT", FontFamily = TileChrome.Mono, FontSize = 10, Foreground = TileChrome.Dim, VerticalAlignment = VerticalAlignment.Center,
+            Text = "EDIT", FontFamily = TileChrome.Mono, FontSize = 11, Foreground = TileChrome.Dim, VerticalAlignment = VerticalAlignment.Center,
         };
         _edit = new StackPanel
         {
@@ -419,7 +419,7 @@ public sealed class DashboardView : IDisposable
             Background = TileChrome.Text, CornerRadius = new CornerRadius(10), Padding = new Thickness(8, 3, 8, 3),
             HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Bottom,
             Margin = new Thickness(8), Cursor = Cursors.Hand,
-            Child = new TextBlock { Text = $"{cw}×{ch} ▸", FontFamily = TileChrome.Mono, FontSize = 10, Foreground = TileChrome.Dark },
+            Child = new TextBlock { Text = $"{cw}×{ch} ▸", FontFamily = TileChrome.Mono, FontSize = 11, Foreground = TileChrome.Dark },
         };
         chip.MouseLeftButtonUp += (_, e) => { e.Handled = true; SizeChipClicked?.Invoke(index); };
         var x = new Border

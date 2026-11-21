@@ -14,7 +14,7 @@
         SizeToContent="Manual"
         UseLayoutRounding="True"
         TextOptions.TextFormattingMode="Display"
-        FontFamily="{StaticResource Font.Geist}"
+        FontFamily="{StaticResource Font.Grotesk}"
         Foreground="{StaticResource Brush.Text}">
     <!-- The window is a fixed transparent band at the top centre; only the pill inside is painted. The whole band is
          click-through (WS_EX_TRANSPARENT) except while the dashboard is open. Pill sizes per state (spec §6.4): resting
@@ -23,9 +23,6 @@
         <Border x:Name="Pill" HorizontalAlignment="Center" VerticalAlignment="Top" Margin="0,8,0,0"
                 Width="196" Height="34" CornerRadius="20" Background="#FF000000"
                 BorderBrush="#14FFFFFF" BorderThickness="1" ClipToBounds="True">
-            <Border.Effect>
-                <DropShadowEffect BlurRadius="30" ShadowDepth="8" Direction="270" Opacity="0.28" Color="Black" />
-            </Border.Effect>
             <Grid>
                 <!-- Resting: dot-matrix time | battery -->
                 <DockPanel x:Name="RestLayer" Margin="14,0" Opacity="1">
@@ -37,7 +34,7 @@
                             <TextBlock x:Name="Bolt" Text="⚡" FontSize="8" Foreground="#FF000000" HorizontalAlignment="Center"
                                        VerticalAlignment="Center" Margin="0,0,2,0" Visibility="Collapsed" />
                         </Grid>
-                        <TextBlock x:Name="BatteryText" FontFamily="{StaticResource Font.GeistMono}" FontWeight="Medium" FontSize="11"
+                        <TextBlock x:Name="BatteryText" FontFamily="{StaticResource Font.Mono}" FontWeight="Medium" FontSize="11"
                                    Foreground="#FFDDDDDD" VerticalAlignment="Center" />
                     </StackPanel>
                     <!-- Mockup rtime: dots(h:m, {d:2.6, gap:1, fill:'#eee'}) -->
@@ -59,12 +56,12 @@
 
                 <!-- Plugged in / unplugged: bolt + label | level dots + percent in dots (user request 2026-11-19) -->
                 <DockPanel x:Name="PowerLayer" Margin="16,0" Opacity="0">
-                    <TextBlock x:Name="PowerBolt" Text="⚡" FontSize="13" Foreground="#FFE8231F" DockPanel.Dock="Left"
+                    <TextBlock x:Name="PowerBolt" Text="⚡" FontSize="13" Foreground="#FFD71921" DockPanel.Dock="Left"
                                VerticalAlignment="Center" Margin="0,0,7,1" />
                     <StackPanel Orientation="Horizontal" DockPanel.Dock="Right" VerticalAlignment="Center">
                         <local:DotBar x:Name="PowerBar" Dot="4" Gap="2" VerticalAlignment="Center" Margin="0,0,10,0" />
                         <local:DotMatrix x:Name="PowerPercent" Dot="2.6" Gap="1" Fill="#FFEEEEEE" VerticalAlignment="Center" />
-                        <TextBlock Text="%" FontFamily="{StaticResource Font.GeistMono}" FontWeight="Medium" FontSize="11"
+                        <TextBlock Text="%" FontFamily="{StaticResource Font.Mono}" FontWeight="Medium" FontSize="11"
                                    Foreground="{StaticResource Brush.Dim}" VerticalAlignment="Center" Margin="2,0,0,0" />
                     </StackPanel>
                     <TextBlock x:Name="PowerLabel" FontSize="12" FontWeight="Medium" VerticalAlignment="Center"
@@ -81,7 +78,7 @@
                     <Canvas x:Name="TrackClip" Height="16" VerticalAlignment="Center" ClipToBounds="True">
                         <TextBlock x:Name="TrackText" FontSize="12" Canvas.Top="0">
                             <TextBlock.RenderTransform><TranslateTransform x:Name="TrackShift" /></TextBlock.RenderTransform>
-                            <Run x:Name="TrackTitle" FontWeight="Medium" Foreground="#FFF2F2F2" /><Run x:Name="TrackDot" Foreground="#FF8A8A8A" /><Run x:Name="TrackArtist" Foreground="#FF8A8A8A" />
+                            <Run x:Name="TrackTitle" FontWeight="Medium" Foreground="#FFE8E8E8" /><Run x:Name="TrackDot" Foreground="#FF999999" /><Run x:Name="TrackArtist" Foreground="#FF999999" />
                         </TextBlock>
                     </Canvas>
                 </DockPanel>
@@ -91,7 +88,7 @@
                     <Border Width="36" Height="36" CornerRadius="18" Background="#FF1D1D1D" DockPanel.Dock="Left" VerticalAlignment="Center" Margin="0,0,14,0">
                         <Image x:Name="NotifyIcon" Width="20" Height="20" />
                     </Border>
-                    <TextBlock Text="NOW" FontFamily="{StaticResource Font.GeistMono}" FontWeight="Medium" FontSize="9"
+                    <TextBlock Text="NOW" FontFamily="{StaticResource Font.Mono}" FontWeight="Medium" FontSize="11"
                                Foreground="{StaticResource Brush.Dim}" DockPanel.Dock="Right" VerticalAlignment="Center" Margin="10,0,0,0" />
                     <StackPanel VerticalAlignment="Center">
                         <TextBlock x:Name="NotifyApp" FontSize="13" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />

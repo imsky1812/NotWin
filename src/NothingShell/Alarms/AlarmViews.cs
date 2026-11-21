@@ -247,7 +247,7 @@ public sealed class AlarmEditorPopup : EditorPopupWindow
             BorderThickness = new Thickness(1), BorderBrush = Brushes.Transparent, Padding = new Thickness(6, 4, 6, 4),
             VerticalAlignment = VerticalAlignment.Center,
         };
-        var bad = TileChrome.FrozenArgb(0x40, 0xE8, 0x23, 0x1F);
+        var bad = TileChrome.FrozenArgb(0x40, 0xD7, 0x19, 0x21);
         var normal = box.Background;
         box.TextChanged += (_, _) =>
         {
@@ -283,7 +283,7 @@ public sealed class AlarmEditorPopup : EditorPopupWindow
         {
             var bit = 1 << d;
             var chip = new Border { Width = 22, Height = 22, CornerRadius = new CornerRadius(11), Margin = new Thickness(0, 0, 3, 0), Cursor = Cursors.Hand };
-            var letter = new TextBlock { Text = DayLetters[d], FontFamily = TileChrome.Font, FontSize = 10, FontWeight = FontWeights.SemiBold, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
+            var letter = new TextBlock { Text = DayLetters[d], FontFamily = TileChrome.Font, FontSize = 11, FontWeight = FontWeights.SemiBold, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
             chip.Child = letter;
             void Paint(bool on)
             {

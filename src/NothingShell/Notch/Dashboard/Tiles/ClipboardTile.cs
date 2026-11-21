@@ -101,7 +101,7 @@ public sealed class ClipboardTile : ITileView
             });
             row1.Children.Add(new TextBlock
             {
-                Text = $"IMAGE · {item.Width} × {item.Height}", FontFamily = TileChrome.Mono, FontSize = 10,
+                Text = $"IMAGE · {item.Width} × {item.Height}", FontFamily = TileChrome.Mono, FontSize = 11,
                 Foreground = first ? TileChrome.Text : Muted, VerticalAlignment = VerticalAlignment.Center,
             });
             line = row1;

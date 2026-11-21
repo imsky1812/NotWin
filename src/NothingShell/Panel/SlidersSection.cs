@@ -30,8 +30,8 @@ public sealed class SlidersSection
 
         _chipText = new TextBlock
         {
-            FontFamily = (FontFamily)Application.Current.FindResource("Font.GeistMono"),
-            FontWeight = FontWeights.Medium, FontSize = 10, Foreground = (Brush)Application.Current.FindResource("Brush.Text"),
+            FontFamily = (FontFamily)Application.Current.FindResource("Font.Mono"),
+            FontWeight = FontWeights.Medium, FontSize = 11, Foreground = (Brush)Application.Current.FindResource("Brush.Text"),
             VerticalAlignment = VerticalAlignment.Center,
         };
         _chip = new Border

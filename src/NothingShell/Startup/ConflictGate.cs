@@ -73,13 +73,13 @@ public static class ConflictGate
             var panel = new StackPanel();
             panel.Children.Add(new TextBlock
             {
-                Text = "NOTHING SHELL", FontFamily = (FontFamily)res["Font.GeistMono"], FontWeight = FontWeights.Medium, FontSize = 11,
+                Text = "NOTHING SHELL", FontFamily = (FontFamily)res["Font.Mono"], FontWeight = FontWeights.Medium, FontSize = 11,
                 Foreground = (Brush)res["Brush.Dim"], Margin = new Thickness(0, 0, 0, 10),
             });
             panel.Children.Add(new TextBlock
             {
                 Text = message, TextWrapping = TextWrapping.Wrap, MaxWidth = 340,
-                FontFamily = (FontFamily)res["Font.Geist"], FontSize = 14, Foreground = (Brush)res["Brush.Text"],
+                FontFamily = (FontFamily)res["Font.Grotesk"], FontSize = 14, Foreground = (Brush)res["Brush.Text"],
             });
             panel.Children.Add(buttons);
             Content = new Border
@@ -98,7 +98,7 @@ public static class ConflictGate
             var b = new Button
             {
                 Content = label, Padding = new Thickness(14, 7, 14, 7), Margin = new Thickness(8, 0, 0, 0),
-                FontFamily = (FontFamily)res["Font.Geist"], FontSize = 13,
+                FontFamily = (FontFamily)res["Font.Grotesk"], FontSize = 13,
                 Foreground = (Brush)res[primary ? "Brush.Ink" : "Brush.Text"],
                 Background = (Brush)res[primary ? "Brush.Text" : "Brush.Hover"],
                 BorderThickness = new Thickness(0), Cursor = Cursors.Hand,

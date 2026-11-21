@@ -13,7 +13,7 @@
         SizeToContent="Manual"
         UseLayoutRounding="True"
         TextOptions.TextFormattingMode="Display"
-        FontFamily="{StaticResource Font.Geist}"
+        FontFamily="{StaticResource Font.Grotesk}"
         Foreground="{StaticResource Brush.Text}">
 
     <Window.Resources>
@@ -242,9 +242,9 @@
 
                     <!-- Time 12 px Geist Mono Medium, day 10 px dim underneath, right aligned (mockup .tm, line-height 1.15). -->
                     <StackPanel Width="38" VerticalAlignment="Center">
-                        <TextBlock Text="{Binding Tray.Time}" FontFamily="{StaticResource Font.GeistMono}" FontWeight="Medium" FontSize="12"
+                        <TextBlock Text="{Binding Tray.Time}" FontFamily="{StaticResource Font.Mono}" FontWeight="Medium" FontSize="12"
                                    LineStackingStrategy="BlockLineHeight" LineHeight="14" TextAlignment="Right" />
-                        <TextBlock Text="{Binding Tray.Day}" FontFamily="{StaticResource Font.GeistMono}" FontSize="10"
+                        <TextBlock Text="{Binding Tray.Day}" FontFamily="{StaticResource Font.Mono}" FontSize="11"
                                    Foreground="{StaticResource Brush.Dim}" LineStackingStrategy="BlockLineHeight"
                                    LineHeight="12" TextAlignment="Right" />
                     </StackPanel>

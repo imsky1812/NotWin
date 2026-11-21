@@ -48,7 +48,6 @@ public sealed class TicTacToeWidget : IDesktopWidget
         _status = TileChrome.Label("");
         _status.Margin = new Thickness(0, 0, 0, 6);
         _tally = TileChrome.Label("");
-        _tally.FontSize = 9;
         _tally.HorizontalAlignment = HorizontalAlignment.Center;
         _tally.Margin = new Thickness(0, 6, 0, 0);
         var panel = new DockPanel();

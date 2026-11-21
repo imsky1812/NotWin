@@ -28,7 +28,7 @@ public sealed class PanelSlider : Border
         {
             HorizontalAlignment = HorizontalAlignment.Left,
             CornerRadius = new CornerRadius(14),
-            Background = new SolidColorBrush(Color.FromRgb(0xF2, 0xF2, 0xF2)),
+            Background = new SolidColorBrush(Color.FromRgb(0xE8, 0xE8, 0xE8)),
             IsHitTestVisible = false,
         };
         Child = _fill;

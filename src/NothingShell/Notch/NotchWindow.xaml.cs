@@ -27,10 +27,10 @@ public partial class NotchWindow : Window
     private static readonly Duration Resize = new(TimeSpan.FromMilliseconds(300));
     private static readonly KeySpline Ease = new(0.2, 0.8, 0.2, 1);
     private static readonly TimeSpan FillDelay = TimeSpan.FromMilliseconds(300), FillStep = TimeSpan.FromMilliseconds(70);
-    private static readonly Brush Lit = Frozen(0xF2, 0xF2, 0xF2), Red = Frozen(0xE8, 0x23, 0x1F), Off = Frozen(0x22, 0x22, 0x22);
+    private static readonly Brush Lit = Frozen(0xE8, 0xE8, 0xE8), Red = Frozen(0xD7, 0x19, 0x21), Off = Frozen(0x22, 0x22, 0x22);
     private readonly DispatcherTimer _eq;
     private readonly DispatcherTimer _fill;
-    private readonly SolidColorBrush _accent = new(Color.FromRgb(0xE8, 0x23, 0x1F)); // animated: pulses while charging
+    private readonly SolidColorBrush _accent = new(Color.FromRgb(0xD7, 0x19, 0x21)); // animated: pulses while charging
     private int _fillTarget;
     private bool _charging;
     private readonly Random _rng = new();

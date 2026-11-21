@@ -43,7 +43,7 @@ public sealed class CalendarWidget : IDesktopWidget
     public WidgetKind Kind => WidgetKind.Calendar;
 
     private static FontFamily Serif =>
-        Application.Current?.TryFindResource("Font.Serif") as FontFamily ?? new FontFamily("Georgia");
+        Application.Current?.TryFindResource("Font.Grotesk") as FontFamily ?? new FontFamily("Segoe UI");
 
     public FrameworkElement Build(WidgetSize size)
     {
@@ -214,7 +214,6 @@ public sealed class CalendarWidget : IDesktopWidget
         if (!hint) return panel;
         // Not signed in, edit mode only (spec §6.5): where to connect, over the bottom of the month.
         var note = TileChrome.Label(Hint);
-        note.FontSize = 9;
         var tag = new Border
         {
             Background = TileChrome.FrozenArgb(0xE6, 0x1A, 0x1A, 0x1A), CornerRadius = new CornerRadius(8),

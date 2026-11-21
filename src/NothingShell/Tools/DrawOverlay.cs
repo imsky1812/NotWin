@@ -19,7 +19,7 @@ namespace NothingShell.Tools;
 /// </summary>
 public sealed class DrawOverlay : Window
 {
-    private static readonly Color[] Pens = [Color.FromRgb(0xE8, 0x23, 0x1F), Color.FromRgb(0xF2, 0xF2, 0xF2), Color.FromRgb(0x11, 0x11, 0x11)];
+    private static readonly Color[] Pens = [Color.FromRgb(0xD7, 0x19, 0x21), Color.FromRgb(0xE8, 0xE8, 0xE8), Color.FromRgb(0x11, 0x11, 0x11)];
     private readonly BitmapSource _shot;
     private readonly RectI _bounds;
     private readonly double _scale;

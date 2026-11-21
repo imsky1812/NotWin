@@ -11,7 +11,7 @@ internal static class FontCheck
     [
         ("Font.Grotesk", "Space Grotesk"),
         ("Font.Mono", "Space Mono"),
-        ("Font.Geist", "Geist"),
+        ("Font.Geist", "Geist"), // bundled, no longer used (Nothing design pass)
         ("Font.GeistMono", "Geist Mono"),
         ("Font.Serif", "DM Serif Display"),
     ];

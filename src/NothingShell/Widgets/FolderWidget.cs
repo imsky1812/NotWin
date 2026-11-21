@@ -144,7 +144,7 @@ public sealed class FolderWidget : IDesktopWidget
         var tile = new Border
         {
             Width = 52, Height = 52, CornerRadius = new CornerRadius(14), Cursor = Cursors.Hand, Tag = "add",
-            BorderBrush = TileChrome.FrozenArgb(0x66, 0xF2, 0xF2, 0xF2), BorderThickness = new Thickness(1.5), Background = Brushes.Transparent,
+            BorderBrush = TileChrome.FrozenArgb(0x66, 0xE8, 0xE8, 0xE8), BorderThickness = new Thickness(1.5), Background = Brushes.Transparent,
             Child = new TextBlock { Text = "＋", FontSize = 22, Foreground = TileChrome.Text, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center },
         };
         tile.MouseLeftButtonUp += (_, e) => { e.Handled = true; Guard(add); };

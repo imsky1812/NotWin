@@ -14,7 +14,7 @@
         WindowStartupLocation="Manual"
         UseLayoutRounding="True"
         TextOptions.TextFormattingMode="Display"
-        FontFamily="{StaticResource Font.Geist}"
+        FontFamily="{StaticResource Font.Grotesk}"
         FontWeight="Medium"
         FontSize="12.5"
         Foreground="{StaticResource Brush.Text}">

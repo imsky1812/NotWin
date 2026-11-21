@@ -191,7 +191,7 @@ public sealed class MediaTile : ITileView
 
     private static Brush MakePlaceholder()
     {
-        var b = new LinearGradientBrush(Color.FromRgb(0x4A, 0x4A, 0x4A), Color.FromRgb(0x11, 0x11, 0x11), 45);
+        var b = new SolidColorBrush(Color.FromRgb(0x22, 0x22, 0x22)); // flat, no gradient (Nothing design pass)
         b.Freeze();
         return b;
     }

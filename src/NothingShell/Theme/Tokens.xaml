@@ -10,9 +10,9 @@
     <SolidColorBrush x:Key="Brush.TileHover" Color="#FF202020" po:Freeze="True" />
     <SolidColorBrush x:Key="Brush.Glass" Color="#E6101010" po:Freeze="True" />
     <SolidColorBrush x:Key="Brush.Line" Color="#1AFFFFFF" po:Freeze="True" />
-    <SolidColorBrush x:Key="Brush.Text" Color="#FFF2F2F2" po:Freeze="True" />
-    <SolidColorBrush x:Key="Brush.Dim" Color="#FF8A8A8A" po:Freeze="True" />
-    <SolidColorBrush x:Key="Brush.Red" Color="#FFE8231F" po:Freeze="True" />
+    <SolidColorBrush x:Key="Brush.Text" Color="#FFE8E8E8" po:Freeze="True" />
+    <SolidColorBrush x:Key="Brush.Dim" Color="#FF999999" po:Freeze="True" />
+    <SolidColorBrush x:Key="Brush.Red" Color="#FFD71921" po:Freeze="True" />
     <SolidColorBrush x:Key="Brush.Hover" Color="#14FFFFFF" po:Freeze="True" />
     <SolidColorBrush x:Key="Brush.Active" Color="#1FFFFFFF" po:Freeze="True" />
     <SolidColorBrush x:Key="Brush.RunDot" Color="#FFBBBBBB" po:Freeze="True" />
@@ -38,9 +38,10 @@
     <CornerRadius x:Key="Radius.Tile">22</CornerRadius>
 
     <!-- Bundled OFL fonts (Theme/Fonts, embedded as resources). The name after # is the font's family name.
-         Geist / Geist Mono are the static v1.9.2 files (Regular, Medium, SemiBold, Bold / Regular, Medium), so
-         FontWeight picks a real weight. WPF only renders a variable font's default instance, which looked too
-         light (user feedback 2026-11-18). Geist is the UI font everywhere (user decision 2026-11-18). -->
+         Nothing design pass (user, 2026-11-21): Space Grotesk for text, Space Mono for labels and numbers. Both are
+         static files (Space Grotesk Regular / Medium / Bold from floriankarsten/space-grotesk, Space Mono Regular /
+         Bold), so FontWeight picks a real weight: WPF only renders a variable font's default instance, which looked
+         too light (user feedback 2026-11-18). Geist stays bundled but unused. -->
     <FontFamily x:Key="Font.Grotesk">pack://application:,,,/NothingShell;component/Theme/Fonts/#Space Grotesk</FontFamily>
     <FontFamily x:Key="Font.Mono">pack://application:,,,/NothingShell;component/Theme/Fonts/#Space Mono</FontFamily>
     <FontFamily x:Key="Font.Geist">pack://application:,,,/NothingShell;component/Theme/Fonts/#Geist</FontFamily>
@@ -60,7 +61,7 @@
                         <Border x:Name="T" CornerRadius="3" Background="#FF3A3A3A" />
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="T" Property="Background" Value="#FF5A5A5A" /></Trigger>
-                            <Trigger Property="IsDragging" Value="True"><Setter TargetName="T" Property="Background" Value="#FF8A8A8A" /></Trigger>
+                            <Trigger Property="IsDragging" Value="True"><Setter TargetName="T" Property="Background" Value="#FF999999" /></Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
                 </Setter.Value>

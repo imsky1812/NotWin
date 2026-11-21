@@ -13,7 +13,8 @@ namespace NothingShell.Notch.Dashboard;
 public static class TileChrome
 {
     public static readonly Brush TileBrush = Frozen(0x16, 0x16, 0x16), HoverBrush = Frozen(0x20, 0x20, 0x20);
-    public static readonly Brush Text = Frozen(0xF2, 0xF2, 0xF2), Dim = Frozen(0x8A, 0x8A, 0x8A), Red = Frozen(0xE8, 0x23, 0x1F);
+    // Nothing design pass (user, 2026-11-21): text #E8E8E8, secondary #999999, Nothing red #D71921.
+    public static readonly Brush Text = Frozen(0xE8, 0xE8, 0xE8), Dim = Frozen(0x99, 0x99, 0x99), Red = Frozen(0xD7, 0x19, 0x21);
     public static readonly Brush Edge = FrozenArgb(0x0F, 0xFF, 0xFF, 0xFF), Dark = Frozen(0x11, 0x11, 0x11);
 
     private static ResourceDictionary? s_icons;
@@ -24,8 +25,8 @@ public static class TileChrome
     };
 
     // Fallbacks keep the chrome usable without the app's resources (tests, a failed theme load).
-    public static FontFamily Font => Application.Current?.TryFindResource("Font.Geist") as FontFamily ?? new FontFamily("Segoe UI");
-    public static FontFamily Mono => Application.Current?.TryFindResource("Font.GeistMono") as FontFamily ?? new FontFamily("Consolas");
+    public static FontFamily Font => Application.Current?.TryFindResource("Font.Grotesk") as FontFamily ?? new FontFamily("Segoe UI");
+    public static FontFamily Mono => Application.Current?.TryFindResource("Font.Mono") as FontFamily ?? new FontFamily("Consolas");
 
     /// <summary>A tile surface. <paramref name="center"/> centres its content (mockup <c>.t.center</c>).</summary>
     public static Border Tile(UIElement content, bool center = false, Brush? background = null)
@@ -103,13 +104,13 @@ public static class TileChrome
         return row;
     }
 
-    /// <summary>Small uppercase label (Geist Mono 9, dim, letter-spaced; mockup <c>.lbl2</c>).</summary>
+    /// <summary>Small uppercase label (Space Mono 11, dim; Nothing design: labels are 11 px at the smallest).</summary>
     public static TextBlock Label(string text, Brush? brush = null) => new()
     {
         Text = text.ToUpperInvariant(),
         FontFamily = Mono,
-        FontWeight = FontWeights.Medium,
-        FontSize = 9,
+        FontWeight = FontWeights.Normal,
+        FontSize = 11,
         Foreground = brush ?? Dim,
         TextTrimming = TextTrimming.CharacterEllipsis,
         VerticalAlignment = VerticalAlignment.Center,

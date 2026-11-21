@@ -25,7 +25,7 @@ namespace NothingShell.Widgets;
 /// </summary>
 public sealed class PhotoFrameWidget : IDesktopWidget
 {
-    private static readonly Brush DashBrush = TileChrome.FrozenArgb(0x66, 0xF2, 0xF2, 0xF2);
+    private static readonly Brush DashBrush = TileChrome.FrozenArgb(0x66, 0xE8, 0xE8, 0xE8);
     private readonly string _id;
     private readonly PhotoStore _store;
     private readonly Action<WidgetConfig> _save;
@@ -353,7 +353,7 @@ public sealed class PhotoManagePopup : Window
         var tile = new Border
         {
             Width = 72, Height = 72, CornerRadius = new CornerRadius(10), Margin = new Thickness(6), Cursor = Cursors.Hand,
-            BorderBrush = TileChrome.FrozenArgb(0x66, 0xF2, 0xF2, 0xF2), BorderThickness = new Thickness(1.5), Background = Brushes.Transparent,
+            BorderBrush = TileChrome.FrozenArgb(0x66, 0xE8, 0xE8, 0xE8), BorderThickness = new Thickness(1.5), Background = Brushes.Transparent,
             Child = new TextBlock { Text = "＋", FontSize = 26, Foreground = TileChrome.Text, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center },
         };
         tile.MouseLeftButtonUp += (_, e) => { e.Handled = true; RequestAdd(); };
