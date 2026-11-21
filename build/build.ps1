@@ -1,7 +1,7 @@
 #Requires -Version 7
 <#
 .SYNOPSIS
-  Builds, signs and packages Nothing Shell into out/ WITHOUT administrator rights. Run this first, from a normal
+  Builds, signs and packages NotWin into out/ WITHOUT administrator rights. Run this first, from a normal
   (not elevated) terminal; then run build\install.ps1 elevated.
 .DESCRIPTION
   Security review 2026-11-21 (#1): the compiler, NuGet analyzers / source generators, signtool and makeappx run here
@@ -22,8 +22,8 @@ if (([Security.Principal.WindowsPrincipal]$id).IsInRole([Security.Principal.Wind
 
 $repo    = Split-Path -Parent $PSScriptRoot
 $outApp  = Join-Path $repo 'out/app'
-$msix    = Join-Path $repo 'out/NothingShell.msix'
-$subject = 'CN=NothingShell Dev'
+$msix    = Join-Path $repo 'out/NotWin.msix'
+$subject = 'CN=NotWin Dev'
 
 $dotnet = (Get-Command dotnet -ErrorAction SilentlyContinue)?.Source
 if (-not $dotnet) { $dotnet = Join-Path $env:ProgramFiles 'dotnet/dotnet.exe' }
@@ -50,7 +50,7 @@ Write-Host "Using certificate $thumb"
 
 # 2. Publish
 # A copy started straight from the build output locks $outApp: stop it first (our own user's processes only).
-$fromOut = @(Get-Process -Name 'NothingShell', 'NothingShell.Watchdog' -ErrorAction SilentlyContinue |
+$fromOut = @(Get-Process -Name 'NotWin', 'NotWin.Watchdog' -ErrorAction SilentlyContinue |
     Where-Object { $_.Path -and $_.Path.StartsWith([IO.Path]::GetFullPath($outApp), [StringComparison]::OrdinalIgnoreCase) })
 if ($fromOut.Count -gt 0) {
     Write-Host "Stopping $($fromOut.Count) process(es) running from $outApp"
@@ -60,22 +60,22 @@ if ($fromOut.Count -gt 0) {
 if (Test-Path $outApp) { Remove-Item $outApp -Recurse -Force }
 # The shelf's drag helper runs at normal level (no uiAccess). Published first: if the two share a file, the shell's
 # own publish below is the copy that stays.
-Invoke-Native $dotnet @('publish', (Join-Path $repo 'src/NothingShell.DragHelper'), '-c', 'Release', '-o', $outApp)
+Invoke-Native $dotnet @('publish', (Join-Path $repo 'src/NotWin.DragHelper'), '-c', 'Release', '-o', $outApp)
 # A plain Release build leaves obj/bin output with the normal manifest that publish would reuse (2026-11-20).
-foreach ($stale in 'src/NothingShell/obj/Release', 'src/NothingShell/bin/Release') {
+foreach ($stale in 'src/NotWin/obj/Release', 'src/NotWin/bin/Release') {
     $path = Join-Path $repo $stale
     if (Test-Path $path) { Remove-Item $path -Recurse -Force }
 }
-Invoke-Native $dotnet @('publish', (Join-Path $repo 'src/NothingShell'), '-c', 'Release', '-p:UiAccess=true', '-o', $outApp)
-$builtExe = Join-Path $outApp 'NothingShell.exe'
+Invoke-Native $dotnet @('publish', (Join-Path $repo 'src/NotWin'), '-c', 'Release', '-p:UiAccess=true', '-o', $outApp)
+$builtExe = Join-Path $outApp 'NotWin.exe'
 if (-not ([IO.File]::ReadAllText($builtExe, [Text.Encoding]::UTF8) -match 'uiAccess="true"')) {
-    throw "NothingShell.exe was built without uiAccess=""true"" in its manifest."
+    throw "NotWin.exe was built without uiAccess=""true"" in its manifest."
 }
 try {
-    Invoke-Native $dotnet @('publish', (Join-Path $repo 'src/NothingShell.Watchdog'), '-c', 'Release', '-o', $outApp)
+    Invoke-Native $dotnet @('publish', (Join-Path $repo 'src/NotWin.Watchdog'), '-c', 'Release', '-o', $outApp)
 } catch {
     Write-Warning "Native AOT publish of the watchdog failed ($($_.Exception.Message)). Falling back to a non-AOT publish."
-    Invoke-Native $dotnet @('publish', (Join-Path $repo 'src/NothingShell.Watchdog'), '-c', 'Release', '-p:PublishAot=false', '-o', $outApp)
+    Invoke-Native $dotnet @('publish', (Join-Path $repo 'src/NotWin.Watchdog'), '-c', 'Release', '-p:PublishAot=false', '-o', $outApp)
 }
 # The four Nothing wallpapers (spec §5) and their previews, for the Settings wallpaper picker.
 $wallOut = Join-Path $outApp 'Wallpapers'
@@ -100,8 +100,8 @@ $makeappx = Join-Path $signtool.Directory 'makeappx.exe'
 $stage = Join-Path $repo 'out/package'
 Remove-Item $stage, $msix -Recurse -Force -ErrorAction SilentlyContinue
 New-Item -ItemType Directory (Join-Path $stage 'Assets') -Force | Out-Null
-Copy-Item (Join-Path $repo 'src/NothingShell/Package/AppxManifest.xml') $stage
-Copy-Item (Join-Path $repo 'src/NothingShell/Package/Assets/logo.png') (Join-Path $stage 'Assets')
+Copy-Item (Join-Path $repo 'src/NotWin/Package/AppxManifest.xml') $stage
+Copy-Item (Join-Path $repo 'src/NotWin/Package/Assets/logo.png') (Join-Path $stage 'Assets')
 Invoke-Native $makeappx @('pack', '/nv', '/o', '/d', $stage, '/p', $msix)
 Invoke-Native $signtool.FullName @('sign', '/fd', 'SHA256', '/sha1', $thumb, $msix)
 

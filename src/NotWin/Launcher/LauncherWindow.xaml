@@ -1,0 +1,189 @@
+<Window x:Class="NotWin.Launcher.LauncherWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:local="clr-namespace:NotWin.Launcher"
+        Title="NotWin Launcher"
+        WindowStyle="None"
+        AllowsTransparency="True"
+        Background="Transparent"
+        ResizeMode="NoResize"
+        ShowInTaskbar="False"
+        Topmost="True"
+        WindowStartupLocation="Manual"
+        UseLayoutRounding="True"
+        TextOptions.TextFormattingMode="Display"
+        FontFamily="{StaticResource Font.Grotesk}"
+        FontSize="14"
+        Foreground="{StaticResource Brush.Text}">
+    <Window.Resources>
+        <!-- Small uppercase labels (.lbl2 / .sec in the mockup): Geist Mono, dim. -->
+        <Style x:Key="Label" TargetType="TextBlock">
+            <Setter Property="FontFamily" Value="{StaticResource Font.Mono}" />
+            <Setter Property="FontWeight" Value="Medium" />
+            <Setter Property="FontSize" Value="9.5" />
+            <Setter Property="Foreground" Value="{StaticResource Brush.Dim}" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
+        <Style x:Key="Section" TargetType="TextBlock" BasedOn="{StaticResource Label}">
+            <Setter Property="FontSize" Value="10" />
+            <Setter Property="Margin" Value="0,0,0,10" />
+        </Style>
+        <!-- Thin scrollbar: shared style in Theme/Tokens.xaml (ScrollBar.Thin). -->
+        <Style TargetType="ScrollBar" BasedOn="{StaticResource ScrollBar.Thin}" />
+
+        <!-- Power menu rows: same look as the dock's right-click menu (DockPopup). -->
+        <Style x:Key="PowerRow" TargetType="Border">
+            <Setter Property="CornerRadius" Value="12" />
+            <Setter Property="Padding" Value="12,8" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Background" Value="{StaticResource Brush.RowSel}" />
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+    </Window.Resources>
+
+    <Grid x:Name="Root">
+        <!-- Scrim: a click on it closes the launcher. -->
+        <Border x:Name="Scrim" Background="{StaticResource Brush.Scrim}" MouseLeftButtonDown="OnScrimDown" />
+
+        <Border x:Name="Panel" Width="620" HorizontalAlignment="Center" VerticalAlignment="Top" Margin="0,150,0,0"
+                Padding="16" CornerRadius="{StaticResource Radius.Panel}"
+                Background="{StaticResource Brush.GlassDense}" BorderBrush="{StaticResource Brush.Line}" BorderThickness="1">
+            <Border.RenderTransform>
+                <TranslateTransform x:Name="PanelShift" Y="0" />
+            </Border.RenderTransform>
+            <StackPanel>
+                <!-- Search field -->
+                <Border Background="{StaticResource Brush.Field}" CornerRadius="18" Padding="16,14" Margin="0,0,0,16">
+                    <DockPanel>
+                        <Viewbox Width="18" Height="18" DockPanel.Dock="Left" Margin="0,0,12,0">
+                            <Canvas Width="24" Height="24">
+                                <Ellipse Canvas.Left="4" Canvas.Top="4" Width="14" Height="14" Stroke="{StaticResource Brush.Icon}" StrokeThickness="2" />
+                                <Line X1="20" Y1="20" X2="16" Y2="16" Stroke="{StaticResource Brush.Icon}" StrokeThickness="2" StrokeStartLineCap="Round" StrokeEndLineCap="Round" />
+                            </Canvas>
+                        </Viewbox>
+                        <TextBlock Text="ESC" Style="{StaticResource Label}" DockPanel.Dock="Right" Margin="12,0,0,0" />
+                        <Grid>
+                            <TextBlock x:Name="Placeholder" Text="Search apps, settings, files" FontSize="18"
+                                       Foreground="{StaticResource Brush.Placeholder}" IsHitTestVisible="False" VerticalAlignment="Center" />
+                            <TextBox x:Name="SearchBox" FontSize="18" Background="Transparent" BorderThickness="0" Padding="0" MaxLength="256"
+                                     Foreground="{StaticResource Brush.Text}" CaretBrush="{StaticResource Brush.Text}"
+                                     FontFamily="{StaticResource Font.Grotesk}" VerticalAlignment="Center"
+                                     TextChanged="OnSearchTextChanged" />
+                        </Grid>
+                    </DockPanel>
+                </Border>
+
+                <!-- Home: Most used -->
+                <StackPanel x:Name="HomeView">
+                    <TextBlock Text="MOST USED" Style="{StaticResource Section}" />
+                    <UniformGrid x:Name="MostGrid" Columns="6" />
+                </StackPanel>
+
+                <!-- Results: best match card + rows -->
+                <StackPanel x:Name="ResultsView" Visibility="Collapsed">
+                    <TextBlock Text="BEST MATCH" Style="{StaticResource Section}" />
+                    <StackPanel x:Name="ResultRows" />
+                    <TextBlock x:Name="NoResults" Text="No matches on this PC" Foreground="{StaticResource Brush.Dim}" Margin="10,6" Visibility="Collapsed" />
+                </StackPanel>
+
+                <!-- All apps A-Z -->
+                <!-- Phone-style app drawer: letter headers, compact full-width rows, ‹ BACK. -->
+                <StackPanel x:Name="AllAppsView" Visibility="Collapsed">
+                    <DockPanel Margin="0,0,0,6">
+                        <TextBlock x:Name="BackLink" Text="‹ BACK" Style="{StaticResource Label}" DockPanel.Dock="Right" Cursor="Hand"
+                                   Margin="0,0,4,0" MouseLeftButtonUp="OnBackClick" />
+                        <TextBlock Text="ALL APPS" Style="{StaticResource Section}" Margin="0" />
+                    </DockPanel>
+                    <ListBox x:Name="AllAppsList" Height="380" Background="Transparent" BorderThickness="0"
+                             Foreground="{StaticResource Brush.Text}" FontWeight="Medium"
+                             HorizontalContentAlignment="Stretch"
+                             ScrollViewer.HorizontalScrollBarVisibility="Disabled" ScrollViewer.CanContentScroll="True"
+                             VirtualizingPanel.IsVirtualizing="True" VirtualizingPanel.VirtualizationMode="Recycling"
+                             VirtualizingPanel.IsVirtualizingWhenGrouping="True" VirtualizingPanel.ScrollUnit="Pixel"
+                             Focusable="False">
+                        <ListBox.GroupStyle>
+                            <GroupStyle>
+                                <GroupStyle.HeaderTemplate>
+                                    <DataTemplate>
+                                        <TextBlock Text="{Binding Name}" FontFamily="{StaticResource Font.Mono}" FontWeight="Medium"
+                                                   FontSize="11" Foreground="{StaticResource Brush.Dim}" Margin="12,12,0,4" />
+                                    </DataTemplate>
+                                </GroupStyle.HeaderTemplate>
+                            </GroupStyle>
+                        </ListBox.GroupStyle>
+                        <ListBox.ItemContainerStyle>
+                            <Style TargetType="ListBoxItem">
+                                <Setter Property="Padding" Value="0" />
+                                <Setter Property="Focusable" Value="False" />
+                                <Setter Property="Cursor" Value="Hand" />
+                                <Setter Property="Template">
+                                    <Setter.Value>
+                                        <ControlTemplate TargetType="ListBoxItem">
+                                            <Border x:Name="Bg" CornerRadius="12" Padding="10,6" Margin="0,1,6,1" Background="Transparent">
+                                                <ContentPresenter />
+                                            </Border>
+                                            <ControlTemplate.Triggers>
+                                                <Trigger Property="IsMouseOver" Value="True">
+                                                    <Setter TargetName="Bg" Property="Background" Value="{StaticResource Brush.Field}" />
+                                                </Trigger>
+                                                <Trigger Property="IsSelected" Value="True">
+                                                    <Setter TargetName="Bg" Property="Background" Value="{StaticResource Brush.RowSel}" />
+                                                </Trigger>
+                                            </ControlTemplate.Triggers>
+                                        </ControlTemplate>
+                                    </Setter.Value>
+                                </Setter>
+                            </Style>
+                        </ListBox.ItemContainerStyle>
+                        <ListBox.ItemTemplate>
+                            <DataTemplate>
+                                <DockPanel Background="Transparent" Tag="{Binding}" MouseLeftButtonUp="OnAllAppsItemUp">
+                                    <Border Width="32" Height="32" CornerRadius="16" Background="{StaticResource Brush.Circle}" Margin="0,0,12,0">
+                                        <Image Width="20" Height="20" Source="{Binding Converter={x:Static local:LauncherIcons.Converter}}" />
+                                    </Border>
+                                    <TextBlock Text="{Binding Name}" FontSize="14" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                                </DockPanel>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+                </StackPanel>
+
+                <!-- Footer -->
+                <Border BorderBrush="{StaticResource Brush.Line}" BorderThickness="0,1,0,0" Padding="0,12,0,0" Margin="0,12,0,0">
+                    <DockPanel>
+                        <StackPanel Orientation="Horizontal" DockPanel.Dock="Right" VerticalAlignment="Center">
+                            <!-- Power menu: a small glass box above the power button, like the dock's menus. -->
+                            <Popup x:Name="PowerMenu" PlacementTarget="{Binding ElementName=PowerButton}" Placement="Custom"
+                                   AllowsTransparency="True" StaysOpen="False" PopupAnimation="Fade">
+                                <Border CornerRadius="18" Background="{StaticResource Brush.GlassDense}" BorderBrush="{StaticResource Brush.Line}"
+                                        BorderThickness="1" Padding="6" Width="152">
+                                    <StackPanel>
+                                        <Border Style="{StaticResource PowerRow}" MouseLeftButtonUp="OnSleep"><TextBlock Text="Sleep" FontSize="13" FontWeight="Medium" Foreground="{StaticResource Brush.Text}" /></Border>
+                                        <Border Style="{StaticResource PowerRow}" MouseLeftButtonUp="OnRestart"><TextBlock Text="Restart" FontSize="13" FontWeight="Medium" Foreground="{StaticResource Brush.Text}" /></Border>
+                                        <Border Style="{StaticResource PowerRow}" MouseLeftButtonUp="OnShutDown"><TextBlock Text="Shut down" FontSize="13" FontWeight="Medium" Foreground="{StaticResource Brush.Text}" /></Border>
+                                    </StackPanel>
+                                </Border>
+                            </Popup>
+                            <TextBlock x:Name="AllAppsLink" Text="ALL APPS ›" Style="{StaticResource Label}" Cursor="Hand" Margin="0,0,8,0"
+                                       MouseLeftButtonUp="OnAllAppsClick" />
+                            <Border x:Name="PowerButton" Width="34" Height="34" CornerRadius="17" Background="{StaticResource Brush.Circle}"
+                                    Cursor="Hand" ToolTip="Power" MouseLeftButtonUp="OnPowerClick">
+                                <Viewbox Width="16" Height="16">
+                                    <Canvas Width="24" Height="24">
+                                        <Line X1="12" Y1="3" X2="12" Y2="11" Stroke="{StaticResource Brush.Text}" StrokeThickness="2" StrokeStartLineCap="Round" StrokeEndLineCap="Round" />
+                                        <Path Data="M6.3,7 A8,8 0 1 0 17.7,7" Stroke="{StaticResource Brush.Text}" StrokeThickness="2" StrokeStartLineCap="Round" StrokeEndLineCap="Round" />
+                                    </Canvas>
+                                </Viewbox>
+                            </Border>
+                        </StackPanel>
+                        <TextBlock Text="↑↓ MOVE · ENTER OPEN · NO WEB RESULTS" Style="{StaticResource Label}" />
+                    </DockPanel>
+                </Border>
+            </StackPanel>
+        </Border>
+    </Grid>
+</Window>

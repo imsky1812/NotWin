@@ -1,13 +1,13 @@
 #Requires -Version 7
 <#
 .SYNOPSIS
-  Installs Nothing Shell from out/ (built and signed by build\build.ps1, run WITHOUT admin rights first). Run this one
+  Installs NotWin from out/ (built and signed by build\build.ps1, run WITHOUT admin rights first). Run this one
   from an elevated PowerShell. uiAccess requires a signed exe under Program Files.
 .DESCRIPTION
   Security review 2026-11-21 (#1, #7): nothing is compiled or signed here. The elevated part only
     - trusts the signing certificate machine-wide, straight from the certificate store (no temporary .cer file),
     - copies out/ into an admin-only staging folder under Program Files,
-    - checks that every exe and dll there carries a valid signature by that certificate and that NothingShell.exe
+    - checks that every exe and dll there carries a valid signature by that certificate and that NotWin.exe
       asks for uiAccess, and refuses to install otherwise,
     - stops the running copy, mirrors the staging folder into Program Files and registers the package.
 #>
@@ -17,17 +17,17 @@ $ErrorActionPreference = 'Stop'
 
 $repo    = Split-Path -Parent $PSScriptRoot
 $outApp  = Join-Path $repo 'out/app'
-$outMsix = Join-Path $repo 'out/NothingShell.msix'
-$install = Join-Path $env:ProgramFiles 'NothingShell'
-$stage   = Join-Path $env:ProgramFiles 'NothingShell.staging'
-$subject = 'CN=NothingShell Dev'
+$outMsix = Join-Path $repo 'out/NotWin.msix'
+$install = Join-Path $env:ProgramFiles 'NotWin'
+$stage   = Join-Path $env:ProgramFiles 'NotWin.staging'
+$subject = 'CN=NotWin Dev'
 
 $id = [Security.Principal.WindowsIdentity]::GetCurrent()
 if (-not ([Security.Principal.WindowsPrincipal]$id).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
     Write-Error 'install.ps1 must be run from an elevated (Run as administrator) PowerShell. Build first with build\build.ps1 (not elevated).'
     exit 1
 }
-if (-not (Test-Path (Join-Path $outApp 'NothingShell.exe')) -or -not (Test-Path $outMsix)) {
+if (-not (Test-Path (Join-Path $outApp 'NotWin.exe')) -or -not (Test-Path $outMsix)) {
     Write-Error 'Nothing to install: run build\build.ps1 from a normal (not elevated) terminal first.'
     exit 1
 }
@@ -58,7 +58,7 @@ New-Item -ItemType Directory -Path $stage | Out-Null
 robocopy $outApp $stage /MIR /NFL /NDL /NJH /NJS /NP | Out-Null
 if ($LASTEXITCODE -ge 8) { throw "robocopy into staging failed (exit $LASTEXITCODE)" }
 $global:LASTEXITCODE = 0
-$stageMsix = Join-Path $stage 'NothingShell.msix'
+$stageMsix = Join-Path $stage 'NotWin.msix'
 Copy-Item $outMsix $stageMsix -Force
 
 $bad = @()
@@ -66,8 +66,8 @@ foreach ($f in @(Get-ChildItem $stage -Recurse -Include *.exe, *.dll -File)) { #
     $sig = Get-AuthenticodeSignature -FilePath $f.FullName
     if ($sig.Status -ne 'Valid' -or $sig.SignerCertificate.Thumbprint -ne $thumb) { $bad += $f.Name }
 }
-if (-not ([IO.File]::ReadAllText((Join-Path $stage 'NothingShell.exe'), [Text.Encoding]::UTF8) -match 'uiAccess="true"')) {
-    $bad += 'NothingShell.exe (no uiAccess in its manifest)'
+if (-not ([IO.File]::ReadAllText((Join-Path $stage 'NotWin.exe'), [Text.Encoding]::UTF8) -match 'uiAccess="true"')) {
+    $bad += 'NotWin.exe (no uiAccess in its manifest)'
 }
 if ($bad.Count -gt 0) {
     Remove-Item $stage -Recurse -Force
@@ -76,40 +76,40 @@ if ($bad.Count -gt 0) {
 Write-Host "Checked $(@(Get-ChildItem $stage -Recurse -Include *.exe, *.dll -File).Count) signed files in staging."
 
 # 3. Stop the running copy so files can be replaced (only now, after everything that can throw above).
-$watchdogWasRunning = [bool](Get-Process -Name 'NothingShell.Watchdog' -ErrorAction SilentlyContinue)
+$watchdogWasRunning = [bool](Get-Process -Name 'NotWin.Watchdog' -ErrorAction SilentlyContinue)
 # Only the shell is killed: the watchdog sees it die and restores the taskbar by itself.
-Get-Process -Name 'NothingShell' -ErrorAction SilentlyContinue | Stop-Process -Force
+Get-Process -Name 'NotWin' -ErrorAction SilentlyContinue | Stop-Process -Force
 $deadline = (Get-Date).AddSeconds(10)
-while ((Get-Process -Name 'NothingShell.Watchdog' -ErrorAction SilentlyContinue) -and (Get-Date) -lt $deadline) {
+while ((Get-Process -Name 'NotWin.Watchdog' -ErrorAction SilentlyContinue) -and (Get-Date) -lt $deadline) {
     Start-Sleep -Milliseconds 250
 }
 # Watchdog stuck or never ran: restore explicitly. The staged (checked) watchdog is used; it deletes its state file
 # without following links (security review #2).
-$stagedWatchdog = Join-Path $stage 'NothingShell.Watchdog.exe'
-if ((-not $watchdogWasRunning) -or (Get-Process -Name 'NothingShell.Watchdog' -ErrorAction SilentlyContinue)) {
-    $p = Start-Process -FilePath $stagedWatchdog -ArgumentList '--restore-now', '--state', ('"{0}"' -f (Join-Path $env:APPDATA 'NothingShell')) -Wait -PassThru
+$stagedWatchdog = Join-Path $stage 'NotWin.Watchdog.exe'
+if ((-not $watchdogWasRunning) -or (Get-Process -Name 'NotWin.Watchdog' -ErrorAction SilentlyContinue)) {
+    $p = Start-Process -FilePath $stagedWatchdog -ArgumentList '--restore-now', '--state', ('"{0}"' -f (Join-Path $env:APPDATA 'NotWin')) -Wait -PassThru
     if ($p.ExitCode -ne 0) { throw "Watchdog --restore-now failed (exit $($p.ExitCode)). Nothing was replaced in $install." }
-    Get-Process -Name 'NothingShell.Watchdog' -ErrorAction SilentlyContinue | Stop-Process -Force
+    Get-Process -Name 'NotWin.Watchdog' -ErrorAction SilentlyContinue | Stop-Process -Force
 }
 Start-Sleep -Milliseconds 500
 
 # 4. Mirror the checked staging folder into Program Files.
-robocopy $stage $install /MIR /XF NothingShell.msix /NFL /NDL /NJH /NJS /NP | Out-Null
+robocopy $stage $install /MIR /XF NotWin.msix /NFL /NDL /NJH /NJS /NP | Out-Null
 if ($LASTEXITCODE -ge 8) { throw "robocopy failed (exit $LASTEXITCODE)" }
 $global:LASTEXITCODE = 0
 Write-Host "Installed to $install"
 
 # 5. Sparse package identity (notifications, radios). Optional: on failure the shell runs without notification access.
 try {
-    Get-AppxPackage -Name 'NothingShell' -ErrorAction SilentlyContinue | Remove-AppxPackage
+    Get-AppxPackage -Name 'NotWin' -ErrorAction SilentlyContinue | Remove-AppxPackage
     Add-AppxPackage -Path $stageMsix -ExternalLocation $install
-    $pkg = Get-AppxPackage -Name 'NothingShell'
+    $pkg = Get-AppxPackage -Name 'NotWin'
     Write-Host "Package registered: $($pkg.PackageFullName) ($($pkg.Status))"
 } catch {
-    Write-Warning "Package identity registration failed: $($_.Exception.Message). Nothing Shell will run without notification access."
+    Write-Warning "Package identity registration failed: $($_.Exception.Message). NotWin will run without notification access."
 }
 Remove-Item $stage -Recurse -Force -ErrorAction SilentlyContinue
 
 # 6. Launch once WITHOUT elevation (explorer.exe de-elevates) so the user process writes the HKCU Run value.
-Start-Process explorer.exe -ArgumentList "`"$install\NothingShell.exe`""
-Write-Host "Launched NothingShell unelevated. Check %AppData%\NothingShell\log.txt for uiAccess=1."
+Start-Process explorer.exe -ArgumentList "`"$install\NotWin.exe`""
+Write-Host "Launched NotWin unelevated. Check %AppData%\NotWin\log.txt for uiAccess=1."
