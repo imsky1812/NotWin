@@ -195,6 +195,7 @@ public sealed class PhotoFrameWidget : IDesktopWidget
 
     private async Task PickAndAddAsync()
     {
+        if (_disposed) return; // the frame went while the picker was being opened
         try
         {
             var room = PhotoList.Max - Photos.Count;

@@ -39,8 +39,11 @@ public sealed class AgendaWidget : IDesktopWidget
         _size = size;
         _host = new Border();
         Fill();
-        if (!_paused) _minute.Start();
-        _calendar?.RefreshSoon();
+        if (!_paused)
+        {
+            _minute.Start();
+            _calendar?.RefreshSoon();
+        }
         return _host;
     }
 

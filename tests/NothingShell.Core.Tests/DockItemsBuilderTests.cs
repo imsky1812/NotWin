@@ -154,4 +154,15 @@ public class DockItemsBuilderTests
     [InlineData(@"c:\apps\chrome.exe", @"c:\apps\chrome.exe")]
     [InlineData("Chrome", "Chrome")]
     public void MatchKey_DropsTheVersionFolder(string id, string key) => Assert.Equal(key, DockItemsBuilder.MatchKey(id));
+
+    // Review (Plan 6b) #3: pin / unpin treat two versions of one Store app as the same app.
+    [Fact]
+    public void SameApp_AcrossStoreVersions()
+    {
+        Assert.True(DockItemsBuilder.SameApp(
+            @"c:\program files\windowsapps\spotifyab.spotifymusic_1.309.2055.0_x64__zpdnekdrzrea0\spotify.exe",
+            @"C:\Program Files\WindowsApps\SpotifyAB.SpotifyMusic_1.310.2586.0_x64__zpdnekdrzrea0\Spotify.exe"));
+        Assert.True(DockItemsBuilder.SameApp("Chrome", "chrome"));
+        Assert.False(DockItemsBuilder.SameApp(@"c:\a\one.exe", @"c:\a\two.exe"));
+    }
 }

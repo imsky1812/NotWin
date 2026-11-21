@@ -28,6 +28,9 @@ public static class DockItemsBuilder
     public static string MatchKey(string id) =>
         PackagedApps.FromExePath(id) is { } p ? "package:" + p.Family + "\\" + p.RelativeExe : id;
 
+    /// <summary>Two app ids name the same app (case-insensitive, Store apps across versions).</summary>
+    public static bool SameApp(string a, string b) => string.Equals(MatchKey(a), MatchKey(b), StringComparison.OrdinalIgnoreCase);
+
     /// <summary>
     /// Pinned apps first (pinned order), then running unpinned apps in order of first appearance.
     /// Windows with an empty title are skipped. App ids compare case-insensitively, Store apps across versions.

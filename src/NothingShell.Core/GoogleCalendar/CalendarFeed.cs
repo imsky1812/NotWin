@@ -21,13 +21,13 @@ public static class CalendarFeed
     private const string Api = "https://www.googleapis.com/calendar/v3/";
 
     public static string CalendarListUrl(string? pageToken) =>
-        Api + "users/me/calendarList?" + GoogleOAuth.Query(Pairs([("fields", "items(id,selected,deleted),nextPageToken")], pageToken));
+        Api + "users/me/calendarList?" + GoogleOAuth.Query(Pairs([("fields", "items(id,selected,deleted,accessRole),nextPageToken")], pageToken));
 
     public static string EventsUrl(string calendarId, DateTimeOffset from, DateTimeOffset to, string? pageToken) =>
         Api + "calendars/" + Uri.EscapeDataString(calendarId) + "/events?" + GoogleOAuth.Query(Pairs(
         [
             ("timeMin", Rfc3339(from)), ("timeMax", Rfc3339(to)), ("singleEvents", "true"), ("orderBy", "startTime"),
-            ("maxResults", "250"), ("fields", "items(summary,status,start,end,eventType,location,htmlLink),nextPageToken"),
+            ("maxResults", "250"), ("fields", "items(summary,status,start,end,eventType,location,htmlLink,attendees(self,responseStatus)),nextPageToken"),
         ], pageToken));
 
     /// <summary>The ids of the calendars switched on in Google Calendar (selected, not deleted), and the next page.</summary>
@@ -42,13 +42,28 @@ public static class CalendarFeed
     }
 
     /// <summary>
+    /// Calendars the user can only read (someone else's calendar they follow): their events are not the user's plans
+    /// (review, Plan 6b).
+    /// </summary>
+    public static IReadOnlySet<string> ReadOnlyCalendars(string json)
+    {
+        var ids = new HashSet<string>();
+        Items(json, item =>
+        {
+            if (GoogleOAuth.Str(item, "id") is { Length: > 0 } id && GoogleOAuth.Str(item, "accessRole") is "reader" or "freeBusyReader") ids.Add(id);
+        });
+        return ids;
+    }
+
+    /// <summary>
     /// The events of <paramref name="calendarId"/> (cancelled ones and ones without a readable start / end skipped), and
     /// the next page. Events of a holiday or contacts-birthday calendar, and birthday / working-location events, are
-    /// not <see cref="CalEvent.Personal"/>.
+    /// not <see cref="CalEvent.Personal"/>; neither are invites the user declined, nor anything on a calendar that is
+    /// not <paramref name="mine"/> (read-only, see <see cref="ReadOnlyCalendars"/>).
     /// </summary>
-    public static (IReadOnlyList<CalEvent> Events, string? Next) ParseEvents(string json, TimeZoneInfo zone, string? calendarId = null)
+    public static (IReadOnlyList<CalEvent> Events, string? Next) ParseEvents(string json, TimeZoneInfo zone, string? calendarId = null, bool mine = true)
     {
-        var sharedFeed = IsSharedFeed(calendarId);
+        var sharedFeed = IsSharedFeed(calendarId) || !mine;
         var events = new List<CalEvent>();
         var next = Items(json, item =>
         {
@@ -57,7 +72,7 @@ public static class CalendarFeed
             if (Time(s, zone) is not { } start || Time(e, zone) is not { } end) return;
             var title = GoogleOAuth.Str(item, "summary");
             var location = GoogleOAuth.Str(item, "location");
-            var personal = !sharedFeed && GoogleOAuth.Str(item, "eventType") is not ("birthday" or "workingLocation");
+            var personal = !sharedFeed && GoogleOAuth.Str(item, "eventType") is not ("birthday" or "workingLocation") && !Declined(item);
             events.Add(new CalEvent(string.IsNullOrWhiteSpace(title) ? "(No title)" : title.Trim(), start.At, end.At, start.AllDay,
                 string.IsNullOrWhiteSpace(location) ? null : location.Trim(), GoogleOAuth.Str(item, "htmlLink"), personal));
         });
@@ -123,15 +138,33 @@ public static class CalendarFeed
     public static bool IsRateLimited(string? reason) =>
         reason is "rateLimitExceeded" or "userRateLimitExceeded" or "quotaExceeded" or "RATE_LIMIT_EXCEEDED";
 
-    /// <summary>Calendars Google fills for everyone: public holidays and the old contacts-birthday calendar.</summary>
+    /// <summary>
+    /// Calendars Google fills for everyone (public holidays, week numbers, sports, the old contacts birthdays): every
+    /// id under <c>group.v.calendar.google.com</c>.
+    /// </summary>
     public static bool IsSharedFeed(string? calendarId) =>
-        calendarId is not null && (calendarId.Contains("#holiday@", StringComparison.OrdinalIgnoreCase)
-            || calendarId.Contains("#contacts@", StringComparison.OrdinalIgnoreCase));
+        calendarId is not null && calendarId.EndsWith("@group.v.calendar.google.com", StringComparison.OrdinalIgnoreCase);
 
-    /// <summary>The "Up next" widget's list: the user's own events not ended yet, soonest first, at most <paramref name="max"/>.</summary>
-    public static IReadOnlyList<CalEvent> Upcoming(IEnumerable<CalEvent> events, DateTimeOffset now, int max) =>
-        [.. events.Where(e => e.Personal && (e.End > now || (e.End <= e.Start && e.Start >= now)))
-            .OrderBy(e => e.Start).ThenBy(e => e.AllDay ? 0 : 1).Take(max)];
+    private static bool Declined(JsonElement item)
+    {
+        if (!item.TryGetProperty("attendees", out var list) || list.ValueKind != JsonValueKind.Array) return false;
+        foreach (var a in list.EnumerateArray())
+            if (a.ValueKind == JsonValueKind.Object && Bool(a, "self")) return GoogleOAuth.Str(a, "responseStatus") == "declined";
+        return false;
+    }
+
+    /// <summary>
+    /// The "Up next" widget's list: the user's own events not ended yet, soonest first, at most <paramref name="max"/>.
+    /// Today's timed events come before an all-day plan already running (a trip), as in <see cref="NextEvent"/>.
+    /// </summary>
+    public static IReadOnlyList<CalEvent> Upcoming(IEnumerable<CalEvent> events, DateTimeOffset now, int max)
+    {
+        var open = events.Where(e => e.Personal && (e.End > now || (e.End <= e.Start && e.Start >= now)))
+            .OrderBy(e => e.Start).ThenBy(e => e.AllDay ? 0 : 1).ToList();
+        var todayTimed = open.Where(e => !e.AllDay && e.Start.ToOffset(now.Offset).Date <= now.Date).ToList();
+        var running = open.Where(e => e.AllDay && e.Start <= now).ToList();
+        return [.. todayTimed.Concat(running).Concat(open.Where(e => !todayTimed.Contains(e) && !running.Contains(e))).Take(max)];
+    }
 
     /// <summary>
     /// The "Up next" label and whether it is soon (drawn red): "NOW", "IN 25 MIN" (under an hour), "IN 3 H" (under six
@@ -144,8 +177,8 @@ public static class CalendarFeed
             if (e.Start <= now && e.End > now) return ("NOW", true);
             var until = e.Start - now;
             if (until > TimeSpan.Zero && until < TimeSpan.FromHours(1))
-                return ($"IN {Math.Max(1, (int)Math.Ceiling(until.TotalMinutes))} MIN", true);
-            if (until > TimeSpan.Zero && until < TimeSpan.FromHours(6)) return ($"IN {(int)until.TotalHours} H", false);
+                return ($"IN {Math.Clamp((int)Math.Ceiling(until.TotalMinutes), 1, 59)} MIN", true);
+            if (until > TimeSpan.Zero && until < TimeSpan.FromHours(6)) return ($"IN {(int)Math.Round(until.TotalHours)} H", false);
         }
         return (WhenLabel(e, now, zone), false);
     }

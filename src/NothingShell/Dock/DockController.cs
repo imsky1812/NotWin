@@ -344,7 +344,7 @@ public sealed class DockController : IDisposable
 
     private void Pin(DockItem item)
     {
-        if (_settings.PinnedApps.Any(p => string.Equals(p.AppId, item.AppId, StringComparison.OrdinalIgnoreCase))) return;
+        if (_settings.PinnedApps.Any(p => DockItemsBuilder.SameApp(p.AppId, item.AppId))) return;
         var exe = item.Windows.Count > 0 ? item.Windows[0].ExePath : item.LaunchPath ?? "";
         var isUwp = IsUwpId(item.AppId);
         var hasExe = !string.IsNullOrEmpty(exe) && System.IO.File.Exists(exe);
@@ -369,7 +369,7 @@ public sealed class DockController : IDisposable
     }
 
     private void Unpin(DockItem item) =>
-        SavePins(_settings.PinnedApps.Where(p => !string.Equals(p.AppId, item.AppId, StringComparison.OrdinalIgnoreCase)).ToList());
+        SavePins(_settings.PinnedApps.Where(p => !DockItemsBuilder.SameApp(p.AppId, item.AppId)).ToList()); // every version's pin
 
     private void SavePins(List<PinnedApp> pinned)
     {

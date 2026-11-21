@@ -163,6 +163,7 @@ public sealed class GoogleCalendarService : IDisposable
             var zone = TimeZoneInfo.Local;
             var (from, to) = CalendarFeed.Window(DateTimeOffset.Now);
             var ids = new List<string>();
+            var readOnly = new HashSet<string>();
             string? page = null;
             for (var i = 0; i < MaxPages; i++)
             {
@@ -170,6 +171,7 @@ public sealed class GoogleCalendarService : IDisposable
                 if (json is null) return; // signed out meanwhile
                 var (some, next) = CalendarFeed.ParseCalendarList(json);
                 ids.AddRange(some);
+                readOnly.UnionWith(CalendarFeed.ReadOnlyCalendars(json));
                 if ((page = next) is null) break;
             }
             var events = new List<CalEvent>();
@@ -181,7 +183,7 @@ public sealed class GoogleCalendarService : IDisposable
                 {
                     var json = await GetAsync(CalendarFeed.EventsUrl(id, from, to, page), generation, skipUnreadable: true);
                     if (json is null) { skipped++; break; }
-                    var (some, next) = CalendarFeed.ParseEvents(json, zone, id);
+                    var (some, next) = CalendarFeed.ParseEvents(json, zone, id, mine: !readOnly.Contains(id));
                     events.AddRange(some);
                     if ((page = next) is null) break;
                 }

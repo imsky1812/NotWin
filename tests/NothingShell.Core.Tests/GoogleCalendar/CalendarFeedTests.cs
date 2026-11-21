@@ -223,7 +223,7 @@ public sealed class CalendarFeedTests
     public void EventsUrl_AsksForTypePlaceAndLink()
     {
         var url = Uri.UnescapeDataString(CalendarFeed.EventsUrl("a", At(11, 1), At(12, 1), null));
-        Assert.Contains("items(summary,status,start,end,eventType,location,htmlLink)", url);
+        Assert.Contains("items(summary,status,start,end,eventType,location,htmlLink,attendees(self,responseStatus))", url);
     }
 
     [Fact]
@@ -264,4 +264,69 @@ public sealed class CalendarFeedTests
     [InlineData("file:///c:/windows", false)]
     [InlineData(null, false)]
     public void IsSafeLink_OnlyGoogleCalendarHttps(string? link, bool safe) => Assert.Equal(safe, CalendarFeed.IsSafeLink(link));
+
+    // Review (Plan 6b) #1: a running all-day plan (a trip) must not hide today's meeting at the 2×1 size.
+    [Fact]
+    public void Upcoming_TodaysTimedEventsBeforeARunningAllDayPlan()
+    {
+        var now = At(11, 21, 10);
+        var trip = AllDay(At(11, 19), At(11, 26), "trip");
+        var meeting = Timed(At(11, 21, 10, 20), At(11, 21, 11), "meeting");
+        var tomorrowAllDay = AllDay(At(11, 22), At(11, 23), "tomorrow all day");
+        var tomorrowTimed = Timed(At(11, 22, 9), At(11, 22, 10), "tomorrow 9");
+        Assert.Equal("meeting", CalendarFeed.Upcoming([trip, meeting, tomorrowAllDay, tomorrowTimed], now, 1).Single().Title);
+        Assert.Equal(["meeting", "trip", "tomorrow all day", "tomorrow 9"],
+            CalendarFeed.Upcoming([tomorrowTimed, trip, tomorrowAllDay, meeting], now, 9).Select(e => e.Title));
+    }
+
+    // Review (Plan 6b) #2: every calendar Google fills for everyone (holidays, week numbers, sports...), declined
+    // invites and calendars the user can only read are not the user's plans.
+    [Theory]
+    [InlineData("en.indian#holiday@group.v.calendar.google.com", true)]
+    [InlineData("e_2_en#weeknum@group.v.calendar.google.com", true)]
+    [InlineData("ht3jlfaac5lfd6263ulfh4tql8@group.v.calendar.google.com", true)]
+    [InlineData("addressbook#contacts@group.v.calendar.google.com", true)]
+    [InlineData("abc123@group.calendar.google.com", false)]
+    [InlineData("someone@gmail.com", false)]
+    [InlineData(null, false)]
+    public void IsSharedFeed_AnyGoogleGeneratedCalendar(string? id, bool shared) => Assert.Equal(shared, CalendarFeed.IsSharedFeed(id));
+
+    [Fact]
+    public void ParseEvents_DeclinedInvite_IsNotPersonal_ReadOnlyCalendar_Neither()
+    {
+        const string json = """
+            {"items":[
+              {"summary":"Declined","attendees":[{"self":true,"responseStatus":"declined"},{"responseStatus":"accepted"}],
+               "start":{"dateTime":"2026-11-24T06:00:00Z"},"end":{"dateTime":"2026-11-24T07:00:00Z"}},
+              {"summary":"Accepted","attendees":[{"self":true,"responseStatus":"accepted"}],
+               "start":{"dateTime":"2026-11-24T08:00:00Z"},"end":{"dateTime":"2026-11-24T09:00:00Z"}}
+            ]}
+            """;
+        Assert.Equal([false, true], CalendarFeed.ParseEvents(json, Utc, "me@gmail.com").Events.Select(e => e.Personal));
+        Assert.All(CalendarFeed.ParseEvents(json, Utc, "boss@company.com", mine: false).Events, e => Assert.False(e.Personal));
+        Assert.Contains("attendees(self,responseStatus)", Uri.UnescapeDataString(CalendarFeed.EventsUrl("a", At(11, 1), At(12, 1), null)));
+    }
+
+    [Fact]
+    public void ReadOnlyCalendars_ReaderAndFreeBusy()
+    {
+        const string json = """
+            {"items":[{"id":"me@gmail.com","selected":true,"accessRole":"owner"},
+                      {"id":"boss@company.com","selected":true,"accessRole":"reader"},
+                      {"id":"busy@company.com","selected":true,"accessRole":"freeBusyReader"},
+                      {"id":"team@group.calendar.google.com","selected":true,"accessRole":"writer"}]}
+            """;
+        Assert.Equal(["boss@company.com", "busy@company.com"], CalendarFeed.ReadOnlyCalendars(json).Order());
+        Assert.Contains("accessRole", Uri.UnescapeDataString(CalendarFeed.CalendarListUrl(null)));
+        Assert.Empty(CalendarFeed.ReadOnlyCalendars("garbage"));
+    }
+
+    // Review (Plan 6b) #5: no "IN 60 MIN"; hours round to the nearest.
+    [Fact]
+    public void Countdown_Edges()
+    {
+        var now = At(11, 21, 10);
+        Assert.Equal(("IN 59 MIN", true), CalendarFeed.Countdown(Timed(now.AddMinutes(59).AddSeconds(30), now.AddHours(2)), now, Utc));
+        Assert.Equal(("IN 2 H", false), CalendarFeed.Countdown(Timed(now.AddMinutes(119), now.AddHours(3)), now, Utc));
+    }
 }
