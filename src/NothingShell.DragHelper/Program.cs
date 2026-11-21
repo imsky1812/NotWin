@@ -29,9 +29,22 @@ internal static class Program
     private static int Main(string[] args)
     {
         var clock = Stopwatch.StartNew();
-        if (DragArgs.Parse(args) is not { } parsed) return Done(2, "bad arguments", clock);
-        var paths = parsed.Where(p => File.Exists(p) || Directory.Exists(p)).ToArray();
+        if (DragArgs.ParseRequest(args) is not { } request) return Done(2, "bad arguments", clock);
+        var paths = request.Paths.Where(p => File.Exists(p) || Directory.Exists(p)).ToArray();
         if (paths.Length == 0) return Done(3, "no file exists", clock);
+        if (request.Over != 0)
+        {
+            // Started on the press (Plan 8): wait until the shell says the press became a drag (the notch turns
+            // click-through) — or until the button is let go, which was a click the shell handles itself.
+            while (true)
+            {
+                var step = DragGate.Next(PrimaryButtonDown(), IsWindow(request.Over) && IsClickThrough(request.Over), clock.Elapsed);
+                if (step == DragGateStep.Go) break;
+                if (step == DragGateStep.Clicked) return Done(6, "a click, no drag", clock);
+                if (step == DragGateStep.GiveUp || !IsWindow(request.Over)) return Done(7, "no drag started", clock);
+                Thread.Sleep(DragGate.Poll);
+            }
+        }
         if (!PrimaryButtonDown()) return Done(4, "button already released", clock); // never drop blindly
 
         Application.SetHighDpiMode(HighDpiMode.PerMonitorV2); // drop positions in real screen pixels on every monitor
@@ -124,6 +137,10 @@ internal static class Program
         [FieldOffset(8)] public MouseData Mouse; // 8 on 64-bit (the union starts after the padded type field)
     }
 
+    private static bool IsClickThrough(nint hwnd) => ((long)GetWindowLongPtr(hwnd, -20 /* GWL_EXSTYLE */) & 0x20) != 0;
+
+    [DllImport("user32.dll")] private static extern bool IsWindow(nint hwnd);
+    [DllImport("user32.dll", EntryPoint = "GetWindowLongPtrW")] private static extern nint GetWindowLongPtr(nint hwnd, int index);
     [DllImport("user32.dll")] private static extern short GetAsyncKeyState(int vk);
     [DllImport("user32.dll")] private static extern int GetSystemMetrics(int index);
     [DllImport("user32.dll")] private static extern bool SetForegroundWindow(nint hwnd);

@@ -32,4 +32,35 @@ public sealed class DragArgsTests
     [Fact]
     public void CommandLine_FolderEndingInBackslash_KeepsItsQuote() =>
         Assert.Equal("--drag \"C:\\dir\\\\\" \"C:\\\\\"", DragArgs.CommandLine([@"C:\dir\", @"C:\"]));
+
+    // Plan 8: the helper starts on the press (before the drag) and waits for the notch to let clicks through.
+    [Fact]
+    public void CommandLine_WithTheNotch_PutsOverFirst() =>
+        Assert.Equal(@"--over 1a2b --drag ""D:\x.txt""", DragArgs.CommandLine([@"D:\x.txt"], 0x1a2b));
+
+    [Fact]
+    public void ParseRequest_ReadsOverAndPaths()
+    {
+        var r = DragArgs.ParseRequest(["--over", "1a2b", "--drag", @"D:\x.txt"]);
+        Assert.NotNull(r);
+        Assert.Equal((nint)0x1a2b, r!.Over);
+        Assert.Equal([@"D:\x.txt"], r.Paths);
+        Assert.Equal([@"D:\x.txt"], DragArgs.Parse(["--over", "1a2b", "--drag", @"D:\x.txt"]));
+        Assert.Equal((nint)0, DragArgs.ParseRequest(["--drag", @"D:\x.txt"])!.Over);
+    }
+
+    [Theory]
+    [InlineData("zz")]
+    [InlineData("0")]
+    [InlineData("")]
+    public void ParseRequest_BadOver_IsNull(string over) => Assert.Null(DragArgs.ParseRequest(["--over", over, "--drag", @"D:\x.txt"]));
+
+    [Theory]
+    [InlineData(true, false, 100, DragGateStep.Wait)]
+    [InlineData(true, true, 100, DragGateStep.Go)]
+    [InlineData(false, false, 100, DragGateStep.Clicked)]   // let go without dragging: it was a click (copy)
+    [InlineData(false, true, 100, DragGateStep.Clicked)]    // never send a press for a button that is up
+    [InlineData(true, false, 30_000, DragGateStep.GiveUp)]
+    public void DragGate_Steps(bool down, bool clickThrough, int ms, DragGateStep step) =>
+        Assert.Equal(step, DragGate.Next(down, clickThrough, TimeSpan.FromMilliseconds(ms)));
 }

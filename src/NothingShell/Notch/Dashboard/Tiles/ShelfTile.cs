@@ -25,7 +25,7 @@ public sealed class ShelfTile : ITileView, IFileDropTarget
     private TileSize _size;
     private Border? _tile;
     private Point _down;
-    private bool _dragged;
+    private bool _dragged, _prestarted;
 
     public ShelfTile(ShelfStore store, AppIconCache icons)
     {
@@ -119,7 +119,14 @@ public sealed class ShelfTile : ITileView, IFileDropTarget
         };
         chip.MouseEnter += (_, _) => x.Visibility = Visibility.Visible;
         chip.MouseLeave += (_, _) => x.Visibility = Visibility.Hidden;
-        chip.PreviewMouseLeftButtonDown += (_, e) => { _down = e.GetPosition(chip); _dragged = false; };
+        chip.PreviewMouseLeftButtonDown += (_, e) =>
+        {
+            _down = e.GetPosition(chip);
+            _dragged = false;
+            // The helper starts now, on the press, and waits: by the time the press becomes a drag it is ready (a
+            // quick flick no longer ends before it starts). A click lets it go again without doing anything.
+            _prestarted = ShelfDragHandoff.Prestart([path], chip);
+        };
         // A click (no drag) copies the file itself: Ctrl+V then pastes it into WhatsApp, a chat, a mail or a folder.
         chip.MouseLeftButtonUp += (_, e) =>
         {
@@ -139,6 +146,7 @@ public sealed class ShelfTile : ITileView, IFileDropTarget
             _dragged = true;
             // The shell runs raised and Windows refuses its drags into normal apps, so a helper at normal level takes
             // the drag over (drops into WhatsApp, browser upload boxes, Explorer). Only without it (dev build): in-process.
+            if (_prestarted) { ShelfDragHandoff.Go(chip); return; }
             if (ShelfDragHandoff.Start([path], chip)) return;
             // Drag the reference out (Explorer copies on drop); the shelf keeps holding it.
             var data = new DataObject(DataFormats.FileDrop, new[] { path });
@@ -203,6 +211,34 @@ public static class ShelfClipboard
 /// </summary>
 public static class ShelfDragHandoff
 {
+    /// <summary>
+    /// Plan 8: starts the helper on the press, told to wait on the notch window (see <see cref="Go"/>). False when there
+    /// is no helper or it did not start; the drag then starts the helper as before.
+    /// </summary>
+    public static bool Prestart(IReadOnlyList<string> paths, UIElement from, string? helper = null)
+    {
+        helper ??= DefaultHelper;
+        var hwnd = NotchHandle(from);
+        if (!File.Exists(helper) || hwnd == 0) return false;
+        AllowSetForegroundWindow(-1 /* ASFW_ANY */);
+        return NothingShell.Native.UnelevatedShell.Open(helper, NothingShell.Core.DragArgs.CommandLine(paths, hwnd), Path.GetDirectoryName(helper),
+            (what, e) => Log.Error(what, e));
+    }
+
+    /// <summary>The press became a drag: the notch lets clicks through, which tells the waiting helper to take over.</summary>
+    public static void Go(UIElement from)
+    {
+        from.ReleaseMouseCapture();
+        Mouse.Capture(null);
+        AllowSetForegroundWindow(-1 /* ASFW_ANY */); // again: moving the mouse since the press may have used it up
+        var hwnd = NotchHandle(from);
+        if (hwnd != 0) HoldClickThrough(hwnd);
+        Log.Info("shelf: drag handed to the waiting helper");
+    }
+
+    private static nint NotchHandle(UIElement from) =>
+        Window.GetWindow(from) is { } w ? new System.Windows.Interop.WindowInteropHelper(w).Handle : 0;
+
     [System.Runtime.InteropServices.DllImport("user32.dll")]
     private static extern bool AllowSetForegroundWindow(int processId);
 

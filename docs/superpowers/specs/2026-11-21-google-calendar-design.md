@@ -87,7 +87,7 @@ and `calendar.dat`.
 **Guide text** (Settings):
 1. Open Google Cloud Console and create a project.
 2. In APIs & Services, enable the Google Calendar API.
-3. On the OAuth consent screen, choose External, add yourself as a test user, then click Publish app. In Testing mode
+3. In Google Auth Platform > Audience (older consoles: OAuth consent screen), choose External, add yourself as a test user, then click Publish app. In Testing mode
    Google signs you out every 7 days.
 4. Under Credentials, create an OAuth client ID of type Desktop app, and paste its ID and secret below.
 
