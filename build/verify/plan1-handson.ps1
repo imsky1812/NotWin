@@ -12,7 +12,7 @@
 param(
     # Run only these sections. Default (no -Only): reinstall + Dock, Apps, Tray, Reserve, Startup.
     # Example: -Only KeySpike,Notify
-    [ValidateSet('Task8', 'KeySpike', 'Overflow', 'Desktop', 'Notify', 'Dock', 'Apps', 'Tray', 'Reserve', 'Launcher', 'Notch', 'Panel', 'Dash', 'Widgets', 'Startup')]
+    [ValidateSet('Task8', 'KeySpike', 'Overflow', 'Desktop', 'Notify', 'Dock', 'Apps', 'Tray', 'Reserve', 'Launcher', 'Notch', 'Panel', 'Dash', 'Widgets', 'Calendar', 'Startup')]
     [string[]]$Only,
     # With -Only the reinstall step is skipped unless -Reinstall is given.
     [switch]$Reinstall
@@ -1719,6 +1719,29 @@ try {
         [void](Ask-Check 'DD.6' 'Previews switch off' 'Settings > Shell: turn off "Window previews in the dock", hover a running app, then turn it back on.' `
             'With it off, did hovering show just the name?')
         Complete-Quit 'DD.quit' $app 'dock effects section (--quit)'
+    }
+
+    # ================================================================ GOOGLE CALENDAR (Plan 6)
+    if (Test-Section 'Calendar') {
+        Write-Step 'GOOGLE CALENDAR (Plan 6): connect, dots, next event, offline, disconnect'
+        $logOff = Get-LogLength $AppLog
+        $app = Start-App
+        [void](Wait-Until { (Get-LogSince $AppLog $logOff) -match 'dock ready' } 15000 250)
+        [void](Ask-Check 'GC.1' 'Hint in edit mode only' 'Not connected yet: look at the calendar widget, then enter Edit widgets.' `
+            'Plain dates normally, and "Connect Google Calendar in Settings" only while editing?')
+        [void](Ask-Check 'GC.2' 'Guided setup and sign-in' 'Settings > Google Calendar: follow the four steps (Open Google Cloud Console), paste the client ID and secret, press Connect and approve in the browser (Advanced > Continue on the unverified-app warning).' `
+            'Did the browser say you can close the tab, and does Settings show CONNECTED with a number of calendars?')
+        [void](Ask-Check 'GC.3' 'Event dots' 'Look at the 2x2 calendar widget and compare with Google Calendar.' `
+            'Is there a dot under each day that has an event (holidays and birthdays included), white on today''s red circle?')
+        [void](Ask-Check 'GC.4' 'Next event' 'Switch the calendar widget to 2x1 in edit mode.' `
+            'Does the right half show the next event with TODAY / TOMORROW / a day and its title?')
+        [void](Ask-Check 'GC.5' 'Offline' 'Turn Wi-Fi off yourself, press Refresh in Settings, then turn Wi-Fi back on.' `
+            'Did the status say OFFLINE and did the dots stay?')
+        $calLog = Get-LogSince $AppLog $logOff
+        if ($calLog -match 'calendar: refreshed') { Write-Good 'log shows a calendar refresh (counts only)' } else { Write-Bad 'no "calendar: refreshed" line in the log' }
+        [void](Ask-Check 'GC.6' 'Disconnect' 'Settings > Google Calendar > Disconnect.' `
+            'Do the dots and the next event go away, and does Settings show the setup steps again?')
+        Complete-Quit 'GC.quit' $app 'google calendar section (--quit)'
     }
 
     # ================================================================ STARTUP (task 16)

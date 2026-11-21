@@ -29,6 +29,7 @@ public partial class App : Application
     private Clips.ClipboardService? _clips;
     private readonly Power.KeepAwakeService _awake = new();
     private Forecast.WeatherService? _weather;
+    private GoogleCalendar.GoogleCalendarService? _calendar;
     private Widgets.DesktopWidgets? _widgets;
     private readonly Core.Widgets.SnakeKeyGate _snakeGate = new(); // one gate for whichever snake is on the desktop
     private Dock.AppIconCache? _folderIcons; // shared by every app folder
@@ -150,6 +151,13 @@ public partial class App : Application
             _notch.SettingsRequested += ShowSettings;
             if (dockCtl is not null) dockCtl.SettingsRequested += ShowSettings;
             _weather.Start(dockCtl?.Settings.Weather);
+            // Google Calendar (Plan 6): guarded, a failure leaves the calendar widget showing plain dates.
+            try
+            {
+                _calendar = new GoogleCalendar.GoogleCalendarService(DataDir);
+                _calendar.Start();
+            }
+            catch (Exception e) { Log.Error("google calendar failed to start", e); }
             try { _clips = new Clips.ClipboardService(DataDir); }
             catch (Exception e) { Log.Error("clipboard history failed to start", e); }
             var timer = _timer;
@@ -274,7 +282,7 @@ public partial class App : Application
         {
             case Core.Widgets.WidgetKind.Clock: return new Widgets.ClockWidget();
             case Core.Widgets.WidgetKind.Timer: return _timer is null ? null : new Widgets.TimerWidget(_timer);
-            case Core.Widgets.WidgetKind.Calendar: return new Widgets.CalendarWidget();
+            case Core.Widgets.WidgetKind.Calendar: return new Widgets.CalendarWidget(_calendar, () => _widgets?.Editing == true);
             case Core.Widgets.WidgetKind.Snake:
                 return _snake = new Widgets.SnakeWidget(_snakeGate, dock.Settings.SnakeBest,
                     best => dock.UpdateSettings(s => s with { SnakeBest = Math.Max(s.SnakeBest, best) }));
@@ -311,7 +319,8 @@ public partial class App : Application
                 () => _widgets?.BeginEdit(),
                 Path.Combine(DataDir, "wallpapers")),
             new Settings.SettingsWindow.DockEffects(
-                on => { dock.UpdateSettings(s => s with { WindowPreviews = on }); dock.PreviewsEnabled = on; }));
+                on => { dock.UpdateSettings(s => s with { WindowPreviews = on }); dock.PreviewsEnabled = on; }),
+            _calendar);
     }
 
     // Source app of a media session (AUMID or exe) as a short name for the media tile: the launcher index, else the
@@ -414,6 +423,7 @@ public partial class App : Application
             _clips?.Dispose();
             _awake.Dispose(); // keep awake never outlives the shell
             _weather?.Dispose();
+            _calendar?.Dispose();
             _widgets?.Dispose();
             _controller?.Dispose();
             _tray?.Dispose();

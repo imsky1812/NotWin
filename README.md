@@ -82,8 +82,13 @@ notifications. `uninstall.ps1` removes it. Use `-NoTimestamp` to skip the signin
   **＋ Add**; **Done** saves the layout. Esc closes the dashboard.
 - **Desktop widgets:** on the desktop, under your windows (still there after Win+D): **Clock** (dot matrix, drawn
   straight on the wallpaper, dark or light to stay legible), **Snake**, **Timer** (the same timer as the notch),
-  **Calendar** (dates; Google events come in a later plan), **Weather**, **Media** and **Battery** (the laptop and
-  connected Bluetooth devices; dots or the wheel switch devices).
+  **Calendar** (dates, plus your Google Calendar once connected), **Weather**, **Media** and **Battery** (the laptop
+  and connected Bluetooth devices; dots or the wheel switch devices).
+  - **Google Calendar:** Settings > Google Calendar walks you through making your own Google Cloud OAuth client
+    (Desktop app, Calendar API, consent screen published so you stay signed in), then **Connect** signs you in once in
+    your browser (read-only). The month gets a dot under days with events from every calendar switched on in Google
+    Calendar; the 2×1 widget shows the next event. Events refresh every 15 minutes and are kept (encrypted for your
+    Windows account) for when you are offline. **Disconnect** signs out and deletes them.
   - **Snake:** click the board to play; arrows or WASD steer, Space pauses / restarts. While you play, those keys go
     only to the snake; clicking anywhere else, switching windows or Esc pauses it and gives the keys back. The best
     score is saved.
