@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    One-click installer (2026-11-21). build\make-setup.ps1 appends the self-contained app and its unsigned package to
+    this exe (see Payload.cs). On the user's PC it asks for admin, signs NotWin with a certificate made for that PC
+    (private key in memory only), trusts it, installs into Program Files and adds an uninstall entry. The same exe
+    without the payload is the uninstaller. Published as a trimmed, compressed single file (no C++ tools needed).
+  -->
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <AssemblyName>NotWin.Setup</AssemblyName>
+    <EnableTrimAnalyzer>true</EnableTrimAnalyzer>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <Version>1.0.0</Version>
+  </PropertyGroup>
+
+</Project>

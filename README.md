@@ -6,15 +6,81 @@ and the clock. It hides until the mouse touches the bottom edge, or (Keep dock v
 Later phases add the launcher, quick settings and notifications, the notch, and desktop widgets
 (see `docs/superpowers/specs/2026-11-17-nothing-shell-design.md`).
 
-Personal use only. Formerly called Nothing Shell (renamed 2026-11-21).
+Formerly called Nothing Shell (renamed 2026-11-21).
 
-## Requirements
+## Install on your PC (one click)
 
-- Windows 11 (developed on 26300), 1920×1080 at 125% tested
-- .NET SDK 10 (`net10.0-windows10.0.22621.0`)
-- PowerShell 7 (`pwsh`)
+You need Windows 11 (64-bit). Nothing else: .NET is built in.
 
-## Install
+**[⬇ Download NotWin-Setup.exe](https://github.com/imsky1812/NotWin/releases/latest/download/NotWin-Setup.exe)**
+(about 95 MB, version 1.0.0). All versions are on the [Releases](https://github.com/imsky1812/NotWin/releases) page.
+
+1. Download **`NotWin-Setup.exe`** with the link above, or build it yourself (see [Build the setup](#build-the-setup)).
+2. Double-click it. Windows SmartScreen may say *"Windows protected your PC"*, because the file is not signed by a
+   known publisher: click **More info**, then **Run anyway**.
+3. Click **Yes** on the admin prompt, then **OK** on *"Install NotWin?"*.
+4. Your taskbar is replaced by the NotWin dock after a few seconds, and *"NotWin is installed and running"*
+   appears. NotWin now starts with Windows.
+
+Right-click the dock's start button and choose **Settings…**. To show your calendar, see
+[Add your Google Calendar](#add-your-google-calendar).
+
+**What setup does.** The dock needs Windows' `uiAccess` to stay above every window, and Windows only allows that
+for a signed program in Program Files. So setup:
+
+- unpacks NotWin into an admin-only folder;
+- makes a certificate just for your PC and signs NotWin with it. The certificate's private key only ever lives in
+  setup's memory, so once setup closes nothing else can ever be signed with it;
+- trusts that certificate on your PC;
+- installs into `C:\Program Files\NotWin`;
+- registers a small package so NotWin can read notifications;
+- adds NotWin to **Settings > Apps**;
+- starts NotWin as you, not as admin.
+
+Setup also writes a short log to `%TEMP%\NotWin-Setup.log`.
+
+**Update:** run a newer `NotWin-Setup.exe` the same way. Your settings are kept.
+
+**Uninstall:** go to **Settings > Apps > Installed apps > NotWin > Uninstall**. Your Windows taskbar comes back, and
+the certificate, package and start-with-Windows entry are removed. Your settings stay in `%AppData%\NotWin`; delete
+that folder too if you want nothing left.
+
+## Add your Google Calendar
+
+NotWin reads your calendar (read-only) through a Google sign-in that **you** own, so no one else's app ever sees
+your events. You set it up once, in about five minutes.
+
+1. Open [Google Cloud Console](https://console.cloud.google.com/) and sign in with the Google account whose calendar
+   you want. Create a project (top bar > project picker > **New project**, any name, e.g. `NotWin`).
+2. Go to **APIs & Services > Library**, search **Google Calendar API**, and click **Enable**.
+3. Go to **Google Auth Platform > Branding** (older consoles: **OAuth consent screen**). Fill in an app name (e.g.
+   `NotWin`) and your email.
+4. Go to **Audience**, choose **External**, then click **Publish app**. While the app is still in *Testing*, Google
+   signs you out every 7 days and only listed test users can sign in.
+5. Go to **Google Auth Platform > Clients** (older consoles: **Credentials**) and click **Create client**. Choose
+   **Desktop app** and click **Create**. Copy the **Client ID** and **Client secret**.
+6. In NotWin, open **Settings > Google Calendar**, paste the client ID and secret, and click **Connect**.
+7. Your browser opens Google's sign-in. Pick your account. On *"Google hasn't verified this app"*, click
+   **Advanced > Go to NotWin (unsafe)**: it is your own app. Allow read-only calendar access. When the page says you
+   can close the tab, Settings shows **CONNECTED**.
+8. Add the **Calendar** widget (edit widgets > **＋ Add > Calendar**) for dots under days with events, or **Up next**
+   for your coming meetings and trips. The calendars switched on in Google Calendar are the ones shown.
+
+Keep the client secret to yourself: paste it only into NotWin's Settings. It is stored encrypted for your Windows
+account, never in a shared or synced file. **Disconnect** in the same place signs NotWin out.
+
+**If something goes wrong:**
+
+| What you see | What to do |
+|---|---|
+| *Error 403: access_denied* | The app is still in *Testing* and your account is not a test user. Publish it (step 4) or add yourself under **Audience > Test users**. |
+| Signed out after a week | Same cause: publish the app (step 4), then **Connect** again. |
+| **OFFLINE** in Settings | No internet. The last events stay visible, and NotWin refreshes on its own every 15 minutes. |
+
+## Install for development (from source)
+
+You need the .NET SDK 10 (`net10.0-windows10.0.22621.0`) and PowerShell 7 (`pwsh`). Developed on Windows 11
+26300, tested at 1920×1080, 125%.
 
 The dock needs `uiAccess` so it can sit above other windows, including elevated ones. Windows only allows
 that for a signed exe under Program Files, so installing needs admin once.
@@ -144,7 +210,9 @@ notifications. `uninstall.ps1` removes it. Use `build.ps1 -NoTimestamp` to skip 
 
 If Fenn (another taskbar app) is running, NotWin asks before taking over.
 
-## Uninstall
+## Uninstall (development install)
+
+Installed with **setup**? Use **Settings > Apps** instead (see above). For a `build.ps1` / `install.ps1` install:
 
 ```powershell
 # elevated PowerShell 7
@@ -153,6 +221,22 @@ D:\NothingLauncher\build\uninstall.ps1
 
 This stops the shell and the watchdog, restores the Windows taskbar, removes the Run entry, and deletes
 `C:\Program Files\NotWin`. The dev cert and your data folder are left in place.
+
+## Build the setup
+
+```powershell
+# from a normal PowerShell 7 (NOT as administrator)
+D:\NothingLauncher\build\make-setup.ps1
+```
+
+This makes `out\NotWin-Setup.exe`, a single file with:
+
+- NotWin, its watchdog and drag helper, self-contained for 64-bit Windows, so no .NET is needed on the PC;
+- the unsigned notification package;
+- the installer itself (`src\NotWin.Setup`), which signs everything on each PC.
+
+Nothing is signed on the build PC. The same file without its payload is the uninstaller that setup leaves in Program
+Files.
 
 ## Data folder: `%AppData%\NotWin`
 
