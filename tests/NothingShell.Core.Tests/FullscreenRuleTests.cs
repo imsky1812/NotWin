@@ -78,4 +78,17 @@ public sealed class FullscreenRuleTests
 
     [Fact]
     public void DecideMaximized_NoForeground_KeepsPrevious() => Assert.True(FullscreenRule.DecideMaximized(null, Mon, previous: true));
+
+    // User report 2026-11-21: the dock and notch showed on the lock screen (the shell's raised windows sit above it).
+    // While Windows is locked the shell acts as in full screen, whatever the probe says.
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Locked_CountsAsFullscreen(bool previous)
+    {
+        var desktop = new FullscreenProbe(new RectI(0, 0, 800, 600), Mon, "Notepad", false, false);
+        Assert.True(FullscreenRule.Decide(desktop, previous, locked: true));
+        Assert.True(FullscreenRule.Decide(null, previous, foregroundIsOwnProcess: true, locked: true));
+        Assert.False(FullscreenRule.Decide(desktop, previous, locked: false));
+    }
 }
