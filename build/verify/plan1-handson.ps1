@@ -12,7 +12,7 @@
 param(
     # Run only these sections. Default (no -Only): reinstall + Dock, Apps, Tray, Reserve, Startup.
     # Example: -Only KeySpike,Notify
-    [ValidateSet('Task8', 'KeySpike', 'Overflow', 'Desktop', 'Notify', 'Dock', 'Apps', 'Tray', 'Reserve', 'Launcher', 'Notch', 'Panel', 'Dash', 'Widgets', 'Calendar', 'Plan9', 'Startup')]
+    [ValidateSet('Task8', 'KeySpike', 'Overflow', 'Desktop', 'Notify', 'Dock', 'Apps', 'Tray', 'Reserve', 'Launcher', 'Notch', 'Panel', 'Dash', 'Widgets', 'Calendar', 'Plan9', 'Rename', 'Startup')]
     [string[]]$Only,
     # With -Only the reinstall step is skipped unless -Reinstall is given.
     [switch]$Reinstall
@@ -1753,6 +1753,23 @@ try {
         if ($p9Log -match 'sync: \d+ pulled, \d+ pushed') { Write-Good 'log shows a sync (counts only)' } else { Write-Bad 'no "sync: ..." line in the log' }
         [void](Ask-Check 'P9.6' 'Sync off' 'Settings > Sync > Turn off.' 'Does Settings show the "Choose folder…" text again?')
         Complete-Quit 'P9.quit' $app 'plan 9 section (--quit)'
+    }
+
+    # ================================================================ RENAME (Plan 12)
+    if (Test-Section 'Rename') {
+        Write-Step 'RENAME (Plan 12): NotWin took over from Nothing Shell'
+        $oldGone   = -not (Test-Path (Join-Path $env:ProgramFiles 'NothingShell'))
+        $oldRun    = $null -ne (Get-ItemProperty 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run' -Name 'NothingShell' -ErrorAction SilentlyContinue)
+        $oldPkg    = $null -ne (Get-AppxPackage -Name 'NothingShell' -ErrorAction SilentlyContinue)
+        $marker    = Test-Path (Join-Path $StateDir 'migrated-from-nothingshell.txt')
+        $logOff = Get-LogLength $AppLog
+        $app = Start-App
+        [void](Wait-Until { (Get-LogSince $AppLog $logOff) -match 'dock ready' } 15000 250)
+        [void](Ask-Check 'RN.1' 'NotWin took over' 'Open Settings > Google Calendar (and look at your widgets, notes and dock pins).' `
+            'Is Google Calendar still CONNECTED, and are your widgets, notes and pins the ones you had in Nothing Shell?' `
+            -Measured @{ oldFolderGone = $oldGone; oldRunValue = $oldRun; oldPackage = $oldPkg; migratedMarker = $marker } `
+            -MeasuredPass ($oldGone -and -not $oldRun -and -not $oldPkg -and $marker))
+        Complete-Quit 'RN.quit' $app 'rename section (--quit)'
     }
 
     # ================================================================ GOOGLE CALENDAR (Plan 6)

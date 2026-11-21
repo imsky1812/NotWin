@@ -1,4 +1,4 @@
-# NotWin (NotWin)
+# NotWin
 
 A personal Windows 11 shell layer styled after Nothing OS. Phase 1 replaces the Windows taskbar with a
 floating dock: start and search buttons, pinned and running apps, and a tray with Wi-Fi, volume, battery
@@ -6,7 +6,7 @@ and the clock. It hides until the mouse touches the bottom edge, or (Keep dock v
 Later phases add the launcher, quick settings and notifications, the notch, and desktop widgets
 (see `docs/superpowers/specs/2026-11-17-nothing-shell-design.md`).
 
-Personal use only.
+Personal use only. Formerly called Nothing Shell (renamed 2026-11-21).
 
 ## Requirements
 
@@ -167,6 +167,12 @@ This stops the shell and the watchdog, restores the Windows taskbar, removes the
 | `launcher-usage.json` | How often and when you launched each item from the launcher (for Most used; max 500 entries) |
 | `log.txt` | Startup, taskbar hide/restore, appbar and full-screen events |
 | `taskbar-restore.json` | Present only while the shell runs: the taskbar's original auto-hide setting |
+| `migrated-from-nothingshell.txt` | Written once when NotWin copied your data over from `%AppData%\NothingShell` (counts only) |
+
+**Coming from Nothing Shell:** the first NotWin start copies `%AppData%\NothingShell` into `%AppData%\NotWin` when
+the new folder has no data yet (never overwriting; the old folder stays as a backup), so Google Calendar, widgets,
+notes and pins carry over. `install.ps1` removes the old `C:\Program Files\NothingShell`, its package and its
+start-with-Windows entry.
 
 If the shell is killed, the watchdog (`NotWin.Watchdog.exe`) restores the Windows taskbar from
 `taskbar-restore.json`. If the taskbar is ever left hidden, run this to restore it by hand:
