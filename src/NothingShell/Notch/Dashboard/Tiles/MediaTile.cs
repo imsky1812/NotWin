@@ -59,9 +59,11 @@ public sealed class MediaTile : ITileView
     }
 
     // Rebuilds the tile's content from the current snapshot (cheap: a handful of elements).
+    private bool _seeking; // no redraw while the dots are being dragged
+
     private void Fill()
     {
-        if (_host is null) return;
+        if (_host is null || _seeking) return;
         var m = _media.Current;
         var has = m.Title is not null || m.SourceAppId is not null;
         _host.Child = _size switch
@@ -156,7 +158,10 @@ public sealed class MediaTile : ITileView
             Lit = has ? MediaProgress.Dots(now, m.Duration, 20) : 0, VerticalAlignment = VerticalAlignment.Bottom,
             HorizontalAlignment = HorizontalAlignment.Left,
         };
-        panel.Children.Add(bar);
+        // Draggable like the desktop widget's (Plan 10): jump anywhere in the song.
+        var seekable = has ? SeekBar.Wrap(bar, 20, m.Duration, _media.SeekAsync, on => { _seeking = on; if (!on) Fill(); }) : bar;
+        if (seekable is Border strip) strip.Margin = new Thickness(0, 0, 0, -5); // the strip's extra 5 px below stay inside the tile
+        panel.Children.Add(seekable);
         return panel;
     }
 

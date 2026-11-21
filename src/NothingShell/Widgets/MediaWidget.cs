@@ -107,41 +107,12 @@ public sealed class MediaWidget : IDesktopWidget
             Count = count, Dot = 4, Gap = 3, On = TileChrome.Text, Off = TileChrome.Frozen(0x33, 0x33, 0x33), Accent = TileChrome.Red,
             Lit = has ? MediaProgress.Dots(now, m.Duration, count) : 0, HorizontalAlignment = HorizontalAlignment.Left,
         };
-        if (!has || m.Duration <= TimeSpan.Zero) return dots;
-        // A taller see-through strip around the dots takes the pointer (the gaps between dots would not).
-        var hit = new Border
+        if (!has) return dots;
+        return SeekBar.Wrap(dots, count, m.Duration, _media.SeekAsync, on =>
         {
-            Background = Brushes.Transparent, Padding = new Thickness(0, 5, 0, 5),
-            Cursor = Cursors.Hand, HorizontalAlignment = HorizontalAlignment.Left, Child = dots,
-        };
-        var duration = m.Duration;
-        hit.MouseLeftButtonDown += (_, e) =>
-        {
-            e.Handled = true;
-            _seeking = true;
-            hit.CaptureMouse();
-            dots.Lit = MediaProgress.LitAt(e.GetPosition(dots).X, dots.ActualWidth, count);
-        };
-        hit.MouseMove += (_, e) =>
-        {
-            if (_seeking && hit.IsMouseCaptured) dots.Lit = MediaProgress.LitAt(e.GetPosition(dots).X, dots.ActualWidth, count);
-        };
-        hit.MouseLeftButtonUp += (_, e) =>
-        {
-            if (!_seeking) return;
-            e.Handled = true;
-            var target = MediaProgress.SeekTarget(e.GetPosition(dots).X, dots.ActualWidth, duration);
-            _seeking = false;
-            hit.ReleaseMouseCapture();
-            if (target is { } t) _ = _media.SeekAsync(t);
-        };
-        hit.LostMouseCapture += (_, _) =>
-        {
-            if (!_seeking) return;
-            _seeking = false; // cancelled (another window took the mouse): back to the real position
-            Fill();
-        };
-        return hit;
+            _seeking = on;
+            if (!on) Fill(); // back to the real position (the seek's own update follows)
+        });
     }
 
     private static Brush ArtBrush(MediaSnapshot m) => m.Art is null ? Placeholder : new ImageBrush(m.Art) { Stretch = Stretch.UniformToFill };
