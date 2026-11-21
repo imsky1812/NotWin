@@ -41,3 +41,30 @@ of total, under the 0.5% limit.
 ## Tests
 
 `dotnet test`: 68/68 pass (NothingShell.Core.Tests).
+
+## Phase 2: launcher (2026-11-18)
+
+Installed Release build from `plan2-launcher` at b743bb5 (pid 11924, started 21:01:22), with keep-visible on.
+Before the samples the launcher had been opened many times: searches, All apps, the power menu, a file search
+(which loads the Windows Search provider) and a full-screen video.
+
+| Sample | Process | Working set | Private bytes | CPU over 60 s |
+|---|---|---|---|---|
+| ~3 min after last launcher use (21:11) | NothingShell | 149.6 MB | 61.1 MB | 31 ms (0.004% of total CPU) |
+| | Watchdog | 22.0 MB | 6.2 MB | 0 ms |
+| | **Total** | **172.3 MB** | **67.5 MB** | |
+| **~14 min after last launcher use (21:22)** | NothingShell | 63.3 MB | 59.4 MB | 0 ms |
+| | Watchdog | 1.9 MB | 6.2 MB | 0 ms |
+| | **Total** | **65.2 MB** | **65.6 MB** | |
+
+**Result: PASS.** After 10+ minutes idle the total working set is 65.2 MB, under the 100 MB limit, and CPU is 0.
+
+### Notes
+- Right after use, the working set is high (172 MB). This comes from the launcher's full-screen layered window,
+  icons, and the OleDb / Windows Search provider. Windows trims it once the PC is idle.
+- Compared with Plan 1, the launcher adds about 4 MB to the idle working set and about 18 MB to private bytes.
+  Most of that is the kept-alive launcher window (a 1920×1080 layered surface under software rendering) and the
+  search components, which stay loaded after the first file search.
+- **If later plans push the budget:** destroy the launcher window after it has been closed for 5 minutes instead of
+  only hiding it (rebuilding takes a fraction of a second on the next open). The spec allows this: "Hidden surfaces
+  should be released or made very cheap".

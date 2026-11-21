@@ -12,13 +12,13 @@
 param(
     # Run only these sections. Default (no -Only): reinstall + Dock, Apps, Tray, Reserve, Startup.
     # Example: -Only KeySpike,Notify
-    [ValidateSet('Task8', 'KeySpike', 'Overflow', 'Desktop', 'Notify', 'Dock', 'Apps', 'Tray', 'Reserve', 'Startup')]
+    [ValidateSet('Task8', 'KeySpike', 'Overflow', 'Desktop', 'Notify', 'Dock', 'Apps', 'Tray', 'Reserve', 'Launcher', 'Startup')]
     [string[]]$Only,
     # With -Only the reinstall step is skipped unless -Reinstall is given.
     [switch]$Reinstall
 )
 $ErrorActionPreference = 'Stop'
-$Sections = if ($Only) { @($Only) } else { @('Dock', 'Apps', 'Tray', 'Reserve', 'Startup') }
+$Sections = if ($Only) { @($Only) } else { @('Launcher', 'Dock', 'Reserve', 'Startup') }
 
 # =====================================================================================
 # HELPERS (everything above the "END HELPERS" marker is safe to dot-source for testing)
@@ -492,16 +492,28 @@ function Start-App {
     return $p
 }
 
-# Quits the app by posting WM_CLOSE to EVERY top-level window of its process (the dock window is hidden, so a
-# title lookup or MainWindow does not work). Never kills. Then asserts the work area equals the starting value
-# (a leaked appbar reservation would leave a dead strip). -NoWait: only post the messages (for timing tests).
+# Quits the app cleanly: first `NothingShell.exe --quit` (the app's own exit path, Plan 2), and only if that is
+# unavailable or does not work, WM_CLOSE to EVERY top-level window of its process (the dock window is hidden, so
+# a title lookup or MainWindow does not work). Never kills. Then asserts the work area equals the starting value
+# (a leaked appbar reservation would leave a dead strip). -NoWait: only post WM_CLOSE (for timing tests).
 function Quit-App($p, [switch]$NoWait) {
     $closed = 0
-    try { $closed = [NsWin]::CloseAllWindows([uint32]$p.Id) } catch { }
-    if ($NoWait) { return @{ windowsClosed = $closed } }
     $sw = [System.Diagnostics.Stopwatch]::StartNew()
     $exited = $false
-    try { $exited = $p.WaitForExit(5000) } catch { $exited = $true }
+    $via = 'wm_close'
+    if (-not $NoWait -and (Test-Path -LiteralPath $AppExe)) {
+        try {
+            $q = Start-Process -FilePath $AppExe -ArgumentList '--quit' -PassThru -WindowStyle Hidden
+            [void]$q.WaitForExit(15000)
+            $exited = $p.WaitForExit(500)
+            if ($exited) { $via = 'quit_command' }
+        } catch { }
+    }
+    if (-not $exited) {
+        try { $closed = [NsWin]::CloseAllWindows([uint32]$p.Id) } catch { }
+        if ($NoWait) { return @{ windowsClosed = $closed } }
+        try { $exited = $p.WaitForExit(5000) } catch { $exited = $true }
+    }
     $exitMs = [int]$sw.ElapsedMilliseconds
     if (-not $exited) { Write-Bad "  The app did not exit within 5 s after WM_CLOSE (not killing it)." }
     $trayMs = Wait-Until { [NsWin]::TrayState() -eq 1 } 4000 100
@@ -513,7 +525,7 @@ function Quit-App($p, [switch]$NoWait) {
         $waOk = (($wa -join ',') -eq ($script:OrigWorkArea -join ','))
         if (-not $waOk) { Write-Bad ("  WORK AREA LEAK: now {0}, expected {1}" -f ($wa -join ','), ($script:OrigWorkArea -join ',')) }
     }
-    return @{ windowsClosed = $closed; exited = $exited; exitMs = $exitMs; trayVisible = ($trayMs -ge 0); trayBackMs = $trayMs
+    return @{ windowsClosed = $closed; exited = $exited; exitMs = $exitMs; via = $via; trayVisible = ($trayMs -ge 0); trayBackMs = $trayMs
               workAreaOk = $waOk; workArea = ($wa -join ','); startWorkArea = ($script:OrigWorkArea -join ',') }
 }
 
@@ -711,7 +723,7 @@ try {
     Write-Good 'Install done.'
     } else {
         Write-Info 'Skipping the reinstall (use -Reinstall to force it).'
-        if ((Test-Section 'Task8') -or (Test-Section 'Overflow') -or (Test-Section 'Dock') -or (Test-Section 'Apps') -or (Test-Section 'Tray') -or (Test-Section 'Reserve') -or (Test-Section 'Startup')) {
+        if ((Test-Section 'Task8') -or (Test-Section 'Overflow') -or (Test-Section 'Dock') -or (Test-Section 'Apps') -or (Test-Section 'Tray') -or (Test-Section 'Reserve') -or (Test-Section 'Launcher') -or (Test-Section 'Startup')) {
             if (-not (Test-Path $AppExe) -or -not (Test-Path $Watchdog)) { throw 'The app is not installed. Run again with -Reinstall.' }
         }
     }
@@ -732,7 +744,7 @@ try {
     Write-Step 'STEP 1: close Fenn'
     $fenn = @(Get-Process -Name 'fenn' -ErrorAction SilentlyContinue)
     $fennSkipped = $false
-    $needFennGone = (Test-Section 'Task8') -or (Test-Section 'Overflow') -or (Test-Section 'Dock') -or (Test-Section 'Apps') -or (Test-Section 'Tray') -or (Test-Section 'Reserve')
+    $needFennGone = (Test-Section 'Task8') -or (Test-Section 'Overflow') -or (Test-Section 'Dock') -or (Test-Section 'Apps') -or (Test-Section 'Tray') -or (Test-Section 'Reserve') -or (Test-Section 'Launcher')
     if ($fenn.Count -gt 0 -and $needFennGone) {
         Write-Do 'Please quit Fenn now: find its icon in the tray (bottom right), right-click it and choose Quit.'
         Write-Info 'I will wait until it is gone.  (Press S here to continue anyway - results may then be wrong.)'
@@ -1428,6 +1440,77 @@ try {
         [void](Ensure-TaskbarBack 'after reserve section')
     }
 
+    # ================================================================ LAUNCHER (plan 2)
+    if (Test-Section 'Launcher') {
+        Write-Step 'LAUNCHER: Win key, search, launch, All apps, power menu'
+        $logOff = Get-LogLength $AppLog
+        $app = Start-App
+        [void](Wait-Until { (Get-LogSince $AppLog $logOff) -match 'dock ready' } 15000 250)
+        [void](Wait-Until { (Get-LogSince $AppLog $logOff) -match 'app index: \d+ apps' } 20000 250)
+        $idx = [regex]::Match((Get-LogSince $AppLog $logOff), 'app index: (\d+) apps, (\d+) with run history')
+        $hookOk = (Get-LogSince $AppLog $logOff) -match 'win key hook installed'
+        [void](Complete-Check -Id 'LA.0' -Description 'Win key hook installed; app index built' `
+            -Measured @{ winHook = $hookOk; apps = $(if ($idx.Success) { [int]$idx.Groups[1].Value } else { 0 }); withHistory = $(if ($idx.Success) { [int]$idx.Groups[2].Value } else { 0 }) } `
+            -MeasuredPass ($hookOk -and $idx.Success -and [int]$idx.Groups[1].Value -gt 20))
+
+        $o = Get-LogLength $AppLog
+        $a = Ask-YN 'Tap the Win key once (alone). Did the launcher open in the middle of the screen, and Windows Start did NOT open?'
+        $l = Get-LogSince $AppLog $o
+        [void](Complete-Check -Id 'LA.1' -Description 'Lone Win opens the launcher, not Start' -Measured @{ loneWinLogged = ($l -match 'lone win -> launcher') } `
+            -MeasuredPass ($l -match 'lone win -> launcher') -Answer $a -Expect 'y')
+        Write-Do 'Press Esc to close it.'
+
+        $np = Start-Process notepad -PassThru; Start-Sleep -Seconds 2
+        $o = Get-LogLength $AppLog
+        Write-Do 'Click into the Notepad window, then tap Win and type  calc  WITHOUT clicking anything.'
+        $a = Ask-YN 'Did "calc" appear in the launcher search box (and NOT in Notepad)?'
+        $l = Get-LogSince $AppLog $o
+        [void](Complete-Check -Id 'LA.2' -Description 'Typing after Win goes into the search box' -Measured @{ focusOkLogged = ($l -match 'launcher focus ok=True') } `
+            -MeasuredPass ($l -match 'launcher focus ok=True') -Answer $a -Expect 'y')
+        try { if (-not $np.HasExited) { $np.CloseMainWindow() | Out-Null } } catch { }
+
+        $o = Get-LogLength $AppLog
+        $a = Ask-YN 'With "calc" typed, is Calculator the Best match? Press Enter: did Calculator open and the launcher close?'
+        $l = Get-LogSince $AppLog $o
+        [void](Complete-Check -Id 'LA.3' -Description 'Enter launches the best match and closes the launcher' -Measured @{ launchLogged = ($l -match 'launch App ".*" ok=True') } `
+            -MeasuredPass ($l -match 'launch App ".*" ok=True') -Answer $a -Expect 'y')
+        Get-Process -Name CalculatorApp -ErrorAction SilentlyContinue | ForEach-Object { try { $_.CloseMainWindow() | Out-Null } catch { } }
+
+        [void](Ask-Check 'LA.4' 'Settings results' 'Tap Win, type  display' 'Is "Display" shown with a SETTING label? Press Enter: did Settings open on Display?')
+        [void](Ask-Check 'LA.5' 'File results from this PC' 'Tap Win and type part of a file name you know (a document or download).' 'Did that file appear in the list (FILE label) within about a second?')
+        [void](Ask-Check 'LA.6' 'Esc, click outside and Win close the launcher' 'Open the launcher and close it three ways: Esc; clicking outside the panel; tapping Win again.' 'Did all three close it?')
+        [void](Ask-Check 'LA.7' 'Other Win shortcuts unchanged' 'Try Win+E (Explorer), Win+D (desktop), Win+Shift+S (snip, then Esc), Win+Tab, Win+A and Win+N.' 'Did they all do their normal Windows thing (no launcher)?')
+        [void](Ask-Check 'LA.8' 'Dock start and search buttons' 'Show the dock and click the start button (dots), close the launcher, then click the search button.' 'Did both open the launcher?')
+        [void](Ask-Check 'LA.9' 'All apps A-Z' 'Open the launcher and click "ALL APPS ›". Scroll, use the arrow keys, then press Esc.' 'Was there an A-Z list of your apps, and did Esc go back to the start view?')
+        [void](Ask-Check 'LA.10' 'Power menu shows (do NOT click a choice)' 'Click the round power button at the bottom right of the launcher. Do NOT click any choice; press Esc.' 'Did SLEEP, RESTART and SHUT DOWN appear?')
+        [void](Ask-Check 'LA.2b' 'Typing after Win over an elevated window' 'Open Task Manager as administrator (Ctrl+Shift+Esc), click into it, then tap Win and type  note  without clicking.' 'Did "note" appear in the launcher search box?')
+        [void](Ask-Check 'LA.14' 'Quick re-open stays open' 'Tap Win, press Esc, and IMMEDIATELY tap Win again. Do this 3 times.' 'Did the launcher stay open every time (not vanish by itself)?')
+        [void](Ask-Check 'LA.15' 'Alt+F4 only closes it' 'Open the launcher, press Alt+F4, then tap Win.' 'Did the launcher open again normally after Alt+F4?')
+        [void](Ask-Check 'LA.16' 'Win after locking' 'Press Win+L to lock, sign back in, then tap Win ONCE.' 'Did the launcher open (and NOT Windows Start)?')
+        [void](Ask-Check 'LA.11' 'Most used follows launches' 'Launch two different apps from the launcher (e.g. Notepad and Paint), close them, then open the launcher with nothing typed.' 'Are those apps now at the start of MOST USED?')
+        Write-Do 'FULL SCREEN: open a YouTube video in your browser (not full screen yet).'
+        Write-Do 'After you press Enter you get 15 seconds: click the video and press f (full screen). Do NOT click this window. A beep ends it.'
+        Wait-Enter 'Press Enter to start the 15 seconds'
+        $o = Get-LogLength $AppLog
+        Start-Sleep -Seconds 15
+        try { [console]::Beep(880, 300) } catch { }
+        $l = Get-LogSince $AppLog $o
+        [void](Complete-Check -Id 'LA.12' -Description 'Full screen is detected while the launcher feature runs' -Measured @{ fullscreenLogged = ($l -match 'fullscreen=True') } `
+            -MeasuredPass ($l -match 'fullscreen=True') -AnswerRequired $false)
+        Write-Do 'Leave full screen now.'
+
+        # Watchdog relaunch (Plan 2): kill the watchdog; the shell starts a new one.
+        $o = Get-LogLength $AppLog
+        Get-Process -Name 'NothingShell.Watchdog' -ErrorAction SilentlyContinue | Stop-Process -Force
+        [void](Wait-Until { (Get-LogSince $AppLog $o) -match 'watchdog relaunched' } 10000 250)
+        $l = Get-LogSince $AppLog $o
+        [void](Complete-Check -Id 'LA.13' -Description 'Killed watchdog is relaunched once' `
+            -Measured @{ relaunchLogged = ($l -match 'watchdog relaunched'); watchdogs = @(Get-Process -Name 'NothingShell.Watchdog' -ErrorAction SilentlyContinue).Count } `
+            -MeasuredPass (($l -match 'watchdog relaunched') -and @(Get-Process -Name 'NothingShell.Watchdog' -ErrorAction SilentlyContinue).Count -eq 1))
+
+        Complete-Quit 'LA.quit' $app 'launcher section (--quit)'
+    }
+
     # ================================================================ STARTUP (task 16)
     if (Test-Section 'Startup') {
         Write-Step 'STARTUP: Fenn guard, single instance, start with Windows'
@@ -1485,7 +1568,7 @@ try {
     }
 
     # ================================================================ LAST QUESTION
-    if ((Test-Section 'Dock') -or (Test-Section 'Apps') -or (Test-Section 'Tray') -or (Test-Section 'Reserve') -or (Test-Section 'Startup')) {
+    if ((Test-Section 'Dock') -or (Test-Section 'Apps') -or (Test-Section 'Tray') -or (Test-Section 'Reserve') -or (Test-Section 'Launcher') -or (Test-Section 'Startup')) {
         Write-Step 'LAST QUESTION'
         Write-Host '  Keep Nothing Shell as your taskbar from now on?' -ForegroundColor Cyan
         Write-Host '    y = Nothing Shell starts at sign-in and keeps running (Fenn must stay closed)'

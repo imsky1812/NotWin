@@ -24,20 +24,23 @@ public sealed class DockController : IDisposable
     private ShellSettings _settings;
     private readonly DockAppBar _appBar;
     private readonly Action _quit;
+    private readonly Func<string, string?>? _indexedName;
     private DockPopup? _popup;
     private string _lastLog = "";
 
+    /// <param name="indexedName">The launcher index's display name for an app id (null when unknown), used to name new pins.</param>
     public DockController(DockWindow dock, DockViewModel vm, DockReveal reveal, SettingsStore store, ShellSettings settings,
-        DockAppBar appBar, Action quit)
+        DockAppBar appBar, Action quit, Func<string, string?>? indexedName = null)
     {
         _dock = dock; _vm = vm; _reveal = reveal; _store = store; _settings = settings;
-        _appBar = appBar; _quit = quit;
+        _appBar = appBar; _quit = quit; _indexedName = indexedName;
         _tracker = new WindowTracker();
         _tracker.Changed += Rebuild;
         _dock.ItemClicked += OnItemClicked;
         _dock.ItemContext += OnItemContext;
         _dock.TrayClicked += OnTrayClicked;
-        _dock.OverflowClicked += OverflowOpener.Open;
+        // A dock popup left open would sit on top of Windows' overflow flyout: close it first.
+        _dock.OverflowClicked += () => { ClosePopup(); OverflowOpener.Open(); };
         _dock.StartContext += OnStartContext;
         _dock.PlacementChanged += _appBar.Refresh;
         _appBar.GrantedChanged += g =>
@@ -217,6 +220,9 @@ public sealed class DockController : IDisposable
 
     private void ClosePopup() => _popup?.CloseIfOpen();
 
+    /// <summary>Closes any open dock popup (e.g. when a full-screen app comes to the front).</summary>
+    public void ClosePopups() => ClosePopup();
+
     private static void Activate(AppWindow w)
     {
         if (!WindowListNative.Activate(w.Handle))
@@ -228,7 +234,7 @@ public sealed class DockController : IDisposable
         var path = item.LaunchPath;
         if (string.IsNullOrEmpty(path)) { Log.Info($"launch: no launch path for {item.AppId}"); return; }
         // ShellExecuteEx with ASYNCOK: returns immediately; shortcuts, exes and shell:AppsFolder\<AUMID> all work.
-        if (!ShellLinkNative.Open(path)) Log.Info($"launch failed for {item.AppId} ({path})");
+        if (!ShellLinkNative.Open(path)) Log.Info($"launch failed for {item.AppId} ({path}) error={ShellLinkNative.LastError}");
     }
 
     private void Pin(DockItem item)
@@ -240,27 +246,21 @@ public sealed class DockController : IDisposable
         if (!isUwp && !hasExe) { Log.Info($"pin: nothing to launch for {item.AppId}"); return; }
 
         var launch = isUwp ? @"shell:AppsFolder\" + item.AppId : exe;
-        var name = hasExe ? FriendlyName(exe, item.DisplayName) : item.DisplayName;
+        var name = PinRules.Name(item.AppId, _indexedName?.Invoke(item.AppId), hasExe ? ExeDescription(exe) : null, item.DisplayName);
         var pinned = _settings.PinnedApps.Append(new PinnedApp(item.AppId, name, launch, hasExe && !isUwp ? exe.ToLowerInvariant() : null)).ToList(); // no exe key for UWP: the exe may be a shared host
         SavePins(pinned);
     }
 
-    // Packaged-app AUMID "family!app": has '!' and is not a path.
-    private static bool IsUwpId(string id) => id.Contains('!') && !id.Contains('\\') && !id.Contains(':');
+    private static bool IsUwpId(string id) => PinRules.IsPackagedAppId(id);
 
     private static bool CanPin(DockItem item) =>
         IsUwpId(item.AppId) ||
         (item.Windows.Count > 0 && !string.IsNullOrEmpty(item.Windows[0].ExePath) && System.IO.File.Exists(item.Windows[0].ExePath));
 
-    private static string FriendlyName(string exe, string fallback)
+    private static string? ExeDescription(string exe)
     {
-        try
-        {
-            var d = FileVersionInfo.GetVersionInfo(exe).FileDescription;
-            if (!string.IsNullOrWhiteSpace(d)) return d.Trim();
-        }
-        catch { /* fall back to the exe name */ }
-        return fallback;
+        try { return FileVersionInfo.GetVersionInfo(exe).FileDescription; }
+        catch { return null; /* caller falls back to the window's name */ }
     }
 
     private void Unpin(DockItem item) =>

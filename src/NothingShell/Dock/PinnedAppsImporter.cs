@@ -39,17 +39,12 @@ public static class PinnedAppsImporter
             var (target, aumid) = info.Value;
 
             var targetExists = !string.IsNullOrEmpty(target) && File.Exists(target);
-            if (!string.IsNullOrEmpty(target) && !targetExists)
-            {
-                Log.Info($"pin import: skipped '{name}' (target missing: {target})");
-                continue;
-            }
-            var appId = aumid ?? (targetExists ? target!.ToLowerInvariant() : null);
-            if (appId is null) { Log.Info($"pin import: skipped '{name}' (no target and no AppUserModel.ID)"); continue; }
-            if (!seen.Add(appId)) continue;
+            var pin = PinRules.FromShortcut(name, lnk, target, targetExists, aumid);
+            if (pin is null) { Log.Info($"pin import: skipped '{name}' (target missing and no AppUserModel.ID)"); continue; }
+            if (!seen.Add(pin.AppId)) continue;
 
-            result.Add(new PinnedApp(appId, name, lnk, targetExists ? target!.ToLowerInvariant() : null));
-            Log.Info($"pin import: '{name}' appId={appId} target={target ?? "(none)"}");
+            result.Add(pin);
+            Log.Info($"pin import: '{name}' appId={pin.AppId} launch={pin.LaunchPath}");
         }
         return result;
     }

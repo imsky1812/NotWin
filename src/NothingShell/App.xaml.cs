@@ -19,11 +19,22 @@ public partial class App : Application
     private DockController? _controller;
     private TrayStatusService? _tray;
     private DockAppBar? _appBar;
+    private HookThread? _hooks;
+    private Launcher.WinKeyListener? _winKeys;
+    private Launcher.LauncherController? _launcher;
+    private Launcher.AppIndex? _index;
     private bool _secondInstance;
 
     protected override void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
+        // `--quit`: ask the running shell to quit cleanly, then exit (never becomes a shell itself).
+        if (QuitCommand.IsRequested(e.Args))
+        {
+            _secondInstance = true;
+            Shutdown(QuitCommand.Run());
+            return;
+        }
         // 1. Single instance: a second copy exits silently, before any UI.
         if (!SingleInstance.TryAcquire())
         {
@@ -77,13 +88,49 @@ public partial class App : Application
             _mouse?.Reinstall();
         };
         _taskbar.TaskbarReHidden += () => _mouse?.Reinstall();
+        _taskbar.QuitRequested += () => Shutdown(); // `NothingShell.exe --quit`: same exit path as the menu's Quit
 
 #if DEBUG
         Theme.FontCheck.Run(Resources);
 #endif
+        // Low-level hooks (mouse edge, Win key) run on their own message-loop thread so a busy UI thread can't
+        // make Windows drop them.
+        _hooks = new HookThread("NothingShell.Hooks");
+
+        // App index (launcher search, pin names): first build in the background; nothing waits for it.
+        _index = new Launcher.AppIndex(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "NothingShell"));
+        _ = _index.RefreshIfStaleAsync(TimeSpan.Zero);
+
         // 4. Dock, then 5. StartWithWindows (only from settings that were actually read).
         var (settings, loadedOk) = StartDock();
         ApplyStartWithWindows(settings, loadedOk);
+
+        // 6. Lone Win key -> launcher. LL hooks live on their own thread so a busy UI thread can't lose them.
+        StartLauncher();
+    }
+
+    private void StartLauncher()
+    {
+        var index = _index!;
+        _launcher = new Launcher.LauncherController(index, new Launcher.FileSearchService());
+        _launcher.Launched += name => Log.Info($"launched \"{name}\""); // Plan 3: the notch shows "Opening ‹name›…"
+        if (_dock is not null)
+        {
+            _dock.StartClicked += _launcher.Toggle;
+            _dock.SearchClicked += _launcher.Toggle;
+        }
+        _fullscreen!.Changed += fs => { if (fs) _launcher?.Close(); };
+
+        try
+        {
+            _winKeys = new Launcher.WinKeyListener(_hooks!, Dispatcher);
+            _winKeys.LauncherRequested += _launcher.Toggle;
+        }
+        catch (Exception e)
+        {
+            // Without the hook Win simply opens Windows' Start, which is a safe fallback.
+            Log.Error("win key hook failed; Win opens Windows' Start", e);
+        }
     }
 
     private static void ApplyStartWithWindows(ShellSettings settings, bool loadedOk)
@@ -128,7 +175,7 @@ public partial class App : Application
         _dock.HoverChanged += _reveal.SetHoverDock;
         _dock.PlacementChanged += _reveal.Refresh;
 
-        _controller = new DockController(_dock, vm, _reveal, store, settings, _appBar!, Shutdown);
+        _controller = new DockController(_dock, vm, _reveal, store, settings, _appBar!, Shutdown, id => _index?.FindApp(id)?.Name);
         _controller.Start();
 
         _fullscreen = new FullscreenMonitor();
@@ -142,7 +189,7 @@ public partial class App : Application
 #endif
         if (!selfTest)
         {
-            _mouse = new MouseEdgeHook(startPaused: _fullscreen.IsFullscreen);
+            _mouse = new MouseEdgeHook(_hooks!, startPaused: _fullscreen.IsFullscreen);
             _mouse.Moved += _reveal.OnCursorMoved;
         }
 
@@ -150,6 +197,7 @@ public partial class App : Application
         {
             Log.Info($"fullscreen={fullscreen}");
             if (_mouse is not null) _mouse.Paused = fullscreen; // no hook cost while a game/video is in front
+            if (fullscreen) _controller?.ClosePopups();          // a menu left open would sit over the game/video
             _reveal?.SetFullscreen(fullscreen, fullscreen ? null : DockWindowNative.GetCursorPos());
         };
 
@@ -163,11 +211,14 @@ public partial class App : Application
         try
         {
             _appBar?.Dispose();
+            _winKeys?.Dispose();
+            _launcher?.Dispose();
             _controller?.Dispose();
             _tray?.Dispose();
             _mouse?.Dispose();
             _fullscreen?.Dispose();
             _reveal?.Dispose();
+            _hooks?.Dispose();
         }
         catch (Exception ex) { Log.Error("dock shutdown failed", ex); }
         _taskbar?.Dispose();

@@ -133,9 +133,10 @@
                 <TranslateTransform x:Name="Slide" Y="90" />
             </Border.RenderTransform>
             <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center">
-            <!-- Start (3x3 dots, 4 px on a 6 px pitch, last dot red) and search (22 px magnifier). No left-click
-                 handler: Plan 2 binds both to the launcher. Right-click on start opens the interim menu. -->
-            <Border x:Name="StartButton" Style="{StaticResource Slot}" ToolTip="Start" MouseRightButtonUp="OnStartRightUp">
+            <!-- Start (3x3 dots, 4 px on a 6 px pitch, last dot red) and search (22 px magnifier). Left-click on
+                 either opens the launcher; right-click on start opens the interim settings menu. -->
+            <Border x:Name="StartButton" Style="{StaticResource Slot}" ToolTip="Start" MouseRightButtonUp="OnStartRightUp"
+                    MouseLeftButtonUp="OnStartLeftUp">
                 <Canvas Width="16" Height="16" HorizontalAlignment="Center" VerticalAlignment="Center">
                     <Ellipse Canvas.Left="0" Canvas.Top="0" Width="4" Height="4" Fill="{StaticResource Brush.Text}" />
                     <Ellipse Canvas.Left="6" Canvas.Top="0" Width="4" Height="4" Fill="{StaticResource Brush.Text}" />
@@ -148,7 +149,7 @@
                     <Ellipse Canvas.Left="12" Canvas.Top="12" Width="4" Height="4" Fill="{StaticResource Brush.Red}" />
                 </Canvas>
             </Border>
-            <Border x:Name="SearchButton" Style="{StaticResource Slot}" ToolTip="Search">
+            <Border x:Name="SearchButton" Style="{StaticResource Slot}" ToolTip="Search" MouseLeftButtonUp="OnSearchLeftUp">
                 <Viewbox Width="22" Height="22">
                     <Canvas Width="24" Height="24">
                         <Path Style="{StaticResource Glyph}" Data="M18,11 A7,7 0 1 1 4,11 A7,7 0 1 1 18,11 M20,20 L16,16" />
@@ -238,11 +239,11 @@
                               Fill="{StaticResource Brush.Ink}" Stroke="{StaticResource Brush.Text}" StrokeThickness="0.6" StrokeLineJoin="Round" />
                     </Canvas>
 
-                    <!-- Time 12 px Space Mono, day 10 px dim underneath, right aligned (mockup .tm, line-height 1.15). -->
+                    <!-- Time 12 px Geist Mono Medium, day 10 px dim underneath, right aligned (mockup .tm, line-height 1.15). -->
                     <StackPanel Width="38" VerticalAlignment="Center">
-                        <TextBlock Text="{Binding Tray.Time}" FontFamily="{StaticResource Font.Mono}" FontSize="12"
+                        <TextBlock Text="{Binding Tray.Time}" FontFamily="{StaticResource Font.GeistMono}" FontWeight="Medium" FontSize="12"
                                    LineStackingStrategy="BlockLineHeight" LineHeight="14" TextAlignment="Right" />
-                        <TextBlock Text="{Binding Tray.Day}" FontFamily="{StaticResource Font.Mono}" FontSize="10"
+                        <TextBlock Text="{Binding Tray.Day}" FontFamily="{StaticResource Font.GeistMono}" FontSize="10"
                                    Foreground="{StaticResource Brush.Dim}" LineStackingStrategy="BlockLineHeight"
                                    LineHeight="12" TextAlignment="Right" />
                     </StackPanel>

@@ -13,11 +13,32 @@ public sealed class AppIconCache
 {
     private const int Capacity = 64;
 
+    /// <summary>At most this many "no icon" keys are remembered (oldest dropped first).</summary>
+    public const int MaxNegative = 256;
+    private static readonly long NegativeTtlMs = (long)TimeSpan.FromMinutes(5).TotalMilliseconds;
+
     private readonly Dictionary<string, LinkedListNode<(string Key, ImageSource Image)>> _map = [];
     private readonly LinkedList<(string Key, ImageSource Image)> _lru = [];
     private readonly Dictionary<int, ImageSource> _placeholders = [];
+    // Keys whose icon failed to load, with the time of the failure: not retried for 5 minutes, so a broken
+    // shortcut does not cost a shell call on every dock refresh.
+    private readonly Dictionary<string, long> _negative = [];
+    private readonly Queue<string> _negativeOrder = new();
+    private readonly Func<string, int, ImageSource?> _load;
+    private readonly Func<long> _nowMs;
+
+    public AppIconCache() : this(Load, () => Environment.TickCount64) { }
+
+    /// <summary>For tests: inject the loader and the millisecond clock.</summary>
+    public AppIconCache(Func<string, int, ImageSource?> load, Func<long> nowMs)
+    {
+        _load = load;
+        _nowMs = nowMs;
+    }
 
     public int Count => _map.Count;
+
+    public int NegativeCount => _negative.Count;
 
     /// <summary>
     /// Icon for an exe/file path or a packaged-app AUMID (resolved through shell:AppsFolder), at
@@ -36,9 +57,17 @@ public sealed class AppIconCache
             return node.Value.Image;
         }
 
-        var image = Load(exePathOrAumid, sizePx)
-                    ?? (fallbackPath is { Length: > 0 } ? Load(fallbackPath, sizePx) : null);
-        if (image is null) return Placeholder(sizePx); // not cached under the real key: retried on the next refresh
+        var now = _nowMs();
+        if (_negative.TryGetValue(key, out var failedAt) && now - failedAt <= NegativeTtlMs) return Placeholder(sizePx);
+
+        var image = _load(exePathOrAumid, sizePx)
+                    ?? (fallbackPath is { Length: > 0 } ? _load(fallbackPath, sizePx) : null);
+        if (image is null)
+        {
+            RememberFailure(key, now);
+            return Placeholder(sizePx);
+        }
+        _negative.Remove(key);
         _map[key] = _lru.AddFirst((key, image));
         while (_map.Count > Capacity)
         {
@@ -47,6 +76,13 @@ public sealed class AppIconCache
             _map.Remove(last.Value.Key);
         }
         return image;
+    }
+
+    private void RememberFailure(string key, long now)
+    {
+        if (!_negative.ContainsKey(key)) _negativeOrder.Enqueue(key);
+        _negative[key] = now;
+        while (_negative.Count > MaxNegative && _negativeOrder.TryDequeue(out var oldest)) _negative.Remove(oldest);
     }
 
     private static ImageSource? Load(string exePathOrAumid, int sizePx)

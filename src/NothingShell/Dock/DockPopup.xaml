@@ -14,8 +14,9 @@
         WindowStartupLocation="Manual"
         UseLayoutRounding="True"
         TextOptions.TextFormattingMode="Display"
-        FontFamily="{StaticResource Font.Mono}"
-        FontSize="11"
+        FontFamily="{StaticResource Font.Geist}"
+        FontWeight="Medium"
+        FontSize="12.5"
         Foreground="{StaticResource Brush.Text}">
     <!-- Small glass list shown above a dock item: window titles, or the right-click actions. -->
     <Border CornerRadius="18"
