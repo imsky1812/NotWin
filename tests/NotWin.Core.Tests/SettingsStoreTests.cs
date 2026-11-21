@@ -1,0 +1,209 @@
+using NotWin.Core;
+
+namespace NotWin.Core.Tests;
+
+public sealed class SettingsStoreTests : IDisposable
+{
+    private readonly string _dir = Path.Combine(Path.GetTempPath(), "nsshell-tests-" + Guid.NewGuid().ToString("N"));
+
+    public SettingsStoreTests() => Directory.CreateDirectory(_dir);
+
+    public void Dispose()
+    {
+        if (Directory.Exists(_dir)) Directory.Delete(_dir, true);
+    }
+
+    [Fact]
+    public void Load_MissingFile_ReturnsDefaults()
+    {
+        var s = new SettingsStore(_dir).Load();
+        Assert.False(s.KeepDockVisible);
+        Assert.True(s.StartWithWindows);
+        Assert.Equal("M", s.WidgetScale);
+        Assert.Empty(s.PinnedApps);
+        Assert.False(s.PinsImported);
+    }
+
+    [Fact]
+    public void SaveThenLoad_RoundTrips()
+    {
+        var store = new SettingsStore(_dir);
+        var pin = new PinnedApp("app1", "Notepad", @"C:\Windows\notepad.exe");
+        store.Save(new ShellSettings { KeepDockVisible = true, PinnedApps = [pin] });
+
+        var loaded = store.Load();
+        Assert.True(loaded.KeepDockVisible);
+        Assert.Equal(new[] { pin }, loaded.PinnedApps.ToArray());
+        Assert.Empty(Directory.GetFiles(_dir, "*.tmp"));
+    }
+
+    [Fact]
+    public void Load_CorruptFile_ReturnsDefaultsAndKeepsBadCopy()
+    {
+        File.WriteAllText(Path.Combine(_dir, "settings.json"), "{ not json");
+        File.WriteAllText(Path.Combine(_dir, "settings.json.bad"), "older");
+
+        var s = new SettingsStore(_dir).Load();
+
+        Assert.False(s.KeepDockVisible);
+        Assert.True(s.StartWithWindows);
+        Assert.False(File.Exists(Path.Combine(_dir, "settings.json")));
+        Assert.Equal("{ not json", File.ReadAllText(Path.Combine(_dir, "settings.json.bad")));
+    }
+
+    [Fact]
+    public void Load_LockedFile_ReturnsDefaultsWithoutRenaming()
+    {
+        var path = Path.Combine(_dir, "settings.json");
+        File.WriteAllText(path, "{\"keepDockVisible\":true}");
+        using (new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.None))
+        {
+            var s = new SettingsStore(_dir).Load();
+            Assert.False(s.KeepDockVisible);
+        }
+        Assert.True(File.Exists(path));
+        Assert.False(File.Exists(path + ".bad"));
+    }
+
+    [Fact]
+    public void SaveThenLoad_RoundTripsBannerTipDismissed()
+    {
+        var store = new SettingsStore(_dir);
+        Assert.False(store.Load().BannerTipDismissed);
+        store.Save(new ShellSettings { BannerTipDismissed = true });
+        Assert.True(store.Load().BannerTipDismissed);
+    }
+
+    [Fact]
+    public void SaveThenLoad_RoundTripsNotchLayout()
+    {
+        var store = new SettingsStore(_dir);
+        Assert.Null(store.Load().NotchLayout);
+        var layout = NotWin.Core.Notch.DashboardLayout.Default.Remove(0, 1);
+        store.Save(new ShellSettings { NotchLayout = layout });
+        var back = store.Load().NotchLayout!;
+        Assert.Equal(layout.Pages[0], back.Pages[0]);
+        Assert.Equal(layout.Pages[1], back.Pages[1]);
+        Assert.Equal(layout.Removed, back.Removed);
+        Assert.Contains("\"timer\"", File.ReadAllText(Path.Combine(_dir, "settings.json"))); // names, not numbers
+    }
+
+    [Fact]
+    public void SaveThenLoad_RoundTripsWeatherPlace()
+    {
+        var store = new SettingsStore(_dir);
+        Assert.Null(store.Load().Weather);
+        var place = new NotWin.Core.Forecast.WeatherPlace("Delhi", "India", 28.65195, 77.23149);
+        store.Save(new ShellSettings { Weather = place });
+        Assert.Equal(place, store.Load().Weather);
+    }
+
+    [Fact]
+    public void ScaleFactor_MapsSml()
+    {
+        Assert.Equal(0.5, ShellSettings.ScaleFactor("S"));
+        Assert.Equal(0.65, ShellSettings.ScaleFactor("M"));
+        Assert.Equal(0.8, ShellSettings.ScaleFactor("L"));
+        Assert.Equal(0.65, ShellSettings.ScaleFactor("huge"));
+        Assert.Equal("M", new ShellSettings().WidgetScale); // spec §5: 65 % by default
+    }
+
+    [Fact]
+    public void SaveThenLoad_RoundTripsWidgets()
+    {
+        var store = new SettingsStore(_dir);
+        Assert.Null(store.Load().Widgets);
+        var layout = NotWin.Core.Widgets.DesktopLayout.Default;
+        store.Save(new ShellSettings { Widgets = layout, SnakeBest = 7 });
+        var back = store.Load();
+        Assert.Equal(layout.Widgets, back.Widgets!.Widgets);
+        Assert.Equal(7, back.SnakeBest);
+    }
+
+    [Fact]
+    public void Load_UnknownTileKind_KeepsTheRestOfTheSettings()
+    {
+        Directory.CreateDirectory(_dir);
+        File.WriteAllText(Path.Combine(_dir, "settings.json"),
+            "{\"pinsImported\":true,\"notchLayout\":{\"pages\":[[{\"kind\":\"scanQr\",\"size\":\"one\"},{\"kind\":\"timer\",\"size\":\"big\"}]],\"removed\":[]}}");
+        var s = new SettingsStore(_dir).Load();
+        Assert.True(s.PinsImported);
+        var page = NotWin.Core.Notch.DashboardLayout.Sanitize(s.NotchLayout).Pages[0];
+        Assert.Equal([new NotWin.Core.Notch.TileSpec(NotWin.Core.Notch.TileKind.Timer, NotWin.Core.Notch.TileSize.Big)], page);
+    }
+
+    [Fact]
+    public void Load_NullPinnedApps_BecomesEmpty()
+    {
+        Directory.CreateDirectory(_dir);
+        File.WriteAllText(Path.Combine(_dir, "settings.json"), "{\"pinnedApps\":null,\"pinsImported\":true}");
+        var s = new SettingsStore(_dir).Load();
+        Assert.NotNull(s.PinnedApps);
+        Assert.Empty(s.PinnedApps);
+        Assert.True(s.PinsImported);
+    }
+
+    [Fact]
+    public void Save_AfterFailedLoad_DoesNotOverwrite()
+    {
+        var path = Path.Combine(_dir, "settings.json");
+        File.WriteAllText(path, "{\"keepDockVisible\":true}");
+        var store = new SettingsStore(_dir);
+        using (new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.None))
+            store.Load();
+
+        store.Save(new ShellSettings());
+
+        Assert.Equal("{\"keepDockVisible\":true}", File.ReadAllText(path)); // byte-for-byte untouched
+        Assert.True(store.Load().KeepDockVisible); // lock released: load succeeds, saves allowed again
+        store.Save(new ShellSettings { WidgetScale = "L" });
+        Assert.Equal("L", store.Load().WidgetScale);
+    }
+
+    [Fact]
+    public void Load_CorruptFile_WithUnmovableBad_StillReturnsDefaults()
+    {
+        File.WriteAllText(Path.Combine(_dir, "settings.json"), "{ nope");
+        var bad = Path.Combine(_dir, "settings.json.bad");
+        File.WriteAllText(bad, "old");
+        using (new FileStream(bad, FileMode.Open, FileAccess.Read, FileShare.None))
+            Assert.True(new SettingsStore(_dir).Load().StartWithWindows);
+    }
+
+    [Fact]
+    public void LastLoadSucceeded_ReflectsLoadOutcome()
+    {
+        var path = Path.Combine(_dir, "settings.json");
+        var store = new SettingsStore(_dir);
+        store.Load();
+        Assert.True(store.LastLoadSucceeded); // missing file is a normal first run
+
+        File.WriteAllText(path, "{\"keepDockVisible\":true}");
+        using (new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.None))
+        {
+            store.Load();
+            Assert.False(store.LastLoadSucceeded);
+        }
+
+        store.Load();
+        Assert.True(store.LastLoadSucceeded);
+    }
+
+    // Plan 7: "Window previews in the dock" is on by default, also for a settings file written before it existed (and a
+    // file that still holds the removed minimize-animation setting loads fine).
+    [Fact]
+    public void Settings_Previews_DefaultOn()
+    {
+        Assert.True(new ShellSettings().WindowPreviews);
+        var dir = Path.Combine(Path.GetTempPath(), "ns-plan7-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        try
+        {
+            File.WriteAllText(Path.Combine(dir, "settings.json"), "{ \"keepDockVisible\": true, \"dotDrain\": false }");
+            var loaded = new SettingsStore(dir).Load();
+            Assert.True(loaded.KeepDockVisible);
+            Assert.True(loaded.WindowPreviews);
+        }
+        finally { Directory.Delete(dir, true); }
+    }
+}

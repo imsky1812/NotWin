@@ -1,7 +1,7 @@
 #Requires -Version 7
 <#
 .SYNOPSIS
-  Interactive hands-on verification for Nothing Shell plan 1 (taskbar control + spike manual checks).
+  Interactive hands-on verification for NotWin plan 1 (taskbar control + spike manual checks).
   Run ONCE from an ELEVATED PowerShell 7 window. Follow the on-screen prompts.
   Always puts the Windows taskbar back when it ends (also on errors and Ctrl+C).
 .NOTES
@@ -12,7 +12,7 @@
 param(
     # Run only these sections. Default (no -Only): reinstall + Dock, Apps, Tray, Reserve, Startup.
     # Example: -Only KeySpike,Notify
-    [ValidateSet('Task8', 'KeySpike', 'Overflow', 'Desktop', 'Notify', 'Dock', 'Apps', 'Tray', 'Reserve', 'Launcher', 'Notch', 'Panel', 'Dash', 'Widgets', 'Calendar', 'Plan9', 'Startup')]
+    [ValidateSet('Task8', 'KeySpike', 'Overflow', 'Desktop', 'Notify', 'Dock', 'Apps', 'Tray', 'Reserve', 'Launcher', 'Notch', 'Panel', 'Dash', 'Widgets', 'Calendar', 'Plan9', 'Rename', 'Startup')]
     [string[]]$Only,
     # With -Only the reinstall step is skipped unless -Reinstall is given.
     [switch]$Reinstall
@@ -25,13 +25,13 @@ $Sections = if ($Only) { @($Only) } else { @('Widgets', 'Dash', 'Notch', 'Panel'
 # =====================================================================================
 $Repo        = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
 $SddDir      = 'D:\NothingLauncher\.superpowers\sdd\2026-11-17-plan1-foundation-and-dock'
-$AppDir      = Join-Path $env:ProgramFiles 'NothingShell'
-$AppExe      = Join-Path $AppDir 'NothingShell.exe'
-$Watchdog    = Join-Path $AppDir 'NothingShell.Watchdog.exe'
-$StateDir    = Join-Path $env:APPDATA 'NothingShell'
+$AppDir      = Join-Path $env:ProgramFiles 'NotWin'
+$AppExe      = Join-Path $AppDir 'NotWin.exe'
+$Watchdog    = Join-Path $AppDir 'NotWin.Watchdog.exe'
+$StateDir    = Join-Path $env:APPDATA 'NotWin'
 $StateFile   = Join-Path $StateDir 'taskbar-restore.json'
 $AppLog      = Join-Path $StateDir 'log.txt'
-$SpikeRoot   = Join-Path $env:ProgramFiles 'NothingShell.Spikes'
+$SpikeRoot   = Join-Path $env:ProgramFiles 'NotWin.Spikes'
 $SpikeNames  = 'KeySpike', 'OverflowSpike', 'DesktopLayerSpike', 'NotifySpike'
 $Stamp       = Get-Date -Format 'yyyyMMdd-HHmmss'
 
@@ -323,10 +323,10 @@ function Get-LogSince([string]$Path, [int]$Offset) {
 function Count-Matches([string]$Text, [string]$Pattern) { ([regex]::Matches($Text, $Pattern)).Count }
 
 function Get-WatchdogInfo {
-    @(Get-CimInstance Win32_Process -Filter "Name='NothingShell.Watchdog.exe'" -ErrorAction SilentlyContinue |
+    @(Get-CimInstance Win32_Process -Filter "Name='NotWin.Watchdog.exe'" -ErrorAction SilentlyContinue |
         Select-Object ProcessId, CommandLine)
 }
-function Get-AppProcess { @(Get-Process -Name 'NothingShell' -ErrorAction SilentlyContinue) }
+function Get-AppProcess { @(Get-Process -Name 'NotWin' -ErrorAction SilentlyContinue) }
 
 function Read-StateFile {
     if (-not (Test-Path -LiteralPath $StateFile)) { return $null }
@@ -334,7 +334,7 @@ function Read-StateFile {
 }
 
 function Record-Preexisting {
-    foreach ($n in ($SpikeNames + 'NothingShell' + 'NothingShell.Watchdog')) {
+    foreach ($n in ($SpikeNames + 'NotWin' + 'NotWin.Watchdog')) {
         $script:PreexistingIds[$n] = @(Get-Process -Name $n -ErrorAction SilentlyContinue | ForEach-Object { $_.Id })
     }
 }
@@ -367,7 +367,7 @@ function Invoke-Unelevated([string]$CommandLine, [string]$LogFile, [switch]$Wait
     $id = [guid]::NewGuid().ToString('N').Substring(0, 8)
     $cmd = Join-Path $env:TEMP "nsho-$id.cmd"
     $done = Join-Path $env:TEMP "nsho-$id.done"
-    $taskName = "NothingShellVerify_$id"
+    $taskName = "NotWinVerify_$id"
     $script:TempFiles.Add($cmd); $script:TempFiles.Add($done)
     $run = if ($LogFile) { "$CommandLine > `"$LogFile`" 2>&1" } else { $CommandLine }
     $lines = @('@echo off')
@@ -445,16 +445,16 @@ function Invoke-Cleanup {
         }
     } catch { }
     if ($script:KeepRunning) {
-        Write-Info 'Leaving Nothing Shell running (your choice).'
+        Write-Info 'Leaving NotWin running (your choice).'
     } else {
-        try { Stop-OursByName 'NothingShell' } catch { }
+        try { Stop-OursByName 'NotWin' } catch { }
         try {
             Ensure-Explorer
             $rc = Invoke-RestoreNow
             if ($rc -eq 3) { Ensure-Explorer; $rc = Invoke-RestoreNow }
             Write-Info "restore-now exit code: $rc"
         } catch { Write-Bad "restore failed: $($_.Exception.Message)" }
-        try { Stop-OursByName 'NothingShell.Watchdog' } catch { }
+        try { Stop-OursByName 'NotWin.Watchdog' } catch { }
         try {
             if ([NsWin]::TrayState() -ne 1) { [void][NsWin]::ShowTrays() }
             if ($null -ne $script:OrigAutoHide -and [NsWin]::HasTray() -and ([NsWin]::GetAutoHide() -ne $script:OrigAutoHide)) {
@@ -477,13 +477,13 @@ function Start-App {
     # install.ps1 now launches the app once at the end (to register the Run entry), and a copy may also be left
     # from an earlier step: quit any running copy gracefully (WM_CLOSE, never kill) before starting a fresh one.
     foreach ($old in @(Get-AppProcess)) {
-        Write-Info ("  A Nothing Shell copy is already running (pid {0}); closing it first." -f $old.Id)
+        Write-Info ("  A NotWin copy is already running (pid {0}); closing it first." -f $old.Id)
         [void](Quit-App $old)
     }
-    if ((Get-AppProcess).Count -gt 0) { throw 'NothingShell is still running after asking it to close; aborting.' }
-    $p = Start-LimitedProcess 'NothingShell' ('"{0}"' -f $AppExe) '' $AppDir
+    if ((Get-AppProcess).Count -gt 0) { throw 'NotWin is still running after asking it to close; aborting.' }
+    $p = Start-LimitedProcess 'NotWin' ('"{0}"' -f $AppExe) '' $AppDir
     if (-not $p) {
-        [void](Complete-Check -Id 'LAUNCH.app' -Description 'Start NothingShell.exe as the normal (non-elevated) user' -Measured @{ error = $script:LastLaunchError } -MeasuredPass $false -Notes $script:LastLaunchError)
+        [void](Complete-Check -Id 'LAUNCH.app' -Description 'Start NotWin.exe as the normal (non-elevated) user' -Measured @{ error = $script:LastLaunchError } -MeasuredPass $false -Notes $script:LastLaunchError)
         throw "Could not start the app de-elevated: $($script:LastLaunchError)"
     }
     $script:StartedProcs.Add($p)
@@ -492,7 +492,7 @@ function Start-App {
     return $p
 }
 
-# Quits the app cleanly: first `NothingShell.exe --quit` (the app's own exit path, Plan 2), and only if that is
+# Quits the app cleanly: first `NotWin.exe --quit` (the app's own exit path, Plan 2), and only if that is
 # unavailable or does not work, WM_CLOSE to EVERY top-level window of its process (the dock window is hidden, so
 # a title lookup or MainWindow does not work). Never kills. Then asserts the work area equals the starting value
 # (a leaked appbar reservation would leave a dead strip). -NoWait: only post WM_CLOSE (for timing tests).
@@ -649,7 +649,7 @@ function Get-DockTimeText([int]$ProcId) {
     return $null
 }
 
-function Get-RunValue { try { (Get-ItemProperty 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run' -Name 'NothingShell' -ErrorAction Stop).NothingShell } catch { $null } }
+function Get-RunValue { try { (Get-ItemProperty 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run' -Name 'NotWin' -ErrorAction Stop).NotWin } catch { $null } }
 # ===== END HELPERS =====
 
 # =====================================================================================
@@ -670,8 +670,8 @@ Start-Transcript -Path $LogPath -Force | Out-Null
 # Last-resort safety if the console window is closed.
 $null = Register-EngineEvent -SourceIdentifier PowerShell.Exiting -Action {
     try {
-        $wd = Join-Path $env:ProgramFiles 'NothingShell\NothingShell.Watchdog.exe'
-        if (Test-Path $wd) { Start-Process -FilePath $wd -ArgumentList @('--restore-now', '--state', ('"{0}"' -f (Join-Path $env:APPDATA 'NothingShell'))) -Wait -WindowStyle Hidden }
+        $wd = Join-Path $env:ProgramFiles 'NotWin\NotWin.Watchdog.exe'
+        if (Test-Path $wd) { Start-Process -FilePath $wd -ArgumentList @('--restore-now', '--state', ('"{0}"' -f (Join-Path $env:APPDATA 'NotWin'))) -Wait -WindowStyle Hidden }
     } catch { }
 }
 
@@ -679,7 +679,7 @@ $fatal = $null
 try {
     Clear-Host
     Write-Host ''
-    Write-Host '  NOTHING SHELL - HANDS-ON CHECK (about 20-30 minutes)' -ForegroundColor Cyan
+    Write-Host '  NOTWIN - HANDS-ON CHECK (about 20-30 minutes)' -ForegroundColor Cyan
     Write-Host '  I will start and stop the app and some small test programs, and ask you'
     Write-Host '  simple yes/no questions about what you see. The Windows taskbar will'
     Write-Host '  disappear on purpose several times; it always comes back at the end.'
@@ -692,22 +692,34 @@ try {
 
     # ---------------------------------------------------------------- setup
     Record-Preexisting
-    try { Get-ScheduledTask -TaskName 'NothingShellVerify_*' -ErrorAction SilentlyContinue | Unregister-ScheduledTask -Confirm:$false -ErrorAction SilentlyContinue } catch { }   # leftovers of earlier runs
+    try { Get-ScheduledTask -TaskName 'NotWinVerify_*' -ErrorAction SilentlyContinue | Unregister-ScheduledTask -Confirm:$false -ErrorAction SilentlyContinue } catch { }   # leftovers of earlier runs
     $doInstall = (-not $Only) -or $Reinstall
     if ($Only) { Write-Info ("Running only: {0}" -f ($Only -join ', ')) }
     $pwsh = (Get-Process -Id $PID).Path
     if ($doInstall) {
     Write-Step 'SETUP: installing the latest app and test programs'
     $installOk = $false
+    # Security review 2026-11-21: building and signing run WITHOUT admin rights (build.ps1, started de-elevated),
+    # only the install itself runs here, elevated.
+    $built = $false
     foreach ($noTs in $false, $true) {
-        $extra = if ($noTs) { @('-NoTimestamp') } else { @() }
-        Write-Info ("Running build\install.ps1 {0}" -f ($extra -join ' '))
-        & $pwsh -NoProfile -ExecutionPolicy Bypass -File (Join-Path $Repo 'build\install.ps1') @extra 2>&1 | ForEach-Object { Write-Host "    $_" }
-        if ($LASTEXITCODE -eq 0) { $installOk = $true; break }
-        Write-Bad "install.ps1 failed (exit $LASTEXITCODE)."
+        $extra = if ($noTs) { ' -NoTimestamp' } else { '' }
+        $buildLog = Join-Path $env:TEMP ("nsho-build-{0}.log" -f [guid]::NewGuid().ToString('N').Substring(0, 8))
+        $script:TempFiles.Add($buildLog)
+        Write-Info ("Running build\build.ps1{0} (not elevated)" -f $extra)
+        [void](Invoke-Unelevated ("`"{0}`" -NoProfile -ExecutionPolicy Bypass -File `"{1}`"{2}" -f $pwsh, (Join-Path $Repo 'build\build.ps1'), $extra) $buildLog -Wait -TimeoutSec 900)
+        if (Test-Path $buildLog) { Get-Content $buildLog | Select-Object -Last 5 | ForEach-Object { Write-Host "    $_" } }
+        if (Test-Path (Join-Path $Repo 'out\NotWin.msix')) { $built = $true; break }
+        Write-Bad 'build.ps1 did not produce out\NotWin.msix.'
         if (-not $noTs) { Write-Info 'Retrying once without the online timestamp...' }
     }
-    if (-not $installOk) { throw 'build\install.ps1 failed. Nothing else was changed.' }
+    if ($built) {
+        Write-Info 'Running build\install.ps1'
+        & $pwsh -NoProfile -ExecutionPolicy Bypass -File (Join-Path $Repo 'build\install.ps1') 2>&1 | ForEach-Object { Write-Host "    $_" }
+        $installOk = $LASTEXITCODE -eq 0
+        if (-not $installOk) { Write-Bad "install.ps1 failed (exit $LASTEXITCODE)." }
+    }
+    if (-not $installOk) { throw 'build\build.ps1 or build\install.ps1 failed. Nothing else was changed.' }
     if (-not (Test-Path $AppExe) -or -not (Test-Path $Watchdog)) { throw "Install finished but $AppExe or the watchdog is missing." }
 
     $spikesOk = $false
@@ -761,10 +773,10 @@ try {
     if ($fennSkipped) { Write-Bad 'Continuing with Fenn still running (recorded).' } else { Write-Good 'Fenn is not running.' }
     Start-Sleep -Seconds 2
 
-    # A running Nothing Shell (e.g. the installed copy, maybe with "Keep taskbar visible" on) would make its own
+    # A running NotWin (e.g. the installed copy, maybe with "Keep taskbar visible" on) would make its own
     # reserved strip part of the "starting" work area: close it first so the baseline is the plain Windows one.
     foreach ($old in @(Get-AppProcess)) {
-        Write-Info ("A Nothing Shell copy is running (pid {0}); closing it before measuring the starting point." -f $old.Id)
+        Write-Info ("A NotWin copy is running (pid {0}); closing it before measuring the starting point." -f $old.Id)
         [void](Quit-App $old)
     }
     # A leftover state file from an earlier run would change the starting point: give the taskbar back first.
@@ -957,7 +969,7 @@ try {
     if ($null -ne $script:OrigAutoHide -and [NsWin]::GetAutoHide() -ne $script:OrigAutoHide) {
         [NsWin]::SetAutoHide($script:OrigAutoHide); Write-Info "Auto-hide put back to your original setting ($($script:OrigAutoHide))."
     }
-    Stop-OursByName 'NothingShell.Watchdog'
+    Stop-OursByName 'NotWin.Watchdog'
     }
 
     # ================================================================ SPIKES
@@ -1070,7 +1082,7 @@ try {
     $ahNow = [NsWin]::GetAutoHide()
     [void](Complete-Check -Id 'O.5' -Description 'Taskbar returns to original state after the overflow test' -Measured @{ autoHideNow = $ahNow; autoHideOriginal = $script:OrigAutoHide; trayVisible = ([NsWin]::TrayState() -eq 1) } `
         -MeasuredPass (([NsWin]::TrayState() -eq 1) -and $ahNow -eq $script:OrigAutoHide))
-    Stop-OursByName 'NothingShell.Watchdog'
+    Stop-OursByName 'NotWin.Watchdog'
     }
 
     if (Test-Section 'Desktop') {
@@ -1123,7 +1135,7 @@ try {
     $toastPs = Join-Path $Repo 'spikes\NotifySpike\send-test-toast.ps1'
     if (-not (Test-Path $nsExe)) { throw "NotifySpike not installed at $nsExe" }
     $nsLog = Join-Path $env:TEMP 'NotifySpike.log'
-    $up = Start-Spike 'NotifySpike' $nsExe '--seconds 90 --expect "NothingShell spike test"' $nsLog -OwnLog
+    $up = Start-Spike 'NotifySpike' $nsExe '--seconds 90 --expect "NotWin spike test"' $nsLog -OwnLog
     $listening = (Wait-Until { (Read-SharedText $nsLog) -match 'Listening' } 20000 250) -ge 0
     $txt = Read-SharedText $nsLog
     $uia = $txt -match 'tokenUIAccess=1'
@@ -1133,7 +1145,7 @@ try {
         -Measured @{ processUp = $up; tokenUIAccess1 = $uia; package = $pkg; accessAllowed = $allowed; launchedAs = $script:LastSpikeMode; log = @($txt.Trim() -split "`r?`n" | Select-Object -First 8) } `
         -MeasuredPass ($up -and $uia -and $allowed -and [bool]$pkg -and $script:LastSpikeElevated -eq 0))
     if ($listening) {
-        $toastText = "NothingShell spike test $(Get-Date -Format HH:mm:ss) auto"
+        $toastText = "NotWin spike test $(Get-Date -Format HH:mm:ss) auto"
         $off = Get-LogLength $nsLog
         $toastLog1 = Join-Path $env:TEMP "nsho-toast1-$Stamp.txt"; $script:TempFiles.Add($toastLog1)
         $sent = Invoke-Unelevated ('powershell.exe -NoProfile -ExecutionPolicy Bypass -File "{0}" -Text "{1}"' -f $toastPs, $toastText) $toastLog1 -Wait -TimeoutSec 30
@@ -1156,11 +1168,11 @@ try {
     $script:BannersOff = $true
     Wait-Enter 'Press Enter once banners are OFF for Windows PowerShell'
     $nsLog2 = Join-Path $env:TEMP 'NotifySpike.log'
-    $up2 = Start-Spike 'NotifySpike' $nsExe '--seconds 60 --expect "NothingShell spike test"' $nsLog2 -OwnLog
+    $up2 = Start-Spike 'NotifySpike' $nsExe '--seconds 60 --expect "NotWin spike test"' $nsLog2 -OwnLog
     $listening2 = (Wait-Until { (Read-SharedText $nsLog2) -match 'Listening' } 20000 250) -ge 0
     $m2 = $false; $sent2 = $false
     if ($listening2) {
-        $toastText = "NothingShell spike test $(Get-Date -Format HH:mm:ss) banners-off"
+        $toastText = "NotWin spike test $(Get-Date -Format HH:mm:ss) banners-off"
         $off = Get-LogLength $nsLog2
         $toastLog2 = Join-Path $env:TEMP "nsho-toast2-$Stamp.txt"; $script:TempFiles.Add($toastLog2)
         $sent2 = Invoke-Unelevated ('powershell.exe -NoProfile -ExecutionPolicy Bypass -File "{0}" -Text "{1}"' -f $toastPs, $toastText) $toastLog2 -Wait -TimeoutSec 30
@@ -1374,7 +1386,7 @@ try {
         $waRun = [NsWin]::WorkArea(); $mon = [NsWin]::PrimaryMonitor()
         Write-Info ('Work area now (app running, taskbar hidden): ' + ($waRun -join ','))
         [void](Ask-Check 'RS.1' 'Right-click on the start button shows the menu' `
-            'Show the dock and right-click the START button (the left-most one).' 'Does a menu appear with: Keep taskbar visible, Start with Windows, Quit Nothing Shell?')
+            'Show the dock and right-click the START button (the left-most one).' 'Does a menu appear with: Keep taskbar visible, Start with Windows, Quit NotWin?')
         Write-Do 'Click "Keep taskbar visible" so it gets a tick.'
         $kvMs = Wait-Until { $w = [NsWin]::WorkArea(); $w -and ($w[3] -lt $waRun[3] - 40) } 20000 200
         $waKeep = [NsWin]::WorkArea()
@@ -1424,7 +1436,7 @@ try {
         $offMs = Wait-Until { (([NsWin]::WorkArea()) -join ',') -eq ($waRun -join ',') } 20000 200
         [void](Complete-Check -Id 'RS.8' -Description 'Keep visible OFF: work area back to the value before' `
             -Measured @{ expected = ($waRun -join ','); now = (([NsWin]::WorkArea()) -join ','); backAfterMs = $offMs } -MeasuredPass ($offMs -ge 0))
-        Write-Do 'Now right-click the start button and choose "Quit Nothing Shell".'
+        Write-Do 'Now right-click the start button and choose "Quit NotWin".'
         $q0 = [System.Diagnostics.Stopwatch]::StartNew()
         $exited = $app.WaitForExit(60000)
         $quitMs = [int]$q0.ElapsedMilliseconds
@@ -1501,12 +1513,12 @@ try {
 
         # Watchdog relaunch (Plan 2): kill the watchdog; the shell starts a new one.
         $o = Get-LogLength $AppLog
-        Get-Process -Name 'NothingShell.Watchdog' -ErrorAction SilentlyContinue | Stop-Process -Force
+        Get-Process -Name 'NotWin.Watchdog' -ErrorAction SilentlyContinue | Stop-Process -Force
         [void](Wait-Until { (Get-LogSince $AppLog $o) -match 'watchdog relaunched' } 10000 250)
         $l = Get-LogSince $AppLog $o
         [void](Complete-Check -Id 'LA.13' -Description 'Killed watchdog is relaunched once' `
-            -Measured @{ relaunchLogged = ($l -match 'watchdog relaunched'); watchdogs = @(Get-Process -Name 'NothingShell.Watchdog' -ErrorAction SilentlyContinue).Count } `
-            -MeasuredPass (($l -match 'watchdog relaunched') -and @(Get-Process -Name 'NothingShell.Watchdog' -ErrorAction SilentlyContinue).Count -eq 1))
+            -Measured @{ relaunchLogged = ($l -match 'watchdog relaunched'); watchdogs = @(Get-Process -Name 'NotWin.Watchdog' -ErrorAction SilentlyContinue).Count } `
+            -MeasuredPass (($l -match 'watchdog relaunched') -and @(Get-Process -Name 'NotWin.Watchdog' -ErrorAction SilentlyContinue).Count -eq 1))
 
         Complete-Quit 'LA.quit' $app 'launcher section (--quit)'
     }
@@ -1525,7 +1537,7 @@ try {
             -MeasuredPass (($l -match 'package identity=True') -and ($l -match 'notifications: listener ready')))
 
         # PN.1: identity must not break the watchdog's restore (state file in the real %AppData%).
-        Get-Process -Name 'NothingShell' -ErrorAction SilentlyContinue | Stop-Process -Force
+        Get-Process -Name 'NotWin' -ErrorAction SilentlyContinue | Stop-Process -Force
         $back = Wait-Until { [NsWin]::TrayState() -eq 1 } 8000 200
         [void](Complete-Check -Id 'PN.1' -Description 'Hard kill with package identity: watchdog restores the taskbar' `
             -Measured @{ trayBackMs = $back } -MeasuredPass ($back -ge 0))
@@ -1541,7 +1553,7 @@ try {
             Get-Process -Name CalculatorApp -ErrorAction SilentlyContinue | ForEach-Object { try { $_.CloseMainWindow() | Out-Null } catch { } }
             [void](Ask-Check 'NT.3' 'Music state' 'Play music (Spotify or a YouTube video in the browser, not full screen) for ~5 s, then pause it.' 'While playing: art + moving dots in the notch? After pausing: back to the time within ~1 s?')
             $o = Get-LogLength $AppLog
-            & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $toast -Text ("NothingShell test " + (Get-Date -Format 'HH:mm:ss')) | Out-Null
+            & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $toast -Text ("NotWin test " + (Get-Date -Format 'HH:mm:ss')) | Out-Null
             Start-Sleep -Seconds 2
             $l = Get-LogSince $AppLog $o
             $a = Ask-YN 'A test notification was just sent. Did the notch grow and show "Windows PowerShell" + the text for a few seconds?'
@@ -1552,7 +1564,7 @@ try {
             Write-Do 'FULL SCREEN: open a YouTube video. After Enter you get 15 s: click it, press f. A test notification is sent at 8 s. Do NOT click this window.'
             Wait-Enter 'Press Enter to start the 15 seconds'
             Start-Sleep -Seconds 8
-            & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $toast -Text ("NothingShell test " + (Get-Date -Format 'HH:mm:ss')) | Out-Null
+            & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $toast -Text ("NotWin test " + (Get-Date -Format 'HH:mm:ss')) | Out-Null
             Start-Sleep -Seconds 7
             try { [console]::Beep(880, 300) } catch { }
             [void](Ask-Check 'NT.5' 'Full screen hides the notch; a notification during it does not pop the notch' 'Leave full screen now.' 'In full screen: was the notch hidden, and did the notification NOT show in the notch?')
@@ -1560,14 +1572,14 @@ try {
 
         if (Test-Section 'Panel') {
             $o = Get-LogLength $AppLog
-            [void](Ask-Check 'QP.1' 'Win+A / Win+N open Nothing Shell''s panel' 'Press Win+A. Then Win+A again. Then Win+N, and Esc.' 'Did our panel open bottom-right (and Windows'' own Quick Settings / notifications did NOT), and close again?' `
+            [void](Ask-Check 'QP.1' 'Win+A / Win+N open NotWin''s panel' 'Press Win+A. Then Win+A again. Then Win+N, and Esc.' 'Did our panel open bottom-right (and Windows'' own Quick Settings / notifications did NOT), and close again?' `
                 -Measured @{ panelLogged = ((Get-LogSince $AppLog $o) -match 'win\+a/n -> panel') })
             [void](Ask-Check 'QP.2' 'Tray click opens the panel; click outside closes; dock stays up' 'Show the dock and click the tray (Wi-Fi / volume / clock area). Then click on the desktop.' 'Did the panel open with the dock staying visible, and close when you clicked outside?')
             [void](Ask-Check 'QP.3' 'Volume slider + output chip' 'Open the panel, drag the volume slider. If you have two outputs (e.g. buds connected), click the chip next to it.' 'Did the system volume follow the slider (and the chip switch device, if you have two)?')
             [void](Ask-Check 'QP.4' 'Brightness slider' 'Drag the brightness slider down and back up.' 'Did the screen brightness change?')
             [void](Ask-Check 'QP.5' 'Wi-Fi tile' 'Click the arrow (›) on the Wi-Fi tile. Optionally tap the tile to turn Wi-Fi off and on again (a few seconds offline).' 'Did it list networks (or a location hint), with your network marked Connected?')
             [void](Ask-Check 'QP.6' 'Bluetooth tile' 'Click the arrow on the Bluetooth tile. If your buds are paired, try Connect / Connected on them.' 'Did it list paired devices, and did connecting work (or open Bluetooth settings)?')
-            & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $toast -Text ("NothingShell test " + (Get-Date -Format 'HH:mm:ss')) | Out-Null
+            & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $toast -Text ("NotWin test " + (Get-Date -Format 'HH:mm:ss')) | Out-Null
             Start-Sleep -Seconds 2
             [void](Ask-Check 'QP.7' 'Notifications in the panel' 'Open the panel. Find "Windows PowerShell" under NOTIFICATIONS. Click its ✕, then send yourself nothing else and press CLEAR ALL if anything remains.' 'Was the test notification listed, and did ✕ / Clear all remove it?')
             [void](Ask-Check 'QP.8' 'Banner tip (one time)' 'Look at the top of NOTIFICATIONS for the tip about Windows pop-ups. Click "Got it".' 'Did the tip show and disappear after "Got it"?')
@@ -1613,8 +1625,8 @@ try {
         Wait-Enter
         $req = (& powercfg /requests 2>&1 | Out-String)
         [void](Complete-Check -Id 'ND.8' -Description 'Keep awake registers a display/system request' `
-            -Measured @{ listed = ($req -match 'NothingShell'); logged = ((Get-LogSince $AppLog $o) -match 'keep awake=True') } `
-            -MeasuredPass ($req -match 'NothingShell'))
+            -Measured @{ listed = ($req -match 'NotWin'); logged = ((Get-LogSince $AppLog $o) -match 'keep awake=True') } `
+            -MeasuredPass ($req -match 'NotWin'))
         Write-Do 'Turn Keep awake OFF again.'
         Wait-Enter
 
@@ -1627,7 +1639,7 @@ try {
         $before = Get-Date
         [void](Ask-Check 'ND.11' 'Grab text, Color, Snip' 'Page 2: Grab text -> drag over some text, paste it in Notepad. Color -> click a pixel, paste. Snip -> drag a region, paste in Paint.' `
             'Did Grab text copy the text, Color copy a #hex, and Snip copy the image (each with a card in the notch)?' `
-            -Measured @{ snipSaved = (@(Get-ChildItem $shots -Filter 'Nothing Shell *.png' -ErrorAction SilentlyContinue | Where-Object { $_.LastWriteTime -ge $before }).Count -gt 0) })
+            -Measured @{ snipSaved = (@(Get-ChildItem $shots -Filter 'NotWin *.png' -ErrorAction SilentlyContinue | Where-Object { $_.LastWriteTime -ge $before }).Count -gt 0) })
         [void](Ask-Check 'ND.12' 'Phone and Draw' 'Page 2: click Phone, then Draw.' 'Did Phone Link open (or a card say it is not installed), and did Snipping Tool open?')
 
         Write-Do 'FULL SCREEN: start a 1:00 timer, then open a YouTube video full screen (f) and wait until the timer has ended; also try resting the mouse at the top centre.'
@@ -1640,7 +1652,7 @@ try {
         $logOff = Get-LogLength $AppLog
         $app = Start-App
         [void](Wait-Until { (Get-LogSince $AppLog $logOff) -match 'dock ready' } 15000 250)
-        [void](Ask-Check 'ND.R' 'Saved across a restart' 'Nothing Shell was just restarted. Open the dashboard.' `
+        [void](Ask-Check 'ND.R' 'Saved across a restart' 'NotWin was just restarted. Open the dashboard.' `
             'Are the timer length, clipboard items, your note, the edited layout, the shelf file and the weather city all still there?')
         Complete-Quit 'ND.quit' $app 'dash section (--quit)'
     }
@@ -1702,7 +1714,7 @@ try {
         $logOff = Get-LogLength $AppLog
         $app = Start-App
         [void](Wait-Until { (Get-LogSince $AppLog $logOff) -match 'dock ready' } 15000 250)
-        [void](Ask-Check 'DW.R' 'Saved across a restart' 'Nothing Shell was just restarted. Look at the desktop.' `
+        [void](Ask-Check 'DW.R' 'Saved across a restart' 'NotWin was just restarted. Look at the desktop.' `
             'Are the widget positions and sizes, the widget scale, the wallpaper and the snake best score all still there?')
         [void](Ask-Check 'DW.16' 'Frames, folders and removals survive a restart' 'Look at the photo frames, app folders and the widget you removed.' `
             'Do frames keep their photos and shape, folders their picture and apps, and does the removed widget stay removed?')
@@ -1735,12 +1747,29 @@ try {
             'At that minute: sound, "Alarm" in the notch, the Snooze / Stop card at the top and a red flashing widget? Did Snooze silence it and ring again 5 minutes later, and Stop end it?')
         [void](Ask-Check 'P9.4' 'Folder pictures' 'In edit mode, click an app folder a few times.' `
             'Did the new pictures (rocket, heart, moon, sun, code, book, bolt, ghost) come round?')
-        [void](Ask-Check 'P9.5' 'Sync' 'Settings > Sync > Choose folder… and pick an empty test folder. Then open "<that folder>\Nothing Shell sync".' `
-            'Does it hold settings.json, notes.txt (and alarms.json once you made one), and does Settings say SYNCED hh:mm?')
+        [void](Ask-Check 'P9.5' 'Sync' 'Settings > Sync > Choose folder… and pick an empty test folder. Then open "<that folder>\NotWin sync".' `
+            'Does it hold settings.json, notes.txt (and alarms.json once you made one), and does Settings say SAVED TO THE FOLDER hh:mm (· ONEDRIVE UPLOADS IT for a OneDrive folder)?')
         $p9Log = Get-LogSince $AppLog $logOff
         if ($p9Log -match 'sync: \d+ pulled, \d+ pushed') { Write-Good 'log shows a sync (counts only)' } else { Write-Bad 'no "sync: ..." line in the log' }
         [void](Ask-Check 'P9.6' 'Sync off' 'Settings > Sync > Turn off.' 'Does Settings show the "Choose folder…" text again?')
         Complete-Quit 'P9.quit' $app 'plan 9 section (--quit)'
+    }
+
+    # ================================================================ RENAME (Plan 12)
+    if (Test-Section 'Rename') {
+        Write-Step 'RENAME (Plan 12): NotWin took over from Nothing Shell'
+        $oldGone   = -not (Test-Path (Join-Path $env:ProgramFiles 'NothingShell'))
+        $oldRun    = $null -ne (Get-ItemProperty 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run' -Name 'NothingShell' -ErrorAction SilentlyContinue)
+        $oldPkg    = $null -ne (Get-AppxPackage -Name 'NothingShell' -ErrorAction SilentlyContinue)
+        $marker    = Test-Path (Join-Path $StateDir 'migrated-from-nothingshell.txt')
+        $logOff = Get-LogLength $AppLog
+        $app = Start-App
+        [void](Wait-Until { (Get-LogSince $AppLog $logOff) -match 'dock ready' } 15000 250)
+        [void](Ask-Check 'RN.1' 'NotWin took over' 'Open Settings > Google Calendar (and look at your widgets, notes and dock pins).' `
+            'Is Google Calendar still CONNECTED, and are your widgets, notes and pins the ones you had in Nothing Shell?' `
+            -Measured @{ oldFolderGone = $oldGone; oldRunValue = $oldRun; oldPackage = $oldPkg; migratedMarker = $marker } `
+            -MeasuredPass ($oldGone -and -not $oldRun -and -not $oldPkg -and $marker))
+        Complete-Quit 'RN.quit' $app 'rename section (--quit)'
     }
 
     # ================================================================ GOOGLE CALENDAR (Plan 6)
@@ -1787,15 +1816,15 @@ try {
             $dialogs = @([NsWin]::TopLevelOfProcess([uint32]$app.Id)).Count
             $wdCount = (Get-WatchdogInfo).Count; $stateThere = (Test-Path -LiteralPath $StateFile)
             $ahAfter = [NsWin]::GetAutoHide()
-            $a = Ask-YN 'Is there a box saying "Fenn is running. Quit Fenn to use Nothing Shell..." with "Check again" and "Quit Nothing Shell" buttons?'
+            $a = Ask-YN 'Is there a box saying "Fenn is running. Quit Fenn to use NotWin..." with "Check again" and "Quit NotWin" buttons?'
             [void](Complete-Check -Id 'ST.1' -Description 'Fenn running: warning box shown and the taskbar is left alone' `
                 -Measured @{ appAlive = [bool](Get-Process -Id $app.Id -ErrorAction SilentlyContinue); visibleWindows = $dialogs; watchdogProcesses = $wdCount; stateFilePresent = $stateThere; autoHideBefore = $ahBefore; autoHideAfter = $ahAfter } `
                 -MeasuredPass ($wdCount -eq 0 -and -not $stateThere -and $ahBefore -eq $ahAfter -and $dialogs -ge 1) -Answer $a -Expect 'y' -AnswerRequired $false)
             Write-Do 'Now QUIT Fenn (tray icon > Quit), then click "Check again" in the box.'
             $sw = [System.Diagnostics.Stopwatch]::StartNew()
             $takeMs = Wait-Until { (@(Get-Process -Name 'fenn' -ErrorAction SilentlyContinue).Count -eq 0) -and ((Get-WatchdogInfo).Count -gt 0) -and ([NsWin]::TrayState() -eq 0) } 240000 500
-            $a = Ask-YN 'Did Nothing Shell take over (box gone, Windows taskbar hidden, dock works)?'
-            [void](Complete-Check -Id 'ST.2' -Description 'Fenn quit + Check again: Nothing Shell takes over' `
+            $a = Ask-YN 'Did NotWin take over (box gone, Windows taskbar hidden, dock works)?'
+            [void](Complete-Check -Id 'ST.2' -Description 'Fenn quit + Check again: NotWin takes over' `
                 -Measured @{ takeoverMs = $takeMs; watchdogProcesses = (Get-WatchdogInfo).Count; trayHidden = ([NsWin]::TrayState() -eq 0) } -MeasuredPass ($takeMs -ge 0) -Answer $a -Expect 'y' -AnswerRequired $false)
         } else {
             [void](Complete-Check -Id 'ST.1' -Description 'Fenn running: warning box shown and the taskbar is left alone' -Measured @{ fennStarted = $false } -Answer 's' -Expect 'y' -Notes 'Skipped (Fenn not started).')
@@ -1803,11 +1832,11 @@ try {
             Start-Sleep -Seconds 2
         }
         # second copy
-        $cnt0 = @(Get-Process -Name NothingShell -ErrorAction SilentlyContinue).Count
+        $cnt0 = @(Get-Process -Name NotWin -ErrorAction SilentlyContinue).Count
         $winsBefore = @([NsWin]::TopLevelOfProcess([uint32]$app.Id)).Count
         [void](Invoke-Unelevated ('"{0}"' -f $AppExe) '')
         Start-Sleep -Seconds 5
-        $cnt1 = @(Get-Process -Name NothingShell -ErrorAction SilentlyContinue).Count
+        $cnt1 = @(Get-Process -Name NotWin -ErrorAction SilentlyContinue).Count
         $a = Ask-YN 'I just started a second copy. Did anything visible happen (box, window, flicker)?'
         [void](Complete-Check -Id 'ST.3' -Description 'Second copy: nothing happens, still one process' `
             -Measured @{ processesBefore = $cnt0; processesAfter = $cnt1 } -MeasuredPass ($cnt1 -eq $cnt0 -and $cnt1 -eq 1) -Answer $a -Expect 'n' -AnswerRequired $false)
@@ -1825,38 +1854,38 @@ try {
     # ================================================================ LAST QUESTION
     if ((Test-Section 'Dock') -or (Test-Section 'Apps') -or (Test-Section 'Tray') -or (Test-Section 'Reserve') -or (Test-Section 'Launcher') -or (Test-Section 'Notch') -or (Test-Section 'Panel') -or (Test-Section 'Dash') -or (Test-Section 'Widgets') -or (Test-Section 'Startup')) {
         Write-Step 'LAST QUESTION'
-        Write-Host '  Keep Nothing Shell as your taskbar from now on?' -ForegroundColor Cyan
-        Write-Host '    y = Nothing Shell starts at sign-in and keeps running (Fenn must stay closed)'
-        Write-Host '    n = go back to Fenn (Nothing Shell is closed and will not start at sign-in)'
-        do { $keep = (Read-Host '  ? Keep Nothing Shell? [y/n]').Trim().ToLowerInvariant() } until ($keep -in 'y', 'n', 'yes', 'no')
+        Write-Host '  Keep NotWin as your taskbar from now on?' -ForegroundColor Cyan
+        Write-Host '    y = NotWin starts at sign-in and keeps running (Fenn must stay closed)'
+        Write-Host '    n = go back to Fenn (NotWin is closed and will not start at sign-in)'
+        do { $keep = (Read-Host '  ? Keep NotWin? [y/n]').Trim().ToLowerInvariant() } until ($keep -in 'y', 'n', 'yes', 'no')
         $keepYes = $keep -in 'y', 'yes'
         $script:KeepChoice = if ($keepYes) { 'y' } else { 'n' }
         $running = @(Get-AppProcess)
         foreach ($rp in $running) { $qr = Quit-App $rp; Write-Info ("closed running copy: exited={0}, work area ok={1}" -f $qr.exited, $qr.workAreaOk) }
         if ($keepYes) {
-            Write-Info 'Starting Nothing Shell for good (independent of this script)...'
+            Write-Info 'Starting NotWin for good (independent of this script)...'
             [void](Invoke-Unelevated ('explorer.exe "{0}"' -f $AppExe) '')
             $upMs = Wait-Until { (Get-AppProcess).Count -gt 0 } 15000 250
             $hideMs = Wait-Until { [NsWin]::TrayState() -eq 0 } 10000 200
             $rv = Get-RunValue; $fixed = $false
             if (($rv -replace '"', '') -ine $AppExe) {
-                Set-ItemProperty -Path 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run' -Name 'NothingShell' -Value ('"' + $AppExe + '"')
+                Set-ItemProperty -Path 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run' -Name 'NotWin' -Value ('"' + $AppExe + '"')
                 [void](Set-SettingBool 'startWithWindows' $true)
                 $fixed = $true; $rv = Get-RunValue
             }
             $script:KeepRunning = ($upMs -ge 0)
             $elevK = $null; if ($upMs -ge 0) { $elevK = [NsWin]::IsElevated([uint32](Get-AppProcess)[0].Id) }
-            [void](Complete-Check -Id 'KEEP' -Description 'Final choice: keep Nothing Shell as the taskbar' `
+            [void](Complete-Check -Id 'KEEP' -Description 'Final choice: keep NotWin as the taskbar' `
                 -Measured @{ answer = 'y'; appStartedMs = $upMs; taskbarHiddenMs = $hideMs; runValue = $rv; runValueWrittenByScript = $fixed; appElevated = ($elevK -eq 1); watchdogProcesses = (Get-WatchdogInfo).Count } `
                 -MeasuredPass ($upMs -ge 0 -and $hideMs -ge 0 -and (($rv -replace '"', '') -ieq $AppExe) -and $elevK -eq 0) -Answer 'y' -AnswerRequired $false)
         } else {
-            try { Remove-ItemProperty -Path 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run' -Name 'NothingShell' -ErrorAction SilentlyContinue } catch { }
+            try { Remove-ItemProperty -Path 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run' -Name 'NotWin' -ErrorAction SilentlyContinue } catch { }
             $setOff = Set-SettingBool 'startWithWindows' $false
             [void](Ensure-TaskbarBack 'after quitting')
             [void](Complete-Check -Id 'KEEP' -Description 'Final choice: go back to Fenn' `
                 -Measured @{ answer = 'n'; runValueNow = (Get-RunValue); settingStartWithWindowsOff = $setOff; trayVisible = ([NsWin]::TrayState() -eq 1) } `
                 -MeasuredPass ($null -eq (Get-RunValue) -and [NsWin]::TrayState() -eq 1) -Answer 'n' -AnswerRequired $false)
-            Write-Good '  Nothing Shell is closed. Start Fenn again from the Start menu.'
+            Write-Good '  NotWin is closed. Start Fenn again from the Start menu.'
         }
     }
 }
@@ -1876,12 +1905,12 @@ finally {
         $same = ($endAh -eq $script:OrigAutoHide) -and ($endTray -eq $script:OrigTray)
         Write-Host ("  Start: auto-hide={0}, taskbar visible={1}" -f $script:OrigAutoHide, ($script:OrigTray -eq 1))
         Write-Host ("  End:   auto-hide={0}, taskbar visible={1}" -f $endAh, ($endTray -eq 1))
-        $leftoverProcs = @(foreach ($n in ($SpikeNames + 'NothingShell' + 'NothingShell.Watchdog')) {
+        $leftoverProcs = @(foreach ($n in ($SpikeNames + 'NotWin' + 'NotWin.Watchdog')) {
             Get-Process -Name $n -ErrorAction SilentlyContinue | Where-Object { @($script:PreexistingIds[$n]) -notcontains $_.Id } | ForEach-Object { $_.ProcessName }
         })
         if ($script:KeepRunning) {
             $keepApp = @(Get-AppProcess)
-            [void](Complete-Check -Id 'END' -Description 'Kept running: Nothing Shell up, Windows taskbar hidden, helper alive, Run value set' `
+            [void](Complete-Check -Id 'END' -Description 'Kept running: NotWin up, Windows taskbar hidden, helper alive, Run value set' `
                 -Measured @{ appRunning = ($keepApp.Count -eq 1); trayState = $endTray; watchdogProcesses = (Get-WatchdogInfo).Count; runValue = (Get-RunValue); workArea = (([NsWin]::WorkArea()) -join ',') } `
                 -MeasuredPass ($keepApp.Count -eq 1 -and $endTray -eq 0 -and (Get-WatchdogInfo).Count -ge 1))
         } else {
@@ -1901,7 +1930,7 @@ finally {
     } catch { }
     Write-Host ''
     if ($script:KeepRunning) {
-        Write-Good '  Nothing Shell is running as your taskbar. Keep Fenn closed.'
+        Write-Good '  NotWin is running as your taskbar. Keep Fenn closed.'
         Write-Host ''
         Write-Host '  LAST CHECK (please do this now):' -ForegroundColor Cyan
         Write-Host '    Sign out of Windows and sign back in.'

@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Drags shelf files into normal apps (user, 2026-11-20). NotWin runs raised (uiAccess, High integrity) and
+    Windows refuses its drags into normal (Medium) apps, so the shell starts this small helper through Explorer at
+    normal level and the helper does the drag. Plain asInvoker manifest, never uiAccess.
+  -->
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows10.0.22621.0</TargetFramework>
+    <UseWindowsForms>true</UseWindowsForms>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\NotWin.Core\NotWin.Core.csproj" />
+  </ItemGroup>
+
+</Project>

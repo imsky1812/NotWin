@@ -1,0 +1,92 @@
+using NotWin.Core.Sync;
+
+namespace NotWin.Core.Tests.Sync;
+
+// Plan 9: settings, notes and alarms kept in a folder the user picks; the newer copy wins when both PCs changed it.
+public sealed class SyncRuleTests
+{
+    private static readonly DateTime T0 = new(2026, 11, 21, 10, 0, 0, DateTimeKind.Utc);
+    private static SyncSide Side(string? hash, int minutes = 0) => hash is null ? new SyncSide(false, null, default) : new SyncSide(true, hash, T0.AddMinutes(minutes));
+
+    [Fact]
+    public void OnlyLocalChanged_Push() => Assert.Equal(SyncAction.Push, SyncRule.Decide(Side("new"), Side("old", 5), "old"));
+
+    [Fact]
+    public void OnlyRemoteChanged_Pull() => Assert.Equal(SyncAction.Pull, SyncRule.Decide(Side("old", 5), Side("new"), "old"));
+
+    [Fact]
+    public void BothChanged_NewerWins()
+    {
+        Assert.Equal(SyncAction.Pull, SyncRule.Decide(Side("a", 1), Side("b", 2), "old"));
+        Assert.Equal(SyncAction.Push, SyncRule.Decide(Side("a", 3), Side("b", 2), "old"));
+    }
+
+    [Fact]
+    public void FirstSync_OneSideMissing()
+    {
+        Assert.Equal(SyncAction.Push, SyncRule.Decide(Side("a"), Side(null), null));
+        Assert.Equal(SyncAction.Pull, SyncRule.Decide(Side(null), Side("b"), null));
+        Assert.Equal(SyncAction.None, SyncRule.Decide(Side(null), Side(null), null));
+        // Both there on the first sync: the folder wins (review: a PC joining must not push its fresh defaults).
+        Assert.Equal(SyncAction.Pull, SyncRule.Decide(Side("a", 1), Side("b", 2), null));
+        Assert.Equal(SyncAction.Pull, SyncRule.Decide(Side("a", 9), Side("b", 2), null));
+    }
+
+    [Fact]
+    public void SameHash_None() => Assert.Equal(SyncAction.None, SyncRule.Decide(Side("x", 1), Side("x", 9), "old"));
+
+    [Fact]
+    public void RemoteDeleted_LocalUnchanged_PushesItBack() =>
+        Assert.Equal(SyncAction.Push, SyncRule.Decide(Side("x"), Side(null), "x"));
+
+    [Fact]
+    public void Merge_KeepsPerPcFields()
+    {
+        var mine = new ShellSettings { StartWithWindows = false, SyncFolder = @"C:\Mine", PinsImported = true, KeepDockVisible = false, SnakeBest = 3 };
+        var theirs = new ShellSettings { StartWithWindows = true, SyncFolder = @"D:\Theirs", PinsImported = false, KeepDockVisible = true, SnakeBest = 9 };
+        var merged = SyncRule.Merge(mine, theirs);
+        Assert.False(merged.StartWithWindows);
+        Assert.Equal(@"C:\Mine", merged.SyncFolder);
+        Assert.True(merged.PinsImported);
+        Assert.True(merged.KeepDockVisible);
+        Assert.Equal(9, merged.SnakeBest);
+    }
+
+    [Fact]
+    public void Hash_IsHexSha256() =>
+        Assert.Equal("ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad", SyncRule.Hash("abc"u8.ToArray()));
+
+    // Review: photo-frame photos are files on this PC; their names never come from another PC.
+    [Fact]
+    public void Merge_KeepsThisPcsPhotos()
+    {
+        var mine = new ShellSettings { WidgetList = new([new(NotWin.Core.Widgets.WidgetKind.Photo, new(2, 2), 0, 0, "f1", new(Photos: ["mine.jpg"]))]) };
+        var theirs = new ShellSettings
+        {
+            WidgetList = new([
+                new(NotWin.Core.Widgets.WidgetKind.Photo, new(2, 2), 74, 0, "f1", new("circle", ["theirs.jpg"])),
+                new(NotWin.Core.Widgets.WidgetKind.Photo, new(2, 2), 296, 0, "f2", new(Photos: ["other.jpg"])),
+            ]),
+        };
+        var merged = SyncRule.Merge(mine, theirs).WidgetList!.Widgets;
+        Assert.Equal(["mine.jpg"], merged[0].Config!.Photos);
+        Assert.Equal("circle", merged[0].Config!.Shape);   // the rest of the frame follows the other PC
+        Assert.Equal(74, merged[0].X);
+        Assert.Null(merged[1].Config!.Photos);              // a frame new to this PC starts empty here
+    }
+
+    [Fact]
+    public void Shared_BlanksPerPcFieldsAndPhotos()
+    {
+        var s = new ShellSettings
+        {
+            StartWithWindows = false, SyncFolder = "x", PinsImported = true,
+            WidgetList = new([new(NotWin.Core.Widgets.WidgetKind.Photo, new(2, 2), 0, 0, "f1", new(Photos: ["a.jpg"]))]),
+        };
+        var shared = SyncRule.Shared(s);
+        Assert.True(shared.StartWithWindows);
+        Assert.Null(shared.SyncFolder);
+        Assert.False(shared.PinsImported);
+        Assert.Null(shared.WidgetList!.Widgets[0].Config!.Photos);
+    }
+}
