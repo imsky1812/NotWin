@@ -355,8 +355,18 @@ public sealed class PhotoManagePopup : Window
             BorderBrush = TileChrome.FrozenArgb(0x66, 0xF2, 0xF2, 0xF2), BorderThickness = new Thickness(1.5), Background = Brushes.Transparent,
             Child = new TextBlock { Text = "＋", FontSize = 26, Foreground = TileChrome.Text, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center },
         };
-        tile.MouseLeftButtonUp += (_, e) => { e.Handled = true; Guard(_add); };
+        tile.MouseLeftButtonUp += (_, e) => { e.Handled = true; RequestAdd(); };
         return tile;
+    }
+
+    /// <summary>
+    /// The ＋ tile (user report 2026-11-21): the popup closes first and the file picker opens afterwards. Opened on top
+    /// of the popup, the picker took the focus, the popup closed itself and pulled the picker down with it.
+    /// </summary>
+    public void RequestAdd()
+    {
+        CloseIfOpen();
+        Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Background, () => Guard(_add));
     }
 
     internal static void Guard(Action a)

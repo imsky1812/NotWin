@@ -123,4 +123,35 @@ public class DockItemsBuilderTests
         Assert.False(items[0].Running);
         Assert.True(items[1].Running);
     }
+
+    // User report 2026-11-21: two Spotify icons. The pin was made from the 1.309 package folder; Spotify updated itself
+    // and now runs from the 1.310 folder. Same package family and exe: the same app.
+    [Fact]
+    public void Build_StoreAppPinMatchesTheUpdatedVersion()
+    {
+        const string old = @"c:\program files\windowsapps\spotifyab.spotifymusic_1.309.2055.0_x64__zpdnekdrzrea0\spotify.exe";
+        const string current = @"c:\program files\windowsapps\spotifyab.spotifymusic_1.310.2586.0_x64__zpdnekdrzrea0\spotify.exe";
+        var pin = new PinnedApp(old, "Spotify", @"shell:AppsFolder\SpotifyAB.SpotifyMusic_zpdnekdrzrea0!Spotify", old);
+        var items = DockItemsBuilder.Build([pin], [new AppWindow(1, current, "Spotify Premium", current, true)]);
+        var only = Assert.Single(items);
+        Assert.True(only.Pinned);
+        Assert.True(only.Running);
+        Assert.Equal(1, only.Windows[0].Handle);
+    }
+
+    [Fact]
+    public void Build_DifferentStoreAppsStayApart()
+    {
+        const string a = @"c:\program files\windowsapps\one.app_1.0.0.0_x64__pub1\app.exe";
+        const string b = @"c:\program files\windowsapps\two.app_1.0.0.0_x64__pub1\app.exe";
+        var items = DockItemsBuilder.Build([new PinnedApp(a, "One", "x", a)], [new AppWindow(1, b, "Two", b, false)]);
+        Assert.Equal(2, items.Count);
+        Assert.False(items[0].Running);
+    }
+
+    [Theory]
+    [InlineData(@"c:\program files\windowsapps\spotifyab.spotifymusic_1.309.2055.0_x64__zpdnekdrzrea0\spotify.exe", @"package:spotifyab.spotifymusic_zpdnekdrzrea0\spotify.exe")]
+    [InlineData(@"c:\apps\chrome.exe", @"c:\apps\chrome.exe")]
+    [InlineData("Chrome", "Chrome")]
+    public void MatchKey_DropsTheVersionFolder(string id, string key) => Assert.Equal(key, DockItemsBuilder.MatchKey(id));
 }

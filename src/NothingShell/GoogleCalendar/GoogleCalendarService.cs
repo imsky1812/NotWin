@@ -181,7 +181,7 @@ public sealed class GoogleCalendarService : IDisposable
                 {
                     var json = await GetAsync(CalendarFeed.EventsUrl(id, from, to, page), generation, skipUnreadable: true);
                     if (json is null) { skipped++; break; }
-                    var (some, next) = CalendarFeed.ParseEvents(json, zone);
+                    var (some, next) = CalendarFeed.ParseEvents(json, zone, id);
                     events.AddRange(some);
                     if ((page = next) is null) break;
                 }

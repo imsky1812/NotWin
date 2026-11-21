@@ -92,6 +92,7 @@ public sealed class AddPicker : Window
     {
         WidgetKind.Photo => "Photo frame",
         WidgetKind.Folder => "App folder",
+        WidgetKind.Agenda => "Up next",
         _ => kind.ToString(),
     };
 

@@ -121,15 +121,17 @@ public sealed class CalendarWidget : IDesktopWidget
         date.LineHeight = 64;
         date.LineStackingStrategy = LineStackingStrategy.BlockLineHeight;
         left.Children.Add(date);
-        var right = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(18, 0, 0, 0) };
+        var right = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(next is null ? 18 : 14, 0, 0, 0) };
         if (next is not null)
         {
             // The next event (Plan 6): when, the title (two lines at most), then the month and year.
             right.Children.Add(TileChrome.Label(CalendarFeed.WhenLabel(next, DateTimeOffset.Now, TimeZoneInfo.Local), TileChrome.Red));
-            var title = TileChrome.Body(next.Title, 15, FontWeights.SemiBold);
+            var title = TileChrome.Body(next.Title, 13, FontWeights.SemiBold);
             title.TextWrapping = TextWrapping.Wrap;
             title.TextTrimming = TextTrimming.CharacterEllipsis;
-            title.MaxHeight = 40;
+            title.LineHeight = 16;
+            title.LineStackingStrategy = LineStackingStrategy.BlockLineHeight;
+            title.MaxHeight = 48; // three lines
             title.Margin = new Thickness(0, 5, 0, 0);
             right.Children.Add(title);
             var monthYear = TileChrome.Label(now.ToString("MMMM yyyy", CultureInfo.InvariantCulture));
@@ -149,7 +151,15 @@ public sealed class CalendarWidget : IDesktopWidget
             right.Children.Add(year);
         }
         var divider = new Border { Width = 1, Background = Muted, Margin = new Thickness(0, 10, 0, 10), HorizontalAlignment = HorizontalAlignment.Right };
-        var grid = new Grid { ColumnDefinitions = { new ColumnDefinition(), new ColumnDefinition() } };
+        // With an event the date takes 2/5 of the width and the event 3/5, so longer titles fit.
+        var grid = new Grid
+        {
+            ColumnDefinitions =
+            {
+                new ColumnDefinition { Width = new GridLength(next is null ? 1 : 2, GridUnitType.Star) },
+                new ColumnDefinition { Width = new GridLength(next is null ? 1 : 3, GridUnitType.Star) },
+            },
+        };
         grid.Children.Add(left);
         grid.Children.Add(divider);
         Grid.SetColumn(right, 1);

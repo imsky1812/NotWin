@@ -283,6 +283,7 @@ public partial class App : Application
             case Core.Widgets.WidgetKind.Clock: return new Widgets.ClockWidget();
             case Core.Widgets.WidgetKind.Timer: return _timer is null ? null : new Widgets.TimerWidget(_timer);
             case Core.Widgets.WidgetKind.Calendar: return new Widgets.CalendarWidget(_calendar, () => _widgets?.Editing == true);
+            case Core.Widgets.WidgetKind.Agenda: return new Widgets.AgendaWidget(_calendar);
             case Core.Widgets.WidgetKind.Snake:
                 return _snake = new Widgets.SnakeWidget(_snakeGate, dock.Settings.SnakeBest,
                     best => dock.UpdateSettings(s => s with { SnakeBest = Math.Max(s.SnakeBest, best) }));

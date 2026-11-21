@@ -195,4 +195,73 @@ public sealed class CalendarFeedTests
         Assert.Equal(disabled, CalendarFeed.IsApiDisabled(reason));
         Assert.Equal(rateLimited, CalendarFeed.IsRateLimited(reason));
     }
+
+    // Plan 6b: the "Up next" widget shows only the user's own events.
+    [Fact]
+    public void ParseEvents_MarksHolidaysBirthdaysAndWorkingLocationNotPersonal()
+    {
+        const string json = """
+            {"items":[
+              {"summary":"Flight to Goa","eventType":"fromGmail","location":"DEL T3","htmlLink":"https://www.google.com/calendar/event?eid=abc",
+               "start":{"dateTime":"2026-11-24T06:00:00Z"},"end":{"dateTime":"2026-11-24T08:30:00Z"}},
+              {"summary":"Mum","eventType":"birthday","start":{"date":"2026-11-25"},"end":{"date":"2026-11-26"}},
+              {"summary":"Office","eventType":"workingLocation","start":{"date":"2026-11-25"},"end":{"date":"2026-11-26"}},
+              {"summary":"Standup","eventType":"default","start":{"dateTime":"2026-11-25T09:00:00Z"},"end":{"dateTime":"2026-11-25T09:15:00Z"}}
+            ]}
+            """;
+        var mine = CalendarFeed.ParseEvents(json, Utc, "me@gmail.com").Events;
+        Assert.Equal([true, false, false, true], mine.Select(e => e.Personal));
+        Assert.Equal("DEL T3", mine[0].Location);
+        Assert.Equal("https://www.google.com/calendar/event?eid=abc", mine[0].Link);
+        Assert.Null(mine[3].Location);
+        var holidays = CalendarFeed.ParseEvents(json, Utc, "en.indian#holiday@group.v.calendar.google.com").Events;
+        Assert.All(holidays, e => Assert.False(e.Personal));
+        Assert.All(CalendarFeed.ParseEvents(json, Utc, "addressbook#contacts@group.v.calendar.google.com").Events, e => Assert.False(e.Personal));
+    }
+
+    [Fact]
+    public void EventsUrl_AsksForTypePlaceAndLink()
+    {
+        var url = Uri.UnescapeDataString(CalendarFeed.EventsUrl("a", At(11, 1), At(12, 1), null));
+        Assert.Contains("items(summary,status,start,end,eventType,location,htmlLink)", url);
+    }
+
+    [Fact]
+    public void Upcoming_PersonalNotEnded_InOrder_Capped()
+    {
+        var now = At(11, 21, 10);
+        var events = new[]
+        {
+            Timed(At(11, 21, 15), At(11, 21, 16), "c"),
+            Timed(At(11, 21, 8), At(11, 21, 9), "ended"),
+            Timed(At(11, 21, 9, 30), At(11, 21, 11), "b"),
+            new CalEvent("holiday", At(11, 21), At(11, 22), true, Personal: false),
+            Timed(At(11, 22, 9), At(11, 22, 10), "d"),
+            Timed(At(11, 23, 9), At(11, 23, 10), "e"),
+        };
+        Assert.Equal(["b", "c", "d"], CalendarFeed.Upcoming(events, now, 3).Select(e => e.Title));
+        Assert.Empty(CalendarFeed.Upcoming([], now, 4));
+    }
+
+    [Fact]
+    public void Countdown_SoonThenWhenLabel()
+    {
+        var now = At(11, 21, 10);
+        Assert.Equal(("NOW", true), CalendarFeed.Countdown(Timed(At(11, 21, 9), At(11, 21, 11)), now, Utc));
+        Assert.Equal(("IN 25 MIN", true), CalendarFeed.Countdown(Timed(At(11, 21, 10, 25), At(11, 21, 11)), now, Utc));
+        Assert.Equal(("IN 1 MIN", true), CalendarFeed.Countdown(Timed(At(11, 21, 10, 0).AddSeconds(20), At(11, 21, 11)), now, Utc));
+        Assert.Equal(("IN 3 H", false), CalendarFeed.Countdown(Timed(At(11, 21, 13, 10), At(11, 21, 14)), now, Utc));
+        Assert.Equal(("TODAY", false), CalendarFeed.Countdown(AllDay(At(11, 21), At(11, 22)), now, Utc));
+        Assert.Equal(("TOMORROW 09:00", false), CalendarFeed.Countdown(Timed(At(11, 22, 9), At(11, 22, 10)), now, Utc));
+        Assert.Equal(("TUE 24", false), CalendarFeed.Countdown(Timed(At(11, 24, 9), At(11, 24, 10)), now, Utc));
+    }
+
+    [Theory]
+    [InlineData("https://www.google.com/calendar/event?eid=abc", true)]
+    [InlineData("https://calendar.google.com/calendar/event?eid=abc", true)]
+    [InlineData("http://www.google.com/calendar/event?eid=abc", false)]
+    [InlineData("https://evil.example/calendar", false)]
+    [InlineData("file:///c:/windows", false)]
+    [InlineData(null, false)]
+    public void IsSafeLink_OnlyGoogleCalendarHttps(string? link, bool safe) => Assert.Equal(safe, CalendarFeed.IsSafeLink(link));
 }

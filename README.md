@@ -89,6 +89,10 @@ notifications. `uninstall.ps1` removes it. Use `-NoTimestamp` to skip the signin
     your browser (read-only). The month gets a dot under days with events from every calendar switched on in Google
     Calendar; the 2×1 widget shows the next event. Events refresh every 15 minutes and are kept (encrypted for your
     Windows account) for when you are offline. **Disconnect** signs out and deletes them.
+  - **Up next:** a widget (＋ Add > Up next) with only your own plans from Google Calendar: meetings, things you
+    added, and trips or bookings Gmail put in your calendar; no holidays or birthdays. 2×2 lists the next four, 2×1
+    shows the next one large, 4×2 the next six. "IN 25 MIN" / "NOW" in red when it is soon; click an event to open it
+    in Google Calendar.
   - **Snake:** click the board to play; arrows or WASD steer, Space pauses / restarts. While you play, those keys go
     only to the snake; clicking anywhere else, switching windows or Esc pauses it and gives the keys back. The best
     score is saved.

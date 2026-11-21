@@ -5,9 +5,11 @@ namespace NothingShell.Core.GoogleCalendar;
 
 /// <summary>
 /// One calendar event. All-day events start and end at local midnight of their <c>date</c> and their exclusive end
-/// <c>date</c>. The title is private: never logged.
+/// <c>date</c>. <see cref="Personal"/> (Plan 6b): the user's own plans (meetings, things they added, trips Gmail put in
+/// the calendar), not holidays, birthdays or working locations. The title, place and link are private: never logged.
 /// </summary>
-public sealed record CalEvent(string Title, DateTimeOffset Start, DateTimeOffset End, bool AllDay);
+public sealed record CalEvent(string Title, DateTimeOffset Start, DateTimeOffset End, bool AllDay,
+    string? Location = null, string? Link = null, bool Personal = true);
 
 /// <summary>
 /// The Google Calendar API v3 as the Calendar widget uses it (Plan 6): every calendar switched on in Google Calendar
@@ -25,7 +27,7 @@ public static class CalendarFeed
         Api + "calendars/" + Uri.EscapeDataString(calendarId) + "/events?" + GoogleOAuth.Query(Pairs(
         [
             ("timeMin", Rfc3339(from)), ("timeMax", Rfc3339(to)), ("singleEvents", "true"), ("orderBy", "startTime"),
-            ("maxResults", "250"), ("fields", "items(summary,status,start,end),nextPageToken"),
+            ("maxResults", "250"), ("fields", "items(summary,status,start,end,eventType,location,htmlLink),nextPageToken"),
         ], pageToken));
 
     /// <summary>The ids of the calendars switched on in Google Calendar (selected, not deleted), and the next page.</summary>
@@ -39,9 +41,14 @@ public static class CalendarFeed
         return (ids, next);
     }
 
-    /// <summary>The events (cancelled ones and ones without a readable start / end skipped), and the next page.</summary>
-    public static (IReadOnlyList<CalEvent> Events, string? Next) ParseEvents(string json, TimeZoneInfo zone)
+    /// <summary>
+    /// The events of <paramref name="calendarId"/> (cancelled ones and ones without a readable start / end skipped), and
+    /// the next page. Events of a holiday or contacts-birthday calendar, and birthday / working-location events, are
+    /// not <see cref="CalEvent.Personal"/>.
+    /// </summary>
+    public static (IReadOnlyList<CalEvent> Events, string? Next) ParseEvents(string json, TimeZoneInfo zone, string? calendarId = null)
     {
+        var sharedFeed = IsSharedFeed(calendarId);
         var events = new List<CalEvent>();
         var next = Items(json, item =>
         {
@@ -49,7 +56,10 @@ public static class CalendarFeed
             if (!item.TryGetProperty("start", out var s) || !item.TryGetProperty("end", out var e)) return;
             if (Time(s, zone) is not { } start || Time(e, zone) is not { } end) return;
             var title = GoogleOAuth.Str(item, "summary");
-            events.Add(new CalEvent(string.IsNullOrWhiteSpace(title) ? "(No title)" : title.Trim(), start.At, end.At, start.AllDay));
+            var location = GoogleOAuth.Str(item, "location");
+            var personal = !sharedFeed && GoogleOAuth.Str(item, "eventType") is not ("birthday" or "workingLocation");
+            events.Add(new CalEvent(string.IsNullOrWhiteSpace(title) ? "(No title)" : title.Trim(), start.At, end.At, start.AllDay,
+                string.IsNullOrWhiteSpace(location) ? null : location.Trim(), GoogleOAuth.Str(item, "htmlLink"), personal));
         });
         return (events, next);
     }
@@ -112,6 +122,38 @@ public static class CalendarFeed
     /// <summary>Google asked to slow down: a passing failure, not a calendar the account cannot read.</summary>
     public static bool IsRateLimited(string? reason) =>
         reason is "rateLimitExceeded" or "userRateLimitExceeded" or "quotaExceeded" or "RATE_LIMIT_EXCEEDED";
+
+    /// <summary>Calendars Google fills for everyone: public holidays and the old contacts-birthday calendar.</summary>
+    public static bool IsSharedFeed(string? calendarId) =>
+        calendarId is not null && (calendarId.Contains("#holiday@", StringComparison.OrdinalIgnoreCase)
+            || calendarId.Contains("#contacts@", StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>The "Up next" widget's list: the user's own events not ended yet, soonest first, at most <paramref name="max"/>.</summary>
+    public static IReadOnlyList<CalEvent> Upcoming(IEnumerable<CalEvent> events, DateTimeOffset now, int max) =>
+        [.. events.Where(e => e.Personal && (e.End > now || (e.End <= e.Start && e.Start >= now)))
+            .OrderBy(e => e.Start).ThenBy(e => e.AllDay ? 0 : 1).Take(max)];
+
+    /// <summary>
+    /// The "Up next" label and whether it is soon (drawn red): "NOW", "IN 25 MIN" (under an hour), "IN 3 H" (under six
+    /// hours), otherwise <see cref="WhenLabel"/>.
+    /// </summary>
+    public static (string Text, bool Soon) Countdown(CalEvent e, DateTimeOffset now, TimeZoneInfo zone)
+    {
+        if (!e.AllDay)
+        {
+            if (e.Start <= now && e.End > now) return ("NOW", true);
+            var until = e.Start - now;
+            if (until > TimeSpan.Zero && until < TimeSpan.FromHours(1))
+                return ($"IN {Math.Max(1, (int)Math.Ceiling(until.TotalMinutes))} MIN", true);
+            if (until > TimeSpan.Zero && until < TimeSpan.FromHours(6)) return ($"IN {(int)until.TotalHours} H", false);
+        }
+        return (WhenLabel(e, now, zone), false);
+    }
+
+    /// <summary>Only Google Calendar's own https pages are opened from a click (the link comes from the network).</summary>
+    public static bool IsSafeLink(string? link) =>
+        Uri.TryCreate(link, UriKind.Absolute, out var u) && u.Scheme == Uri.UriSchemeHttps
+        && u.Host is "www.google.com" or "calendar.google.com" && u.AbsolutePath.StartsWith("/calendar", StringComparison.Ordinal);
 
     /// <summary>"NOW", "TODAY 14:30", "TODAY", "TOMORROW 09:00", "TOMORROW", or "TUE 24".</summary>
     public static string WhenLabel(CalEvent e, DateTimeOffset now, TimeZoneInfo zone)
