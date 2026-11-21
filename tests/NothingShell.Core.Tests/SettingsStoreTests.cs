@@ -99,6 +99,28 @@ public sealed class SettingsStoreTests : IDisposable
     }
 
     [Fact]
+    public void ScaleFactor_MapsSml()
+    {
+        Assert.Equal(0.5, ShellSettings.ScaleFactor("S"));
+        Assert.Equal(0.65, ShellSettings.ScaleFactor("M"));
+        Assert.Equal(0.8, ShellSettings.ScaleFactor("L"));
+        Assert.Equal(0.65, ShellSettings.ScaleFactor("huge"));
+        Assert.Equal("M", new ShellSettings().WidgetScale); // spec §5: 65 % by default
+    }
+
+    [Fact]
+    public void SaveThenLoad_RoundTripsWidgets()
+    {
+        var store = new SettingsStore(_dir);
+        Assert.Null(store.Load().Widgets);
+        var layout = NothingShell.Core.Widgets.DesktopLayout.Default;
+        store.Save(new ShellSettings { Widgets = layout, SnakeBest = 7 });
+        var back = store.Load();
+        Assert.Equal(layout.Widgets, back.Widgets!.Widgets);
+        Assert.Equal(7, back.SnakeBest);
+    }
+
+    [Fact]
     public void Load_UnknownTileKind_KeepsTheRestOfTheSettings()
     {
         Directory.CreateDirectory(_dir);
@@ -165,5 +187,23 @@ public sealed class SettingsStoreTests : IDisposable
 
         store.Load();
         Assert.True(store.LastLoadSucceeded);
+    }
+
+    // Plan 7: "Window previews in the dock" is on by default, also for a settings file written before it existed (and a
+    // file that still holds the removed minimize-animation setting loads fine).
+    [Fact]
+    public void Settings_Previews_DefaultOn()
+    {
+        Assert.True(new ShellSettings().WindowPreviews);
+        var dir = Path.Combine(Path.GetTempPath(), "ns-plan7-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        try
+        {
+            File.WriteAllText(Path.Combine(dir, "settings.json"), "{ \"keepDockVisible\": true, \"dotDrain\": false }");
+            var loaded = new SettingsStore(dir).Load();
+            Assert.True(loaded.KeepDockVisible);
+            Assert.True(loaded.WindowPreviews);
+        }
+        finally { Directory.Delete(dir, true); }
     }
 }

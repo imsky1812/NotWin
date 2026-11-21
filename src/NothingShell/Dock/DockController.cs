@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Windows;
 using NothingShell.Core;
+using NothingShell.Core.Dock;
 using NothingShell.Native;
 
 namespace NothingShell.Dock;
@@ -36,7 +37,18 @@ public sealed class DockController : IDisposable
         _appBar = appBar; _quit = quit; _indexedName = indexedName;
         _tracker = new WindowTracker();
         _tracker.Changed += Rebuild;
+        _tracker.Changed += RefreshPreview; // after Rebuild: windows opened / closed while the card is open
         _dock.ItemClicked += OnItemClicked;
+        _dock.ItemHover += OnItemHover;
+        _previewTimer.Tick += (_, _) => { _previewTimer.Stop(); PumpPreview(); };
+        _preview.Activate += hwnd => { ClosePreview(); _ = WindowListNative.Activate(hwnd); };
+        _preview.CloseWindow += WindowListNative.RequestClose;
+        _preview.PointerOver += over => { _previewHover.Pointer(_hoverItem, over, _previewClock.Elapsed); PumpPreview(); };
+        _preview.Closed += () =>
+        {
+            _reveal.SetPanelOpen("preview", false);
+            _previewHover.Reset(); // closed by itself (last window gone): hovering the app again reopens it
+        };
         _dock.ItemContext += OnItemContext;
         _dock.TrayClicked += OnTrayClicked;
         // A dock popup left open would sit on top of Windows' overflow flyout: close it first.
@@ -120,8 +132,84 @@ public sealed class DockController : IDisposable
 
     private static string Trunc(string s, int n) => s.Length <= n ? s : s[..n] + "~";
 
+    // ---- window previews (Plan 7) ----
+
+    private readonly WindowPreviewCard _preview = new();
+    private readonly PreviewHover _previewHover = new();
+    private readonly System.Diagnostics.Stopwatch _previewClock = System.Diagnostics.Stopwatch.StartNew();
+    private readonly System.Windows.Threading.DispatcherTimer _previewTimer = new();
+    private string? _hoverItem;
+
+    /// <summary>The "Window previews in the dock" switch.</summary>
+    public bool PreviewsEnabled
+    {
+        get => DockItemViewModel.PreviewsEnabled;
+        set
+        {
+            DockItemViewModel.PreviewsEnabled = value;
+            foreach (var vm in _vm.Items) vm.Update(vm.Item, vm.Icon);
+            if (!value) ClosePreview();
+        }
+    }
+
+    private void OnItemHover(DockItemViewModel? vm, FrameworkElement? el)
+    {
+        _hoverItem = vm is { Running: true } && PreviewsEnabled ? vm.AppId : null;
+        var over = DockWindowNative.GetCursorPos() is { } c && _preview.IsOver(c);
+        _previewHover.Pointer(_hoverItem, over, _previewClock.Elapsed);
+        PumpPreview();
+    }
+
+    private void PumpPreview()
+    {
+        try
+        {
+            if (_previewHover.Update(_previewClock.Elapsed)) ApplyPreview();
+            _previewTimer.Stop();
+            if (_previewHover.NextCheckAt is { } at)
+            {
+                var wait = at - _previewClock.Elapsed;
+                _previewTimer.Interval = (wait > TimeSpan.Zero ? wait : TimeSpan.Zero) + TimeSpan.FromMilliseconds(5);
+                _previewTimer.Start();
+            }
+        }
+        catch (Exception e) { Log.Error("dock preview failed", e); }
+    }
+
+    private void ApplyPreview()
+    {
+        var id = _previewHover.OpenFor;
+        var vm = id is null ? null : _vm.Items.FirstOrDefault(v => v.AppId == id);
+        if (vm is null || !vm.Running || _dock.IconRect(vm.AppId) is not { } rect)
+        {
+            if (_preview.IsOpen) _preview.Close();
+            return;
+        }
+        ClosePopup();
+        _reveal.SetPanelOpen("preview", true); // keeps the dock up while the card is open
+        _preview.Show(vm.Item.Windows, rect, _dock.Handle);
+    }
+
+    private void RefreshPreview()
+    {
+        if (!_preview.IsOpen || _previewHover.OpenFor is not { } id) return;
+        try
+        {
+            var vm = _vm.Items.FirstOrDefault(v => v.AppId == id);
+            _preview.Refresh(vm?.Item.Windows ?? []);
+        }
+        catch (Exception e) { Log.Error("dock preview refresh failed", e); }
+    }
+
+    private void ClosePreview()
+    {
+        if (_preview.IsOpen) _preview.Close();
+        _previewHover.Close(); // after Close: a click keeps it shut until the pointer leaves the icon
+    }
+
     private void OnItemClicked(DockItemViewModel vm, FrameworkElement el)
     {
+        ClosePreview();
         ClosePopup();
         var item = vm.Item;
         try
@@ -141,6 +229,7 @@ public sealed class DockController : IDisposable
 
     private void OnItemContext(DockItemViewModel vm, FrameworkElement el)
     {
+        ClosePreview();
         ClosePopup();
         var item = vm.Item;
         var rows = new List<PopupRow>
@@ -244,6 +333,8 @@ public sealed class DockController : IDisposable
     {
         var path = item.LaunchPath;
         if (string.IsNullOrEmpty(path)) { Log.Info($"launch: no launch path for {item.AppId}"); return; }
+        // A Store app pinned by its exe inside WindowsApps cannot be run directly: start it by its app id instead.
+        if (PackagedApps.Resolve(path, StoreApps.ReadText, StoreApps.CurrentRoot) is { } packaged) path = packaged;
         // ShellExecuteEx with ASYNCOK: returns immediately; shortcuts, exes and shell:AppsFolder\<AUMID> all work.
         if (!ShellLinkNative.Open(path)) Log.Info($"launch failed for {item.AppId} ({path}) error={ShellLinkNative.LastError}");
     }
@@ -256,7 +347,7 @@ public sealed class DockController : IDisposable
         var hasExe = !string.IsNullOrEmpty(exe) && System.IO.File.Exists(exe);
         if (!isUwp && !hasExe) { Log.Info($"pin: nothing to launch for {item.AppId}"); return; }
 
-        var launch = isUwp ? @"shell:AppsFolder\" + item.AppId : exe;
+        var launch = isUwp ? @"shell:AppsFolder\" + item.AppId : PackagedApps.Resolve(exe, StoreApps.ReadText, StoreApps.CurrentRoot) ?? exe;
         var name = PinRules.Name(item.AppId, _indexedName?.Invoke(item.AppId), hasExe ? ExeDescription(exe) : null, item.DisplayName);
         var pinned = _settings.PinnedApps.Append(new PinnedApp(item.AppId, name, launch, hasExe && !isUwp ? exe.ToLowerInvariant() : null)).ToList(); // no exe key for UWP: the exe may be a shared host
         SavePins(pinned);

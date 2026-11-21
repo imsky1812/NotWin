@@ -1,6 +1,7 @@
 using System.IO;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
+using NothingShell.Core.Notch;
 using Windows.Media.Control;
 
 namespace NothingShell.Media;
@@ -38,8 +39,9 @@ public interface ISessionManager
 }
 
 /// <summary>
-/// Follows the system's current media session (GlobalSystemMediaTransportControlsSessionManager). Music shows in
-/// the notch only while the current session is Playing (spec §6.4). <see cref="Changed"/> is raised on the context
+/// Follows the media session chosen from every app that reports to Windows' media controls
+/// (GlobalSystemMediaTransportControlsSessionManager; see MediaPick). Music shows in the notch only while that
+/// session is Playing (spec §6.4). <see cref="Changed"/> is raised on the context
 /// <see cref="StartAsync"/> was called on (the UI thread in the app). Logs the source app only, never titles.
 /// </summary>
 public sealed class MediaSessionService : IDisposable
@@ -186,38 +188,120 @@ public sealed class MediaSessionService : IDisposable
 
     // ---- WinRT adapters ----
 
+    // Every app that reports to Windows' media controls (Spotify, a browser playing YouTube, …), not only Windows'
+    // "current" session, which can stay on a paused app while another plays (user report 2026-11-20). The session to
+    // follow is chosen by MediaPick: the playing one, the shown one kept while it plays, else the last to start.
     private sealed class WinRtSessionManager : ISessionManager
     {
         private readonly GlobalSystemMediaTransportControlsSessionManager _m;
+        private readonly object _lock = new();
+        private readonly Dictionary<WinRtSession, long> _since = []; // when each playing session started playing
+        private List<WinRtSession> _all = [];
         private WinRtSession? _current;
 
         private WinRtSessionManager(GlobalSystemMediaTransportControlsSessionManager m)
         {
             _m = m;
-            _m.CurrentSessionChanged += (_, _) => { _current = Wrap(); CurrentChanged?.Invoke(); };
-            _current = Wrap();
+            _m.SessionsChanged += (_, _) => Guard(Resync);
+            _m.CurrentSessionChanged += (_, _) => Guard(Reevaluate);
+            Resync();
         }
 
         public static async Task<ISessionManager?> CreateAsync() =>
             new WinRtSessionManager(await GlobalSystemMediaTransportControlsSessionManager.RequestAsync());
 
-        private WinRtSession? Wrap() => _m.GetCurrentSession() is { } s ? new WinRtSession(s) : null;
-
-        public ISessionSource? Current => _current;
+        public ISessionSource? Current { get { lock (_lock) return _current; } }
         public event Action? CurrentChanged;
+
+        private void Resync()
+        {
+            lock (_lock)
+            {
+                var next = new List<WinRtSession>();
+                foreach (var raw in _m.GetSessions())
+                {
+                    var known = _all.FirstOrDefault(w => w.Is(raw));
+                    if (known is null)
+                    {
+                        known = new WinRtSession(raw);
+                        known.Changed += () => Guard(() => OnSessionChanged(known));
+                        if (known.PlaybackPlaying) _since[known] = Environment.TickCount64;
+                    }
+                    next.Add(known);
+                }
+                foreach (var gone in _all.Where(w => !next.Contains(w)))
+                {
+                    gone.Detach();
+                    _since.Remove(gone);
+                }
+                _all = next;
+            }
+            Reevaluate();
+        }
+
+        private void OnSessionChanged(WinRtSession session)
+        {
+            lock (_lock)
+            {
+                if (!_all.Contains(session)) return;
+                if (!session.PlaybackPlaying) _since.Remove(session);
+                else if (!_since.ContainsKey(session)) _since[session] = Environment.TickCount64;
+            }
+            Reevaluate();
+        }
+
+        private void Reevaluate()
+        {
+            bool changed;
+            lock (_lock)
+            {
+                var systemRaw = _m.GetCurrentSession();
+                var system = systemRaw is null ? null : _all.FirstOrDefault(w => w.Is(systemRaw));
+                var choice = MediaPick.Choose(_all, w => w.PlaybackPlaying, w => _since.GetValueOrDefault(w), _current, system);
+                changed = !ReferenceEquals(choice, _current);
+                _current = choice;
+            }
+            if (changed) CurrentChanged?.Invoke();
+        }
+
+        private static void Guard(Action a)
+        {
+            try { a(); }
+            catch (Exception e) { Log.Error("media sessions update failed", e); }
+        }
     }
 
     private sealed class WinRtSession : ISessionSource
     {
         private readonly GlobalSystemMediaTransportControlsSession _s;
+        private readonly Windows.Foundation.TypedEventHandler<GlobalSystemMediaTransportControlsSession, PlaybackInfoChangedEventArgs> _onPlayback;
+        private readonly Windows.Foundation.TypedEventHandler<GlobalSystemMediaTransportControlsSession, MediaPropertiesChangedEventArgs> _onProps;
+        private readonly Windows.Foundation.TypedEventHandler<GlobalSystemMediaTransportControlsSession, TimelinePropertiesChangedEventArgs> _onTimeline;
         private GlobalSystemMediaTransportControlsSessionMediaProperties? _props;
 
         public WinRtSession(GlobalSystemMediaTransportControlsSession s)
         {
             _s = s;
-            _s.PlaybackInfoChanged += (_, _) => Changed?.Invoke();
-            _s.MediaPropertiesChanged += (_, _) => { _props = null; Changed?.Invoke(); };
-            _s.TimelinePropertiesChanged += (_, _) => Changed?.Invoke();
+            _onPlayback = (_, _) => Changed?.Invoke();
+            _onProps = (_, _) => { _props = null; Changed?.Invoke(); };
+            _onTimeline = (_, _) => Changed?.Invoke();
+            _s.PlaybackInfoChanged += _onPlayback;
+            _s.MediaPropertiesChanged += _onProps;
+            _s.TimelinePropertiesChanged += _onTimeline;
+        }
+
+        public bool Is(GlobalSystemMediaTransportControlsSession other) => ReferenceEquals(_s, other) || _s.Equals(other);
+
+        /// <summary>The session went away: stop listening to it.</summary>
+        public void Detach()
+        {
+            try
+            {
+                _s.PlaybackInfoChanged -= _onPlayback;
+                _s.MediaPropertiesChanged -= _onProps;
+                _s.TimelinePropertiesChanged -= _onTimeline;
+            }
+            catch { /* the app already closed it */ }
         }
 
         public (TimeSpan Position, TimeSpan Duration, DateTimeOffset At) Timeline
@@ -237,8 +321,14 @@ public sealed class MediaSessionService : IDisposable
         public async Task<bool> NextAsync() => await _s.TrySkipNextAsync();
         public async Task<bool> PreviousAsync() => await _s.TrySkipPreviousAsync();
 
-        public bool PlaybackPlaying =>
-            _s.GetPlaybackInfo()?.PlaybackStatus == GlobalSystemMediaTransportControlsSessionPlaybackStatus.Playing;
+        public bool PlaybackPlaying
+        {
+            get
+            {
+                try { return _s.GetPlaybackInfo()?.PlaybackStatus == GlobalSystemMediaTransportControlsSessionPlaybackStatus.Playing; }
+                catch { return false; } // the app closed the session meanwhile
+            }
+        }
 
         public string? Title => Props()?.Title;
         public string? Artist => Props()?.Artist;

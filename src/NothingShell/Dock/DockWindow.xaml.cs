@@ -104,6 +104,16 @@ public partial class DockWindow : Window
         if (sender is FrameworkElement { DataContext: DockItemViewModel item } el) ItemClicked?.Invoke(item, el);
     }
 
+    /// <summary>The pointer is on an app icon (its view model and element) or left one (nulls) — window previews.</summary>
+    public event Action<DockItemViewModel?, FrameworkElement?>? ItemHover;
+
+    private void OnItemEnter(object sender, System.Windows.Input.MouseEventArgs e)
+    {
+        if (sender is FrameworkElement { DataContext: DockItemViewModel item } el) ItemHover?.Invoke(item, el);
+    }
+
+    private void OnItemLeave(object sender, System.Windows.Input.MouseEventArgs e) => ItemHover?.Invoke(null, null);
+
     private void OnItemRightUp(object sender, System.Windows.Input.MouseButtonEventArgs e)
     {
         if (sender is FrameworkElement { DataContext: DockItemViewModel item } el) ItemContext?.Invoke(item, el);
@@ -131,6 +141,20 @@ public partial class DockWindow : Window
     }
 
     public DockPlacement Placement => _placement;
+
+    /// <summary>The app's icon slot on screen (physical px), or null when it is not shown (Plan 7 dot drain).</summary>
+    public RectI? IconRect(string appId)
+    {
+        foreach (var item in ItemsHost.Items)
+        {
+            if (item is not DockItemViewModel vm || vm.AppId != appId) continue;
+            if (ItemsHost.ItemContainerGenerator.ContainerFromItem(vm) is not FrameworkElement c || !c.IsVisible || c.ActualWidth <= 0) return null;
+            var a = c.PointToScreen(new Point(0, 0));
+            var b = c.PointToScreen(new Point(c.ActualWidth, c.ActualHeight));
+            return new RectI((int)Math.Round(a.X), (int)Math.Round(a.Y), (int)Math.Round(b.X), (int)Math.Round(b.Y));
+        }
+        return null;
+    }
 
     public nint Handle => _hwnd;
 

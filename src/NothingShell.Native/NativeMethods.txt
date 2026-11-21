@@ -112,3 +112,4 @@ WlanConnect
 WlanFreeMemory
 WlanSetProfile
 WLAN_CONNECTION_PARAMETERS
+GetWindowPlacement

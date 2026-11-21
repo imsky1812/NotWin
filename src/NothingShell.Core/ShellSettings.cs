@@ -5,6 +5,9 @@ public sealed record ShellSettings
     public bool KeepDockVisible { get; init; } = false;
     public bool StartWithWindows { get; init; } = true;
     public string WidgetScale { get; init; } = "M";
+
+    /// <summary>Spec §5 global widget scale: S 50 %, M 65 % (default), L 80 %.</summary>
+    public static double ScaleFactor(string? scale) => scale switch { "S" => 0.5, "L" => 0.8, _ => 0.65 };
     public IReadOnlyList<PinnedApp> PinnedApps { get; init; } = [];
     public bool PinsImported { get; init; } = false;
 
@@ -19,4 +22,19 @@ public sealed record ShellSettings
 
     /// <summary>The weather tile's place (spec §6.5: a city the user types in Settings); null until set.</summary>
     public Forecast.WeatherPlace? Weather { get; init; }
+
+    /// <summary>
+    /// Plan 5 layout (one widget per kind, no ids). Read once to convert into <see cref="WidgetList"/> and never written
+    /// again, so an older build reading this file still finds its layout.
+    /// </summary>
+    public Widgets.DesktopLayout? Widgets { get; init; }
+
+    /// <summary>The desktop widget instances (Plan 5b): null = not converted yet. Sanitized on use.</summary>
+    public Widgets.DesktopLayout? WidgetList { get; init; }
+
+    /// <summary>Plan 7: live window previews when hovering a running app in the dock.</summary>
+    public bool WindowPreviews { get; init; } = true;
+
+    /// <summary>The snake widget's best score.</summary>
+    public int SnakeBest { get; init; }
 }

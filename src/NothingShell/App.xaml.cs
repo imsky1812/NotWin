@@ -21,6 +21,7 @@ public partial class App : Application
     private DockAppBar? _appBar;
     private HookThread? _hooks;
     private Launcher.WinKeyListener? _winKeys;
+    private Widgets.SnakeWidget? _snake;
     private Launcher.LauncherController? _launcher;
     private Launcher.AppIndex? _index;
     private Notch.NotchController? _notch;
@@ -28,6 +29,9 @@ public partial class App : Application
     private Clips.ClipboardService? _clips;
     private readonly Power.KeepAwakeService _awake = new();
     private Forecast.WeatherService? _weather;
+    private Widgets.DesktopWidgets? _widgets;
+    private readonly Core.Widgets.SnakeKeyGate _snakeGate = new(); // one gate for whichever snake is on the desktop
+    private Dock.AppIconCache? _folderIcons; // shared by every app folder
 
     private static string DataDir => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "NothingShell");
     private Media.MediaSessionService? _media;
@@ -98,6 +102,7 @@ public partial class App : Application
         {
             _taskbar.AppBarReRegistered = _appBar.ReRegister();
             _mouse?.Reinstall();
+            _widgets?.Rebuild(); // backup for the widget windows' own loss signal
         };
         _taskbar.TaskbarReHidden += () => _mouse?.Reinstall();
         _taskbar.QuitRequested += () => Shutdown(); // `NothingShell.exe --quit`: same exit path as the menu's Quit
@@ -195,6 +200,11 @@ public partial class App : Application
         _fullscreen!.Changed += fs => { if (fs) { _launcher?.Close(); _panel?.Close(); } };
         _launcher.VisibleChanged += _ => UpdateNotchCover();
 
+        // Desktop widgets (spec §6.5): on the desktop layer, sharing the timer / media / weather services. Guarded: a
+        // failure here must never take the dock, launcher or notch down.
+        try { StartWidgets(); }
+        catch (Exception e) { Log.Error("desktop widgets failed to start", e); }
+
         // Quick-settings panel (spec §6.3): Win+A / Win+N (below) and the dock tray. Guarded like the notch: a failure
         // here must never take the dock and launcher down with it (Win+A / Win+N then simply do nothing).
         try
@@ -222,6 +232,10 @@ public partial class App : Application
             _winKeys = new Launcher.WinKeyListener(_hooks!, Dispatcher);
             _winKeys.LauncherRequested += _launcher.Toggle;
             _winKeys.PanelRequested += () => _panel?.Toggle();
+            _winKeys.EscapePressed += () => _widgets?.EndEdit();
+            _winKeys.SnakeGate = _snakeGate;
+            _winKeys.SnakeKeyPressed += key => _snake?.OnKey(key);
+            _winKeys.SnakeReleased += () => _snake?.Release();
         }
         catch (Exception e)
         {
@@ -234,6 +248,51 @@ public partial class App : Application
     private void UpdateNotchCover() =>
         _notch?.SetCovered(_launcher?.IsOpen == true || _panel?.IsOpen == true);
 
+    private void StartWidgets()
+    {
+        var dock = _controller;
+        if (dock is null || _timer is null) return;
+        var widgets = new Widgets.DesktopWidgets(() => dock.Settings, dock.UpdateSettings, (p, save) => CreateWidget(p, save, dock));
+        _widgets = widgets;
+        _widgets.EditingChanged += editing =>
+        {
+            if (_winKeys is not null) _winKeys.EscapeWanted = editing; // Esc ends edit mode
+            if (editing) _snake?.Release();                            // the snake never keeps the keys while editing
+        };
+        if (_fullscreen is not null)
+        {
+            _fullscreen.Changed += fs => _widgets?.SetFullscreen(fs);
+            if (_fullscreen.IsFullscreen) widgets.SetFullscreen(true);
+        }
+        widgets.Start();
+    }
+
+    // One widget object per desktop instance (Plan 5b); a removed instance's object is disposed by DesktopWidgets.
+    private Widgets.IDesktopWidget? CreateWidget(Core.Widgets.WidgetPlacement p, Action<Core.Widgets.WidgetConfig> save, Dock.DockController dock)
+    {
+        switch (p.Kind)
+        {
+            case Core.Widgets.WidgetKind.Clock: return new Widgets.ClockWidget();
+            case Core.Widgets.WidgetKind.Timer: return _timer is null ? null : new Widgets.TimerWidget(_timer);
+            case Core.Widgets.WidgetKind.Calendar: return new Widgets.CalendarWidget();
+            case Core.Widgets.WidgetKind.Snake:
+                return _snake = new Widgets.SnakeWidget(_snakeGate, dock.Settings.SnakeBest,
+                    best => dock.UpdateSettings(s => s with { SnakeBest = Math.Max(s.SnakeBest, best) }));
+            case Core.Widgets.WidgetKind.Weather: return _weather is null ? null : new Widgets.WeatherWidget(_weather);
+            case Core.Widgets.WidgetKind.Media: return _media is null ? null : new Widgets.MediaWidget(_media);
+            case Core.Widgets.WidgetKind.Battery:
+                // The Bluetooth watcher runs only while a battery widget is on the desktop (the widget owns it).
+                return _tray is null ? null : new Widgets.BatteryWidget(new Widgets.DeviceBatteryService(_tray), ownsSource: true);
+            case Core.Widgets.WidgetKind.Photo:
+                return new Widgets.PhotoFrameWidget(p.Id, p.Config, new Widgets.PhotoStore(Path.Combine(DataDir, "frames")), save);
+            case Core.Widgets.WidgetKind.Folder:
+                if (_index is not { } index) return null;
+                _folderIcons ??= new Dock.AppIconCache();
+                return new Widgets.FolderWidget(p.Id, p.Config, () => index.Apps, index.FindApp, _folderIcons, save);
+            default: return null;
+        }
+    }
+
     // Settings window (spec §6.7): the dock controller is the one settings writer.
     private void ShowSettings()
     {
@@ -245,7 +304,14 @@ public partial class App : Application
                 dock.UpdateSettings(s => s with { Weather = place });
                 _weather?.Start(place);
             },
-            () => Shutdown());
+            () => Shutdown(),
+            new Settings.SettingsWindow.WidgetOptions(
+                scale => { if (_widgets is null) dock.UpdateSettings(s => s with { WidgetScale = scale }); else _widgets.SetScale(scale); },
+                Path.Combine(AppContext.BaseDirectory, "Wallpapers"),
+                () => _widgets?.BeginEdit(),
+                Path.Combine(DataDir, "wallpapers")),
+            new Settings.SettingsWindow.DockEffects(
+                on => { dock.UpdateSettings(s => s with { WindowPreviews = on }); dock.PreviewsEnabled = on; }));
     }
 
     // Source app of a media session (AUMID or exe) as a short name for the media tile: the launcher index, else the
@@ -301,6 +367,8 @@ public partial class App : Application
         _dock.PlacementChanged += _reveal.Refresh;
 
         _controller = new DockController(_dock, vm, _reveal, store, settings, _appBar!, Shutdown, id => _index?.FindApp(id)?.Name);
+        // Plan 7: dock window previews (switchable in Settings). Minimizing uses Windows' own animation (user, 2026-11-21).
+        _controller.PreviewsEnabled = _controller.Settings.WindowPreviews;
         _controller.Start();
 
         _fullscreen = new FullscreenMonitor();
@@ -346,6 +414,7 @@ public partial class App : Application
             _clips?.Dispose();
             _awake.Dispose(); // keep awake never outlives the shell
             _weather?.Dispose();
+            _widgets?.Dispose();
             _controller?.Dispose();
             _tray?.Dispose();
             _mouse?.Dispose();

@@ -26,4 +26,8 @@
     <Geometry x:Key="Icon.cloudsun">M 8 3 v 1.5 M 3 8 h 1.5 M 4.5 4.5 l 1 1 M 11.5 4.5 l -1 1 M 5.2 10.5 A 3 3 0 0 1 10.6 7 M 9 20 h 9 a 3.5 3.5 0 0 0 0 -7 5 5 0 0 0 -9.6 1.3 A 2.9 2.9 0 0 0 9 20 z</Geometry>
     <Geometry x:Key="Icon.music">M 9 18 V 6 l 10 -2 v 12 M 5 18 A 2 2 0 1 0 9 18 A 2 2 0 1 0 5 18 Z M 15 16 A 2 2 0 1 0 19 16 A 2 2 0 1 0 15 16 Z</Geometry>
     <Geometry x:Key="Icon.files">M 3 7 h 6 l 2 2 h 10 v 10 H 3 z</Geometry>
+    <Geometry x:Key="Icon.laptop">M 5.5 6 H 18.5 A 1.5 1.5 0 0 1 20 7.5 V 14.5 A 1.5 1.5 0 0 1 18.5 16 H 5.5 A 1.5 1.5 0 0 1 4 14.5 V 7.5 A 1.5 1.5 0 0 1 5.5 6 Z M 2 19 h 20</Geometry>
+    <Geometry x:Key="Icon.head">M 4 14 v -2 a 8 8 0 0 1 16 0 v 2 M 4.5 14 H 5.5 A 1.5 1.5 0 0 1 7 15.5 V 18.5 A 1.5 1.5 0 0 1 5.5 20 H 4.5 A 1.5 1.5 0 0 1 3 18.5 V 15.5 A 1.5 1.5 0 0 1 4.5 14 Z M 18.5 14 H 19.5 A 1.5 1.5 0 0 1 21 15.5 V 18.5 A 1.5 1.5 0 0 1 19.5 20 H 18.5 A 1.5 1.5 0 0 1 17 18.5 V 15.5 A 1.5 1.5 0 0 1 18.5 14 Z</Geometry>
+    <Geometry x:Key="Icon.mouse">M 12 3 H 12 A 5 5 0 0 1 17 8 V 16 A 5 5 0 0 1 12 21 H 12 A 5 5 0 0 1 7 16 V 8 A 5 5 0 0 1 12 3 Z M 12 7 v 3</Geometry>
+    <Geometry x:Key="Icon.speaker">M 8 3 H 16 A 2 2 0 0 1 18 5 V 19 A 2 2 0 0 1 16 21 H 8 A 2 2 0 0 1 6 19 V 5 A 2 2 0 0 1 8 3 Z M 9 14 A 3 3 0 1 0 15 14 A 3 3 0 1 0 9 14 Z M 11 7 A 1 1 0 1 0 13 7 A 1 1 0 1 0 11 7 Z</Geometry>
 </ResourceDictionary>

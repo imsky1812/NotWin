@@ -68,8 +68,29 @@ if (-not $SkipAdminSteps) {
 }
 
 # 3. Publish
+# A copy started straight from the build output (for example by double-clicking it) locks $outApp: stop it first.
+$fromOut = @(Get-Process -Name 'NothingShell', 'NothingShell.Watchdog' -ErrorAction SilentlyContinue |
+    Where-Object { $_.Path -and $_.Path.StartsWith([IO.Path]::GetFullPath($outApp), [StringComparison]::OrdinalIgnoreCase) })
+if ($fromOut.Count -gt 0) {
+    Write-Host "Stopping $($fromOut.Count) process(es) running from $outApp"
+    $fromOut | Stop-Process -Force
+    Start-Sleep -Milliseconds 500
+}
 if (Test-Path $outApp) { Remove-Item $outApp -Recurse -Force }
+# The shelf's drag helper runs at normal level (no uiAccess), so drags reach normal apps. Published first: if the two
+# share a file (NothingShell.Core.dll, same source), the shell's own publish below is the copy that stays.
+Invoke-Native $dotnet @('publish', (Join-Path $repo 'src/NothingShell.DragHelper'), '-c', 'Release', '-o', $outApp)
+# A plain Release build (no UiAccess) leaves obj/bin output with the normal manifest that publish would reuse, and the
+# shell then starts without uiAccess (2026-11-20). Always publish from clean Release output, then check the manifest.
+foreach ($stale in 'src/NothingShell/obj/Release', 'src/NothingShell/bin/Release') {
+    $path = Join-Path $repo $stale
+    if (Test-Path $path) { Remove-Item $path -Recurse -Force }
+}
 Invoke-Native $dotnet @('publish', (Join-Path $repo 'src/NothingShell'), '-c', 'Release', '-p:UiAccess=true', '-o', $outApp)
+$builtExe = Join-Path $outApp 'NothingShell.exe'
+if (-not ([IO.File]::ReadAllText($builtExe, [Text.Encoding]::UTF8) -match 'uiAccess="true"')) {
+    throw "NothingShell.exe was built without uiAccess=""true"" in its manifest; not installing it."
+}
 try {
     Invoke-Native $dotnet @('publish', (Join-Path $repo 'src/NothingShell.Watchdog'), '-c', 'Release', '-o', $outApp)
 } catch {
@@ -121,6 +142,10 @@ if ((-not $watchdogWasRunning) -or (Get-Process -Name 'NothingShell.Watchdog' -E
 Start-Sleep -Milliseconds 500
 
 # 6. Mirror to Program Files
+# The four Nothing wallpapers (spec §5) and their previews, for the Settings wallpaper picker (Plan 5).
+$wallOut = Join-Path $outApp 'Wallpapers'
+New-Item -ItemType Directory -Force -Path $wallOut | Out-Null
+Copy-Item (Join-Path $repo 'wallpapers/*.png'), (Join-Path $repo 'wallpapers/*_preview.jpg') $wallOut -Force
 robocopy $outApp $install /MIR /NFL /NDL /NJH /NJS /NP | Out-Null
 if ($LASTEXITCODE -ge 8) { throw "robocopy failed (exit $LASTEXITCODE)" }
 $global:LASTEXITCODE = 0

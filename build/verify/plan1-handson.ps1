@@ -12,13 +12,13 @@
 param(
     # Run only these sections. Default (no -Only): reinstall + Dock, Apps, Tray, Reserve, Startup.
     # Example: -Only KeySpike,Notify
-    [ValidateSet('Task8', 'KeySpike', 'Overflow', 'Desktop', 'Notify', 'Dock', 'Apps', 'Tray', 'Reserve', 'Launcher', 'Notch', 'Panel', 'Dash', 'Startup')]
+    [ValidateSet('Task8', 'KeySpike', 'Overflow', 'Desktop', 'Notify', 'Dock', 'Apps', 'Tray', 'Reserve', 'Launcher', 'Notch', 'Panel', 'Dash', 'Widgets', 'Startup')]
     [string[]]$Only,
     # With -Only the reinstall step is skipped unless -Reinstall is given.
     [switch]$Reinstall
 )
 $ErrorActionPreference = 'Stop'
-$Sections = if ($Only) { @($Only) } else { @('Dash', 'Notch', 'Panel', 'Launcher', 'Dock', 'Reserve', 'Startup') }
+$Sections = if ($Only) { @($Only) } else { @('Widgets', 'Dash', 'Notch', 'Panel', 'Launcher', 'Dock', 'Reserve', 'Startup') }
 
 # =====================================================================================
 # HELPERS (everything above the "END HELPERS" marker is safe to dot-source for testing)
@@ -723,7 +723,7 @@ try {
     Write-Good 'Install done.'
     } else {
         Write-Info 'Skipping the reinstall (use -Reinstall to force it).'
-        if ((Test-Section 'Task8') -or (Test-Section 'Overflow') -or (Test-Section 'Dock') -or (Test-Section 'Apps') -or (Test-Section 'Tray') -or (Test-Section 'Reserve') -or (Test-Section 'Launcher') -or (Test-Section 'Notch') -or (Test-Section 'Panel') -or (Test-Section 'Dash') -or (Test-Section 'Startup')) {
+        if ((Test-Section 'Task8') -or (Test-Section 'Overflow') -or (Test-Section 'Dock') -or (Test-Section 'Apps') -or (Test-Section 'Tray') -or (Test-Section 'Reserve') -or (Test-Section 'Launcher') -or (Test-Section 'Notch') -or (Test-Section 'Panel') -or (Test-Section 'Dash') -or (Test-Section 'Widgets') -or (Test-Section 'Startup')) {
             if (-not (Test-Path $AppExe) -or -not (Test-Path $Watchdog)) { throw 'The app is not installed. Run again with -Reinstall.' }
         }
     }
@@ -744,7 +744,7 @@ try {
     Write-Step 'STEP 1: close Fenn'
     $fenn = @(Get-Process -Name 'fenn' -ErrorAction SilentlyContinue)
     $fennSkipped = $false
-    $needFennGone = (Test-Section 'Task8') -or (Test-Section 'Overflow') -or (Test-Section 'Dock') -or (Test-Section 'Apps') -or (Test-Section 'Tray') -or (Test-Section 'Reserve') -or (Test-Section 'Launcher') -or (Test-Section 'Notch') -or (Test-Section 'Panel') -or (Test-Section 'Dash')
+    $needFennGone = (Test-Section 'Task8') -or (Test-Section 'Overflow') -or (Test-Section 'Dock') -or (Test-Section 'Apps') -or (Test-Section 'Tray') -or (Test-Section 'Reserve') -or (Test-Section 'Launcher') -or (Test-Section 'Notch') -or (Test-Section 'Panel') -or (Test-Section 'Dash') -or (Test-Section 'Widgets')
     if ($fenn.Count -gt 0 -and $needFennGone) {
         Write-Do 'Please quit Fenn now: find its icon in the tray (bottom right), right-click it and choose Quit.'
         Write-Info 'I will wait until it is gone.  (Press S here to continue anyway - results may then be wrong.)'
@@ -1645,6 +1645,82 @@ try {
         Complete-Quit 'ND.quit' $app 'dash section (--quit)'
     }
 
+    if (Test-Section 'Widgets') {
+        Write-Step 'WIDGETS: desktop widgets, snake, edit mode, settings size / wallpaper, full screen'
+        $logOff = Get-LogLength $AppLog
+        $app = Start-App
+        [void](Wait-Until { (Get-LogSince $AppLog $logOff) -match 'dock ready' } 15000 250)
+
+        [void](Ask-Check 'DW.1' 'Seven widgets on the desktop, under app windows' 'Look at the desktop (minimise windows if needed), then open any app window over a widget.' `
+            'Are clock, snake, timer, calendar, weather, media and battery all on the desktop, and does an app window cover them?')
+        [void](Ask-Check 'DW.2' 'Win+D: widgets stay visible and clickable' 'Press Win+D. Click the Timer widget to start it, click it again to pause.' `
+            'After Win+D were the widgets still there, and did the timer start and pause on click?')
+
+        if ((Ask-YN 'DW.3 restarts Explorer (the screen flickers for a few seconds). Restart Explorer now?') -eq 'y') {
+            $o = Get-LogLength $AppLog
+            Stop-Process -Name explorer -Force
+            $ms = Wait-Until { (Get-LogSince $AppLog $o) -match 'widgets reattached in \d+ ms' } 10000 100
+            if (@(Get-Process -Name explorer -ErrorAction SilentlyContinue).Count -eq 0) { Ensure-Explorer }
+            $l = Get-LogSince $AppLog $o
+            $n = if ($l -match 'widgets reattached in (\d+) ms') { [int]$Matches[1] } else { -1 }
+            [void](Complete-Check -Id 'DW.3' -Description 'Explorer restart: widgets back within 2 s' `
+                -Measured @{ reattachedMs = $n; waitedMs = $ms } -MeasuredPass ($n -ge 0 -and $n -le 2000))
+            [void](Ensure-TaskbarBack 'after DW.3')
+        }
+        else { [void](Complete-Check -Id 'DW.3' -Description 'Explorer restart: widgets back within 2 s' -Answer 's' -Expect 'y' -AnswerRequired $false -Notes 'skipped by the user') }
+
+        [void](Ask-Check 'DW.4' 'No widget in Alt+Tab' 'Hold Alt and press Tab a few times.' 'Is Alt+Tab free of any widget (or empty desktop-looking) entry?')
+        [void](Ask-Check 'DW.5' 'Clock legible on every wallpaper' 'Right-click the notch > Settings > Wallpaper: click each of the four in turn and look at the clock.' `
+            'Was the clock legible on all four (dark dots on light, light dots on dark)? (Pick the one you want to keep last.)')
+
+        [void](Ask-Check 'DW.6' 'Snake' 'Click the snake board, play with arrows / WASD, press Space to pause and again to resume. Then click another window and press the arrow keys there. Note your best score.' `
+            'Did the snake play and pause, did clicking elsewhere pause it, and did the arrows work normally in the other window?')
+        [void](Ask-Check 'DW.7' 'Timer widget = notch timer' 'Set 01:00 on the Timer widget (- / +) and start it. Hover the notch and look at the Timer tile. Wait until it ends.' `
+            'Did the notch tile show the same countdown, and did the widget flash at zero?')
+        [void](Ask-Check 'DW.8' 'Weather and Media match the notch' 'Play music. Compare the Weather and Media widgets with the notch tiles.' `
+            'Do they match (temperature, track, progress), and do the media buttons work?')
+        [void](Ask-Check 'DW.9' 'Battery' 'Look at the Battery widget; connect Bluetooth buds if you have them; use the dots or the wheel.' `
+            'Does it show the laptop (and the buds when connected), and did connecting jump to the new device?')
+
+        $o = Get-LogLength $AppLog
+        [void](Ask-Check 'DW.10' 'Edit mode' 'Right-click a widget > Edit widgets. Drag one onto another (it should turn red and slide back), drag one to a free spot, click a size chip, then click Done.' `
+            'Did the dot grid show, did dragging snap, did the overlap show red and refuse, did the chip resize, and did Done end it?' `
+            -Measured @{ editOn = ((Get-LogSince $AppLog $o) -match 'widget edit mode on'); editOff = ((Get-LogSince $AppLog $o) -match 'widget edit mode off') })
+        [void](Ask-Check 'DW.13' 'Add and remove widgets' 'In edit mode click + Add: add a Photo frame and an App folder. Click the x on one widget to remove it, then open + Add again.' `
+            'Were the frame and folder placed on free spots, did x remove the widget, and does + Add now list the removed one again (and never a one-off widget that is still on the desktop)?')
+        [void](Ask-Check 'DW.14' 'Photo frame' 'Click Done. Click the empty frame and pick a few photos. In edit mode click its shape chip (square / circle). Wait a minute. Click the frame: remove one photo with x, add one with +.' `
+            'Did the photos appear inside the card, did the shape switch, did the slideshow change after a minute, and did removing / adding work?')
+        [void](Ask-Check 'DW.15' 'App folder' 'In edit mode click the folder once (its picture changes). Click Done. Click the folder: + adds apps (search one), click an icon to open it, right-click an icon > Remove from folder.' `
+            'Did the picture change, did the popup show the apps with +, did an icon open its app, and did Remove from folder work?')
+        [void](Ask-Check 'DW.11' 'Settings: widget size S / M / L' 'Settings > Widgets: click S, then L, then M.' 'Did the widgets resize live each time?')
+
+        Write-Do 'FULL SCREEN: open a YouTube video full screen (f) for a few seconds, then leave full screen.'
+        Wait-Enter 'Press Enter after leaving full screen'
+        [void](Ask-Check 'DW.12' 'Full screen: no widget over the video' '' 'In full screen, was nothing of the widgets visible over the video?')
+
+        [void](Quit-App $app)
+        $logOff = Get-LogLength $AppLog
+        $app = Start-App
+        [void](Wait-Until { (Get-LogSince $AppLog $logOff) -match 'dock ready' } 15000 250)
+        [void](Ask-Check 'DW.R' 'Saved across a restart' 'Nothing Shell was just restarted. Look at the desktop.' `
+            'Are the widget positions and sizes, the widget scale, the wallpaper and the snake best score all still there?')
+        [void](Ask-Check 'DW.16' 'Frames, folders and removals survive a restart' 'Look at the photo frames, app folders and the widget you removed.' `
+            'Do frames keep their photos and shape, folders their picture and apps, and does the removed widget stay removed?')
+        Complete-Quit 'DW.quit' $app 'widgets section (--quit)'
+    }
+
+    if (Test-Section 'Widgets') {
+        Write-Step 'DOCK PREVIEWS (Plan 7): window previews'
+        $logOff = Get-LogLength $AppLog
+        $app = Start-App
+        [void](Wait-Until { (Get-LogSince $AppLog $logOff) -match 'dock ready' } 15000 250)
+        [void](Ask-Check 'DD.5' 'Window previews' 'Rest the mouse on a running app with 2+ windows (e.g. two File Explorer windows), click a preview, then reopen it and press a preview''s x.' `
+            'Did live previews with titles appear, did clicking switch to that window, and did x close it?')
+        [void](Ask-Check 'DD.6' 'Previews switch off' 'Settings > Shell: turn off "Window previews in the dock", hover a running app, then turn it back on.' `
+            'With it off, did hovering show just the name?')
+        Complete-Quit 'DD.quit' $app 'dock effects section (--quit)'
+    }
+
     # ================================================================ STARTUP (task 16)
     if (Test-Section 'Startup') {
         Write-Step 'STARTUP: Fenn guard, single instance, start with Windows'
@@ -1702,7 +1778,7 @@ try {
     }
 
     # ================================================================ LAST QUESTION
-    if ((Test-Section 'Dock') -or (Test-Section 'Apps') -or (Test-Section 'Tray') -or (Test-Section 'Reserve') -or (Test-Section 'Launcher') -or (Test-Section 'Notch') -or (Test-Section 'Panel') -or (Test-Section 'Dash') -or (Test-Section 'Startup')) {
+    if ((Test-Section 'Dock') -or (Test-Section 'Apps') -or (Test-Section 'Tray') -or (Test-Section 'Reserve') -or (Test-Section 'Launcher') -or (Test-Section 'Notch') -or (Test-Section 'Panel') -or (Test-Section 'Dash') -or (Test-Section 'Widgets') -or (Test-Section 'Startup')) {
         Write-Step 'LAST QUESTION'
         Write-Host '  Keep Nothing Shell as your taskbar from now on?' -ForegroundColor Cyan
         Write-Host '    y = Nothing Shell starts at sign-in and keeps running (Fenn must stay closed)'

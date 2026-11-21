@@ -23,6 +23,12 @@ public sealed class DockItemViewModel : INotifyPropertyChanged
     public string AppId => _item.AppId;
     public string DisplayName => _item.DisplayName;
     public bool Running => _item.Running;
+
+    /// <summary>The name tooltip: only for apps with no windows (running ones show window previews instead, Plan 7).</summary>
+    public bool ShowTooltip => !_item.Running || !PreviewsEnabled;
+
+    /// <summary>The "Window previews in the dock" switch, set by the dock controller.</summary>
+    public static bool PreviewsEnabled { get; set; } = true;
     public bool Focused => _item.Focused;
     public ImageSource Icon => _icon;
 
@@ -30,7 +36,7 @@ public sealed class DockItemViewModel : INotifyPropertyChanged
     {
         _item = item;
         if (!ReferenceEquals(_icon, icon)) { _icon = icon; Raise(nameof(Icon)); }
-        Raise(nameof(Item)); Raise(nameof(DisplayName)); Raise(nameof(Running)); Raise(nameof(Focused));
+        Raise(nameof(Item)); Raise(nameof(DisplayName)); Raise(nameof(Running)); Raise(nameof(Focused)); Raise(nameof(ShowTooltip));
     }
 
     private void Raise([CallerMemberName] string? n = null) =>

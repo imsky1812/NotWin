@@ -88,3 +88,19 @@ brightness, notifications). No music was playing, so the notch was resting (equa
   media / notification / radio objects and the Bluetooth watcher.
 - The 63 ms of CPU in the window is the notch clock and tray minute tick plus listener and radio callbacks; there is
   no polling. The equalizer (Plan 3 minor M1) only runs while music plays and was not measured here.
+
+## Phase 5: desktop widgets (2026-11-19)
+
+**Not measured yet.** The budget needs the Plan 5 build installed (admin) and a session with the widgets in use (a
+snake game, a timer run, media playing), then 10 minutes idle with no music, sampled with the Plan 1 method. It is
+step 2 of the Plan 5 hands-on (`build/verify/plan1-handson.ps1 -Only Widgets`, then the budget sample). Pass: under
+100 MB total working set and CPU under 0.5 %.
+
+### What to expect
+- Seven small per-pixel-transparent child windows of the desktop (each only as large as its widget) plus, in edit
+  mode only, one backdrop window; nothing renders while idle except the clock (one redraw a minute), the battery
+  ring when the level changes and, while one runs, the timer.
+- The snake's 120 ms tick runs only while a game is being played; its foreground hook and click watch exist only
+  while it has the keys.
+- The Bluetooth battery watcher is event-driven; levels are re-read every 2 minutes only while a device is
+  connected.
