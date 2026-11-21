@@ -25,7 +25,14 @@ public sealed class ShelfTile : ITileView, IFileDropTarget
     private TileSize _size;
     private Border? _tile;
     private Point _down;
-    private bool _dragged, _prestarted;
+    private bool _dragged;
+
+    private static bool IsWithin(DependencyObject? d, DependencyObject ancestor)
+    {
+        for (; d is not null; d = d is Visual or System.Windows.Media.Media3D.Visual3D ? VisualTreeHelper.GetParent(d) : LogicalTreeHelper.GetParent(d))
+            if (ReferenceEquals(d, ancestor)) return true;
+        return false;
+    }
 
     public ShelfTile(ShelfStore store, AppIconCache icons)
     {
@@ -119,18 +126,26 @@ public sealed class ShelfTile : ITileView, IFileDropTarget
         };
         chip.MouseEnter += (_, _) => x.Visibility = Visibility.Visible;
         chip.MouseLeave += (_, _) => x.Visibility = Visibility.Hidden;
+        var pressedHere = false;
+        long token = 0;
         chip.PreviewMouseLeftButtonDown += (_, e) =>
         {
             _down = e.GetPosition(chip);
             _dragged = false;
-            // The helper starts now, on the press, and waits: by the time the press becomes a drag it is ready (a
-            // quick flick no longer ends before it starts). A click lets it go again without doing anything.
-            _prestarted = ShelfDragHandoff.Prestart([path], chip);
+            pressedHere = true;
+            token = 0;
+            if (IsWithin(e.OriginalSource as DependencyObject, x)) return; // ✕ removes, never drags
+            // The helper starts now, on the press, and waits for this press's token: by the time the press becomes a
+            // drag it is ready (a quick flick no longer ends before it starts). A click lets it go without doing anything.
+            token = ShelfDragHandoff.Prestart([path], chip);
         };
+        chip.MouseLeave += (_, e) => { if (e.LeftButton != MouseButtonState.Pressed) pressedHere = false; };
         // A click (no drag) copies the file itself: Ctrl+V then pastes it into WhatsApp, a chat, a mail or a folder.
         chip.MouseLeftButtonUp += (_, e) =>
         {
-            if (_dragged) return;
+            var wasHere = pressedHere;
+            pressedHere = false;
+            if (_dragged || !wasHere) return;
             e.Handled = true;
             if (!ShelfClipboard.Copy([path])) return;
             name.Text = "Copied ✓";
@@ -141,12 +156,13 @@ public sealed class ShelfTile : ITileView, IFileDropTarget
         chip.MouseMove += (_, e) =>
         {
             if (_dragged || e.LeftButton != MouseButtonState.Pressed) return; // one drag per press
+            if (!pressedHere) return; // a press that began somewhere else, never a drag of this chip
             var d = e.GetPosition(chip) - _down;
             if (Math.Abs(d.X) < SystemParameters.MinimumHorizontalDragDistance && Math.Abs(d.Y) < SystemParameters.MinimumVerticalDragDistance) return;
             _dragged = true;
             // The shell runs raised and Windows refuses its drags into normal apps, so a helper at normal level takes
             // the drag over (drops into WhatsApp, browser upload boxes, Explorer). Only without it (dev build): in-process.
-            if (_prestarted) { ShelfDragHandoff.Go(chip); return; }
+            if (token != 0) { ShelfDragHandoff.Go(chip, token); return; }
             if (ShelfDragHandoff.Start([path], chip)) return;
             // Drag the reference out (Explorer copies on drop); the shelf keeps holding it.
             var data = new DataObject(DataFormats.FileDrop, new[] { path });
@@ -212,27 +228,36 @@ public static class ShelfClipboard
 public static class ShelfDragHandoff
 {
     /// <summary>
-    /// Plan 8: starts the helper on the press, told to wait on the notch window (see <see cref="Go"/>). False when there
-    /// is no helper or it did not start; the drag then starts the helper as before.
+    /// Plan 8: starts the helper on the press, told to wait on the notch window for this press's token (see
+    /// <see cref="Go"/>). The token, or 0 when there is no helper or it did not start (the drag then starts the helper
+    /// as before).
     /// </summary>
-    public static bool Prestart(IReadOnlyList<string> paths, UIElement from, string? helper = null)
+    public static long Prestart(IReadOnlyList<string> paths, UIElement from, string? helper = null)
     {
         helper ??= DefaultHelper;
         var hwnd = NotchHandle(from);
-        if (!File.Exists(helper) || hwnd == 0) return false;
+        if (!File.Exists(helper) || hwnd == 0) return 0;
+        var token = System.Security.Cryptography.RandomNumberGenerator.GetInt32(1, int.MaxValue);
         AllowSetForegroundWindow(-1 /* ASFW_ANY */);
-        return NothingShell.Native.UnelevatedShell.Open(helper, NothingShell.Core.DragArgs.CommandLine(paths, hwnd), Path.GetDirectoryName(helper),
-            (what, e) => Log.Error(what, e));
+        var ok = NothingShell.Native.UnelevatedShell.Open(helper, NothingShell.Core.DragArgs.CommandLine(paths, hwnd, token),
+            Path.GetDirectoryName(helper), (what, e) => Log.Error(what, e));
+        return ok ? token : 0;
     }
 
-    /// <summary>The press became a drag: the notch lets clicks through, which tells the waiting helper to take over.</summary>
-    public static void Go(UIElement from)
+    /// <summary>
+    /// The press became a drag: this press's token goes on the notch (the waiting helper's signal) and the notch lets
+    /// clicks through so the helper's re-sent press reaches its grip.
+    /// </summary>
+    public static void Go(UIElement from, long token)
     {
         from.ReleaseMouseCapture();
         Mouse.Capture(null);
         AllowSetForegroundWindow(-1 /* ASFW_ANY */); // again: moving the mouse since the press may have used it up
+        var window = Window.GetWindow(from);
         var hwnd = NotchHandle(from);
-        if (hwnd != 0) HoldClickThrough(hwnd);
+        if (hwnd == 0 || window is null) return;
+        SetProp(hwnd, NothingShell.Core.DragGate.Property, (nint)token);
+        HoldClickThrough(window, hwnd, token);
         Log.Info("shelf: drag handed to the waiting helper");
     }
 
@@ -258,20 +283,28 @@ public static class ShelfDragHandoff
         var ok = NothingShell.Native.UnelevatedShell.Open(helper, NothingShell.Core.DragArgs.CommandLine(paths), Path.GetDirectoryName(helper),
             (what, e) => Log.Error(what, e));
         Log.Info($"shelf: drag of {paths.Count} handed to the helper ok={ok}");
-        if (ok && hwnd != 0) HoldClickThrough(hwnd);
+        if (ok && hwnd != 0 && window is not null) HoldClickThrough(window, hwnd, 0);
         return ok;
     }
 
-    private const int ExTransparent = 0x20, ExLayered = 0x80000, VkLButton = 0x01, VkRButton = 0x02, SmSwapButton = 23;
+    private const int VkLButton = 0x01, VkRButton = 0x02, SmSwapButton = 23;
+
+    [System.Runtime.InteropServices.DllImport("user32.dll", EntryPoint = "SetPropW", CharSet = System.Runtime.InteropServices.CharSet.Unicode)]
+    private static extern bool SetProp(nint hwnd, string name, nint data);
+
+    [System.Runtime.InteropServices.DllImport("user32.dll", EntryPoint = "GetPropW", CharSet = System.Runtime.InteropServices.CharSet.Unicode)]
+    private static extern nint GetProp(nint hwnd, string name);
+
+    [System.Runtime.InteropServices.DllImport("user32.dll", EntryPoint = "RemovePropW", CharSet = System.Runtime.InteropServices.CharSet.Unicode)]
+    private static extern nint RemoveProp(nint hwnd, string name);
 
     // The notch lets clicks through until the drag is over (NothingShell.Core.Shelving.DragHandoffHold says why): the
-    // helper's grip is under it and must take the re-sent press. Only a style this added is taken off again.
-    private static void HoldClickThrough(nint hwnd)
+    // helper's grip is under it and must take the re-sent press. The notch's own hold keeps its state's click-through
+    // right afterwards; the press's token is taken off the window again.
+    private static void HoldClickThrough(Window window, nint hwnd, long token)
     {
-        var before = NothingShell.Native.DockWindowNative.GetExStyle(hwnd);
-        if ((before & ExTransparent) != 0) return; // already click-through: nothing to hold or restore
-        NothingShell.Native.DockWindowNative.AddExStyle(hwnd, ExTransparent | ExLayered);
-        var addedLayered = (before & ExLayered) == 0;
+        if (window is not NothingShell.Notch.NotchWindow notch) return;
+        notch.HoldClickThrough(true);
         var clock = System.Diagnostics.Stopwatch.StartNew();
         var released = 0;
         var poll = new System.Windows.Threading.DispatcherTimer { Interval = NothingShell.Core.Shelving.DragHandoffHold.Poll };
@@ -280,8 +313,9 @@ public static class ShelfDragHandoff
             released = PrimaryButtonDown() ? 0 : released + 1;
             if (!NothingShell.Core.Shelving.DragHandoffHold.ShouldRestore(clock.Elapsed, released)) return;
             poll.Stop();
-            NothingShell.Native.DockWindowNative.RemoveExStyle(hwnd, ExTransparent | (addedLayered ? ExLayered : 0));
-            Log.Info($"shelf: notch clickable again after {clock.ElapsedMilliseconds} ms");
+            if (token != 0 && (long)GetProp(hwnd, NothingShell.Core.DragGate.Property) == token) RemoveProp(hwnd, NothingShell.Core.DragGate.Property);
+            notch.HoldClickThrough(false);
+            Log.Info($"shelf: notch hold released after {clock.ElapsedMilliseconds} ms");
         };
         poll.Start();
     }
