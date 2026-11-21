@@ -1736,7 +1736,7 @@ try {
         [void](Ask-Check 'P9.4' 'Folder pictures' 'In edit mode, click an app folder a few times.' `
             'Did the new pictures (rocket, heart, moon, sun, code, book, bolt, ghost) come round?')
         [void](Ask-Check 'P9.5' 'Sync' 'Settings > Sync > Choose folder… and pick an empty test folder. Then open "<that folder>\Nothing Shell sync".' `
-            'Does it hold settings.json, notes.txt (and alarms.json once you made one), and does Settings say SYNCED hh:mm?')
+            'Does it hold settings.json, notes.txt (and alarms.json once you made one), and does Settings say SAVED TO THE FOLDER hh:mm (· ONEDRIVE UPLOADS IT for a OneDrive folder)?')
         $p9Log = Get-LogSince $AppLog $logOff
         if ($p9Log -match 'sync: \d+ pulled, \d+ pushed') { Write-Good 'log shows a sync (counts only)' } else { Write-Bad 'no "sync: ..." line in the log' }
         [void](Ask-Check 'P9.6' 'Sync off' 'Settings > Sync > Turn off.' 'Does Settings show the "Choose folder…" text again?')

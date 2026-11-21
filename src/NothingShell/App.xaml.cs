@@ -379,7 +379,7 @@ public partial class App : Application
         Sync.SyncOutcome outcome;
         try { outcome = _sync.RunOnce(); }
         catch (Exception e) { Log.Error("sync failed", e); _syncStatus = "SYNC FAILED"; return; }
-        _syncStatus = outcome.Reached ? $"SYNCED {DateTime.Now:HH:mm}" : "CAN'T REACH THE FOLDER";
+        _syncStatus = Sync.SyncStatus.Text(dock.Settings.SyncFolder, outcome.Reached, outcome.Reached ? DateTime.Now : null, Sync.SyncStatus.OneDriveRoots());
         if (outcome.Pulled.Contains("settings.json"))
         {
             var before = dock.Settings;
