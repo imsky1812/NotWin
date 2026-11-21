@@ -15,6 +15,12 @@ public static class DataMigration
     public static readonly IReadOnlySet<string> Skip =
         new HashSet<string>(["taskbar-restore.json", "log.txt", "log.1.txt", "draghelper.log"], StringComparer.OrdinalIgnoreCase);
 
+    /// <summary>The folder holds data (a file other than the skipped logs / state), so nothing is carried over.</summary>
+    public static bool HasData(string dir) =>
+        Directory.Exists(dir) && Directory.EnumerateFiles(dir, "*", SearchOption.AllDirectories)
+            .Select(f => Path.GetRelativePath(dir, f))
+            .Any(rel => rel.Contains(Path.DirectorySeparatorChar) || !Skip.Contains(rel));
+
     /// <summary>Copy only when the old folder exists and the new one holds no files yet.</summary>
     public static MigrationStep Plan(bool oldExists, bool newHasFiles) =>
         oldExists && !newHasFiles ? MigrationStep.Copy : MigrationStep.None;

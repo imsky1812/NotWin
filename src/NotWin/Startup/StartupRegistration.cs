@@ -34,6 +34,18 @@ public static class StartupRegistration
             Log.Info("start-with-windows: not the installed copy - Run entry left unchanged");
     }
 
+    /// <summary>
+    /// Removes the start-with-Windows value an install under the old name left behind (Plan 12), so the old program can
+    /// never start alongside NotWin. True when one was removed.
+    /// </summary>
+    public static bool RemoveLegacyRunValue()
+    {
+        using var key = Registry.CurrentUser.OpenSubKey(RunKey, writable: true);
+        if (key?.GetValue(LegacyNames.RunValue) is null) return false;
+        key.DeleteValue(LegacyNames.RunValue, throwOnMissingValue: false);
+        return true;
+    }
+
     public static bool IsEnabled()
     {
         using var key = Registry.CurrentUser.OpenSubKey(RunKey);

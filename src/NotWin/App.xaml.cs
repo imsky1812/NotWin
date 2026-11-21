@@ -70,6 +70,9 @@ public partial class App : Application
             Shutdown(0);
             return;
         }
+        // Plan 12: carry the data over from the old name once, before anything writes into the new folder.
+        MigrateFromNothingShell();
+
         // Diagnoses slow teardown: compare with the "exit" line in the log.
         AppDomain.CurrentDomain.ProcessExit += (_, _) => Log.Info("process exit");
 
@@ -522,6 +525,24 @@ public partial class App : Application
         if (_index?.FindApp(id) is { } app) return app.Name;
         var file = Path.GetFileName(id);
         return file.EndsWith(".exe", StringComparison.OrdinalIgnoreCase) ? Path.GetFileNameWithoutExtension(file) : "Media";
+    }
+
+    // Plan 12 (renamed to NotWin): %AppData%\NothingShell is copied into %AppData%\NotWin when the new folder has no
+    // data yet, and a leftover "NothingShell" start-with-Windows value is removed. Never fails start-up.
+    private static void MigrateFromNothingShell()
+    {
+        try
+        {
+            var old = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), NotWin.Startup.LegacyNames.DataFolder);
+            if (DataMigration.Plan(Directory.Exists(old), DataMigration.HasData(DataDir)) == MigrationStep.Copy)
+            {
+                var (copied, failed) = DataMigration.Run(old, DataDir);
+                Log.Info($"data migrated from the old folder (copied {copied}, failed {failed})");
+            }
+        }
+        catch (Exception e) { Log.Error("data migration failed", e); }
+        try { if (NotWin.Startup.StartupRegistration.RemoveLegacyRunValue()) Log.Info("removed the old start-with-Windows entry"); }
+        catch (Exception e) { Log.Error("removing the old start-with-Windows entry failed", e); }
     }
 
     private static void ApplyStartWithWindows(ShellSettings settings, bool loadedOk)

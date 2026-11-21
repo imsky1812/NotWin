@@ -76,4 +76,16 @@ public sealed class GoogleVaultTests : IDisposable
         Assert.Null(GoogleCalendarService.ResolveClient("id.apps", "", null));
         Assert.Null(GoogleCalendarService.ResolveClient("", "typed", saved));
     }
+
+    // Plan 12: the sign-in saved by Nothing Shell, copied into the NotWin folder, still decrypts (same DPAPI entropy).
+    [Fact]
+    public void Vault_ReadsAFileMigratedFromTheOldFolder()
+    {
+        var old = Path.Combine(_dir, "NothingShell");
+        var renamed = Path.Combine(_dir, "NotWin");
+        new GoogleVault(old).Save(new GoogleCredentials("id.apps", "secret", "refresh"));
+        Directory.CreateDirectory(renamed);
+        File.Copy(Path.Combine(old, "google.dat"), Path.Combine(renamed, "google.dat"));
+        Assert.Equal(new GoogleCredentials("id.apps", "secret", "refresh"), new GoogleVault(renamed).Load());
+    }
 }

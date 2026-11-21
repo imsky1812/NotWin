@@ -80,4 +80,15 @@ public sealed class DataMigrationTests : IDisposable
         Assert.Equal(1, copied);
         Assert.True(File.Exists(Path.Combine(New, @"sub\b.json")));
     }
+
+    // A log line written before the migration runs must not count as "the new folder already has data".
+    [Fact]
+    public void HasData_IgnoresLogsAndMissingFolder()
+    {
+        Assert.False(DataMigration.HasData(New));
+        Put(New, "log.txt");
+        Assert.False(DataMigration.HasData(New));
+        Put(New, "settings.json");
+        Assert.True(DataMigration.HasData(New));
+    }
 }
