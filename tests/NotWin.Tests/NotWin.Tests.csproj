@@ -21,6 +21,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\NotWin\NotWin.csproj" />
     <ProjectReference Include="..\..\src\NotWin.Core\NotWin.Core.csproj" />
+    <ProjectReference Include="..\..\src\NotWin.Setup\NotWin.Setup.csproj" />
   </ItemGroup>
 
 </Project>
