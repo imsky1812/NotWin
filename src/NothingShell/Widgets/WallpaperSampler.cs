@@ -7,12 +7,13 @@ namespace NothingShell.Widgets;
 
 /// <summary>
 /// Mean brightness of the wallpaper under a screen rectangle, so the clock can pick dark or light dots (spec §6.5).
-/// Decodes the wallpaper once at 256 px wide (cached per file) and maps the rectangle as Windows' "Fill" style does:
+/// Decodes the wallpaper once at 256 px wide (cached per file version: Windows rewrites its wallpaper file in place,
+/// so the path alone is not enough) and maps the rectangle as Windows' "Fill" style does:
 /// scaled to cover the monitor, centred.
 /// </summary>
 public static class WallpaperSampler
 {
-    private static string? s_path;
+    private static (string Path, DateTime Written, long Length)? s_key;
     private static byte[]? s_pixels;
     private static int s_w, s_h;
 
@@ -44,12 +45,20 @@ public static class WallpaperSampler
 
     private static bool Load(string path)
     {
-        if (s_path == path && s_pixels is not null) return true;
+        (string, DateTime, long) key;
+        try
+        {
+            var info = new FileInfo(path);
+            key = (path, info.LastWriteTimeUtc, info.Length);
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException) { return false; }
+        if (s_key == key && s_pixels is not null) return true;
         try
         {
             var img = new BitmapImage();
             img.BeginInit();
             img.CacheOption = BitmapCacheOption.OnLoad;
+            img.CreateOptions = BitmapCreateOptions.IgnoreImageCache; // WPF's own cache would hand back the old picture
             img.DecodePixelWidth = 256;
             img.UriSource = new Uri(path);
             img.EndInit();
@@ -58,13 +67,13 @@ public static class WallpaperSampler
             s_h = bgra.PixelHeight;
             s_pixels = new byte[s_w * s_h * 4];
             bgra.CopyPixels(s_pixels, s_w * 4, 0);
-            s_path = path;
+            s_key = key;
             return true;
         }
         catch (Exception e)
         {
             Log.Error("reading the wallpaper for the clock failed", e);
-            s_path = null;
+            s_key = null;
             s_pixels = null;
             return false;
         }
