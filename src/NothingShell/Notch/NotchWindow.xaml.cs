@@ -325,7 +325,7 @@ public partial class NotchWindow : Window
         };
         _pillW = w;
         _pillH = h;
-        SetClickThrough(state != NotchState.Open);
+        SetClickThrough(state != NotchState.Open || _clickThroughHolds > 0);
         if (state != NotchState.Open) EndTyping();
         OpenLayer.IsHitTestVisible = state == NotchState.Open;
         Animate(Pill, WidthProperty, w);
@@ -367,6 +367,19 @@ public partial class NotchWindow : Window
         var paths = FileDropNative.Read(wParam);
         if (paths.Length > 0) FilesDropped?.Invoke(paths);
         return 0;
+    }
+
+    private int _clickThroughHolds;
+
+    /// <summary>
+    /// Holds the notch click-through (true) or lets go of a hold (false) while the drag helper takes a shelf drag over;
+    /// with no hold left the notch is click-through exactly when its state says so (review, Plan 8: a blind restore
+    /// made the resting pill swallow clicks).
+    /// </summary>
+    public void HoldClickThrough(bool hold)
+    {
+        _clickThroughHolds = Math.Max(0, _clickThroughHolds + (hold ? 1 : -1));
+        SetClickThrough(_clickThroughHolds > 0 || _shown != NotchState.Open);
     }
 
     private void SetClickThrough(bool on)

@@ -36,7 +36,7 @@ public sealed class DesktopWidgets : IDisposable
     private WidgetHost? _backdrop;
     private Dock.DockPopup? _popup;
     private (string Id, PointI Cursor, RectI Start, EditChrome Chrome)? _drag;
-    private DispatcherTimer? _settle;
+    private readonly WidgetSlide _settle = new();
     private AddPicker? _picker;
     private bool _paused;
 
@@ -255,7 +255,7 @@ public sealed class DesktopWidgets : IDisposable
         if (!Editing) return;
         Editing = false;
         _drag = null;
-        _settle?.Stop();
+        _settle.Finish();
         ClosePicker();
         _backdrop?.Dispose();
         _backdrop = null;
@@ -348,7 +348,7 @@ public sealed class DesktopWidgets : IDisposable
     {
         var i = _layout.IndexOf(id);
         if (i < 0 || !_slots.TryGetValue(id, out var slot) || DockWindowNative.GetCursorPos() is not { } cursor) return;
-        _settle?.Stop();
+        _settle.Finish();
         _drag = (id, cursor, ScreenRect(_layout.Widgets[i]), chrome);
         slot.Host.Raise();
         chrome.Grab.CaptureMouse();
@@ -407,23 +407,8 @@ public sealed class DesktopWidgets : IDisposable
         if (i >= 0) d.Chrome.ShowOverlap(_layout.Overlaps(i));
     }
 
-    // 180 ms ease-out slide of the widget window between two screen rectangles.
-    private void Animate(WidgetHost host, RectI from, RectI to)
-    {
-        _settle?.Stop();
-        var clock = Stopwatch.StartNew();
-        var timer = new DispatcherTimer(DispatcherPriority.Render) { Interval = TimeSpan.FromMilliseconds(15) };
-        timer.Tick += (_, _) =>
-        {
-            var t = Math.Min(1, clock.Elapsed.TotalMilliseconds / 180);
-            var k = 1 - Math.Pow(1 - t, 3);
-            int L(int a, int b) => (int)Math.Round(a + (b - a) * k);
-            host.Place(new RectI(L(from.Left, to.Left), L(from.Top, to.Top), L(from.Right, to.Right), L(from.Bottom, to.Bottom)));
-            if (t >= 1) timer.Stop();
-        };
-        _settle = timer;
-        timer.Start();
-    }
+    // 180 ms ease-out slide of the widget window between two screen rectangles (a slide cut short ends at its spot).
+    private void Animate(WidgetHost host, RectI from, RectI to) => _settle.Start(host.Place, from, to);
 
     private void OnContext(MouseButtonEventArgs e)
     {
@@ -489,7 +474,7 @@ public sealed class DesktopWidgets : IDisposable
         _disposed = true;
         _reattach.Stop();
         _dpiDebounce.Stop();
-        _settle?.Stop();
+        _settle.Finish();
         _popup?.CloseIfOpen();
         ClosePicker();
         _backdrop?.Dispose();
