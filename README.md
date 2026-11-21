@@ -19,15 +19,25 @@ Personal use only.
 The dock needs `uiAccess` so it can sit above other windows, including elevated ones. Windows only allows
 that for a signed exe under Program Files, so installing needs admin once.
 
+Two steps. Building and signing run **without** admin rights; only the copy into Program Files is elevated, so no
+build tool ever runs as admin.
+
 ```powershell
-# from an elevated PowerShell 7 (Run as administrator)
+# 1. from a normal PowerShell 7 (NOT as administrator)
+D:\NothingLauncher\build\build.ps1
+```
+
+```powershell
+# 2. then from an elevated PowerShell 7 (Run as administrator)
 D:\NothingLauncher\build\install.ps1
 ```
 
-`install.ps1` does the following:
-1. Creates a self-signed code-signing cert `CN=NothingShell Dev` (non-exportable) and trusts it on this PC.
-2. Publishes the app and the watchdog, signs them, and stops any running copy.
-3. Copies them to `C:\Program Files\NothingShell`, then starts the shell once as you (not as admin).
+`build.ps1` creates a self-signed code-signing cert `CN=NothingShell Dev` (non-exportable) the first time, then
+publishes the app, the watchdog and the drag helper into `out\app`, signs them and packs the sparse package.
+`install.ps1` trusts that certificate on this PC (straight from the certificate store), copies `out\app` into an
+admin-only staging folder, refuses to go on unless every exe and dll there is validly signed by that certificate,
+stops any running copy, copies the files to `C:\Program Files\NothingShell`, then starts the shell once as you (not as
+admin).
 
 The shell then adds itself to `HKCU\...\Run`, so it starts at sign-in. Only the installed copy writes
 that entry.
@@ -35,7 +45,7 @@ that entry.
 `install.ps1` also registers a small **sparse package** named `NothingShell`, which points at
 `C:\Program Files\NothingShell`. This gives the shell a package identity, which Windows requires before an app can
 read notifications. It never appears in Start. If the registration fails, the shell still works, just without
-notifications. `uninstall.ps1` removes it. Use `-NoTimestamp` to skip the signing timestamp when offline.
+notifications. `uninstall.ps1` removes it. Use `build.ps1 -NoTimestamp` to skip the signing timestamp when offline.
 
 ## Using it
 
