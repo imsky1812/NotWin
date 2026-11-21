@@ -28,6 +28,7 @@ internal static class Program
     [STAThread]
     private static int Main(string[] args)
     {
+        SetDefaultDllDirectories(0x00001000); // only the app folder and System32 (security review 2026-11-21)
         var clock = Stopwatch.StartNew();
         if (DragArgs.ParseRequest(args) is not { } request) return Done(2, "bad arguments", clock);
         var paths = request.Paths.Where(p => File.Exists(p) || Directory.Exists(p)).ToArray();
@@ -138,6 +139,7 @@ internal static class Program
         [FieldOffset(8)] public MouseData Mouse; // 8 on 64-bit (the union starts after the padded type field)
     }
 
+    [DllImport("kernel32.dll")] private static extern bool SetDefaultDllDirectories(uint flags);
     [DllImport("user32.dll")] private static extern bool IsWindow(nint hwnd);
     [DllImport("user32.dll", EntryPoint = "GetPropW", CharSet = CharSet.Unicode)] private static extern nint GetProp(nint hwnd, string name);
     [DllImport("user32.dll")] private static extern short GetAsyncKeyState(int vk);

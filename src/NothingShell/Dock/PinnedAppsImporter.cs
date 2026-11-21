@@ -35,16 +35,16 @@ public static class PinnedAppsImporter
         {
             var name = Path.GetFileNameWithoutExtension(lnk);
             var info = ShellLinkNative.Read(lnk);
-            if (info is null) { Log.Info($"pin import: skipped '{name}' (unreadable shortcut)"); continue; }
+            if (info is null) { Log.Info("pin import: skipped an unreadable shortcut"); continue; }
             var (target, aumid) = info.Value;
 
             var targetExists = !string.IsNullOrEmpty(target) && File.Exists(target);
             var pin = PinRules.FromShortcut(name, lnk, target, targetExists, aumid);
-            if (pin is null) { Log.Info($"pin import: skipped '{name}' (target missing and no AppUserModel.ID)"); continue; }
+            if (pin is null) { Log.Info("pin import: skipped a shortcut (target missing and no AppUserModel.ID)"); continue; }
             if (!seen.Add(pin.AppId)) continue;
 
             result.Add(pin);
-            Log.Info($"pin import: '{name}' appId={pin.AppId} launch={pin.LaunchPath}");
+            Log.Info($"pin import: pin {result.Count} added"); // never names or paths (privacy)
         }
         return result;
     }

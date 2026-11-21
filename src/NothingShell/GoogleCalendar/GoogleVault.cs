@@ -57,7 +57,7 @@ public sealed class GoogleVault(string dir)
     private void Write<T>(string path, T value)
     {
         Directory.CreateDirectory(dir);
-        var temp = path + ".tmp";
+        var temp = path + "." + Guid.NewGuid().ToString("N") + ".tmp";
         File.WriteAllBytes(temp, ProtectedData.Protect(JsonSerializer.SerializeToUtf8Bytes(value, Json), Entropy, DataProtectionScope.CurrentUser));
         File.Move(temp, path, overwrite: true);
     }

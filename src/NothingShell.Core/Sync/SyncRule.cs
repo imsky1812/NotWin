@@ -39,9 +39,23 @@ public static class SyncRule
     /// The other PC's settings, keeping what belongs to this PC: start with Windows, the sync folder, the pin import and
     /// each photo frame's photos (files on this PC; a frame new here starts empty).
     /// </summary>
-    public static ShellSettings Merge(ShellSettings mine, ShellSettings theirs)
+    /// Pins (security review 2026-11-21): a pin this PC also has keeps this PC's own entry; another pin is taken only
+    /// when its launch path and target are <see cref="PinTrust.IsTrusted"/> under <paramref name="trustedRoots"/>, else
+    /// dropped. The old one-widget-per-kind layout never comes from another PC.
+    public static ShellSettings Merge(ShellSettings mine, ShellSettings theirs, IReadOnlyList<string>? trustedRoots = null)
     {
-        var merged = theirs with { StartWithWindows = mine.StartWithWindows, SyncFolder = mine.SyncFolder, PinsImported = mine.PinsImported };
+        trustedRoots ??= [];
+        var pins = new List<PinnedApp>();
+        foreach (var p in theirs.PinnedApps ?? [])
+        {
+            if (mine.PinnedApps.FirstOrDefault(m => DockItemsBuilder.SameApp(m.AppId, p.AppId)) is { } own) pins.Add(own);
+            else if (PinTrust.IsTrusted(p.LaunchPath, trustedRoots) && (p.TargetExe is null || PinTrust.IsTrusted(p.TargetExe, trustedRoots))) pins.Add(p);
+        }
+        var merged = theirs with
+        {
+            StartWithWindows = mine.StartWithWindows, SyncFolder = mine.SyncFolder, PinsImported = mine.PinsImported,
+            PinnedApps = pins, Widgets = mine.Widgets,
+        };
         if (theirs.WidgetList is not { } layout) return merged;
         var myPhotos = (mine.WidgetList?.Widgets ?? []).Where(p => p.Config?.Photos is not null)
             .GroupBy(p => p.Id).ToDictionary(g => g.Key, g => g.First().Config!.Photos);

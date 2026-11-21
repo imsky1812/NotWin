@@ -34,5 +34,10 @@ public sealed class TaskbarRestoreStore(string directory)
 
     public void Save(TaskbarRestoreState state) => JsonFile.WriteAtomic(directory, FileName, state, RestoreStateJsonContext.Default.TaskbarRestoreState);
 
-    public void Delete() => File.Delete(Path.Combine(directory, FileName));
+    public void Delete() => File.Delete(FilePath);
+
+    /// <summary>The state file's path (the watchdog deletes it with a link-refusing delete when elevated).</summary>
+    public string FilePath => Path.Combine(directory, FileName);
+
+    public string Directory => directory;
 }

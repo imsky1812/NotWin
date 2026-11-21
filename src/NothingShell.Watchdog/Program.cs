@@ -11,6 +11,7 @@ using NothingShell.Native;
 //   --restore-now --state <dir>                                    restore immediately
 // --parent-start guards against PID reuse: if the process with that pid started at a different time
 // (+/- 1 s) it is not our parent, so the parent is treated as already gone.
+DllSearch.Restrict(); // only the app folder and System32 (security review 2026-11-21)
 return Run(args);
 
 static int Run(string[] args)
@@ -81,6 +82,7 @@ static int RestoreTaskbar(TaskbarRestoreStore store)
     var acted = store.TryLoad(out var state) ? TaskbarNative.Restore(state) : TaskbarNative.ShowAll();
     if (!acted) return 3;
 
-    try { store.Delete(); } catch (Exception) { }
+    // Never a plain File.Delete: this may run elevated on a folder a normal process can write (security review #2).
+    SafeFileNative.DeleteInside(store.FilePath, store.Directory);
     return 0;
 }

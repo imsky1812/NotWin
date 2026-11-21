@@ -16,10 +16,13 @@ public sealed class PhotoStore(string framesRoot)
 {
     public const int LongSide = 1600, ThumbSide = 240;
 
-    public string PhotoPath(string frameId, string name) => Path.Combine(framesRoot, frameId, name);
+    // Null for a frame id or photo name that could leave the frame's folder (a synced or hand-edited settings file:
+    // security review 2026-11-21, #5).
+    public string? PhotoPath(string frameId, string name) =>
+        ValidId(frameId) && ValidName(name) ? Path.Combine(framesRoot, frameId, name) : null;
 
-    public string ThumbPath(string frameId, string name) =>
-        Path.Combine(framesRoot, frameId, Path.GetFileNameWithoutExtension(name) + ".thumb.jpg");
+    public string? ThumbPath(string frameId, string name) =>
+        ValidId(frameId) && ValidName(name) ? Path.Combine(framesRoot, frameId, Path.GetFileNameWithoutExtension(name) + ".thumb.jpg") : null;
 
     /// <summary>
     /// Copies the files into the frame (off the UI thread). Unreadable files are skipped; of the rest at most
@@ -151,9 +154,9 @@ public sealed class PhotoStore(string framesRoot)
         catch (Exception e) { Log.Info($"deleting a photo frame's folder failed: {e.GetType().Name}"); } // no paths in the log
     }
 
-    private static void TryDelete(string path)
+    private static void TryDelete(string? path)
     {
-        try { if (File.Exists(path)) File.Delete(path); }
+        try { if (path is not null && File.Exists(path)) File.Delete(path); }
         catch (Exception e) { Log.Info($"deleting a frame photo failed: {e.GetType().Name}"); }
     }
 

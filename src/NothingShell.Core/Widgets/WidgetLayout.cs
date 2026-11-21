@@ -136,7 +136,8 @@ public sealed record DesktopLayout(IReadOnlyList<WidgetPlacement> Widgets)
             if (!WidgetRules.IsRepeatable(p.Kind) && !seenKinds.Add(p.Kind)) continue;
             var size = WidgetRules.Sizes(p.Kind).Contains(p.Size) ? p.Size : WidgetRules.Sizes(p.Kind)[0];
             var (x, y) = Clamp(size, SnapTo(p.X), SnapTo(p.Y), areaW, areaH);
-            var id = p.Id;
+            // Ids name folders on disk (photo frames): only short letters-and-digits ids are kept (security review).
+            var id = p.Id is { Length: > 0 and <= 32 } i && i.All(char.IsAsciiLetterOrDigit) ? p.Id : "";
             while (string.IsNullOrEmpty(id) || !seenIds.Add(id)) id = newId();
             list.Add(p with { Size = size, X = x, Y = y, Id = id });
         }

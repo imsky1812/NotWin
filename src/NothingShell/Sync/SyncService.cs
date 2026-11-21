@@ -107,8 +107,21 @@ public sealed class SyncService(string dataDir, Func<string?> folder)
         if (theirs is null) { Log.Info("sync: the folder's settings could not be read, skipped"); return false; }
         var store = new SettingsStore(dataDir);
         var mine = store.Load();
-        store.Save(SyncRule.Merge(mine, theirs));
+        store.Save(SyncRule.Merge(mine, theirs, TrustedRoots()));
         return true;
+    }
+
+    /// <summary>Where installed apps and their shortcuts live: the only places a synced pin may launch from.</summary>
+    public static IReadOnlyList<string> TrustedRoots()
+    {
+        static string F(Environment.SpecialFolder f) => Environment.GetFolderPath(f);
+        var local = F(Environment.SpecialFolder.LocalApplicationData);
+        return [.. new[]
+        {
+            F(Environment.SpecialFolder.ProgramFiles), F(Environment.SpecialFolder.ProgramFilesX86), F(Environment.SpecialFolder.Windows),
+            local.Length > 0 ? Path.Combine(local, "Programs") : "",
+            F(Environment.SpecialFolder.StartMenu), F(Environment.SpecialFolder.CommonStartMenu),
+        }.Where(p => p.Length > 0)];
     }
 
     private static SyncSide Side(string path, string name)
@@ -166,7 +179,7 @@ public sealed class SyncService(string dataDir, Func<string?> folder)
     {
         Directory.CreateDirectory(dataDir);
         var path = Path.Combine(dataDir, StateFile);
-        var temp = path + ".tmp";
+        var temp = path + "." + Guid.NewGuid().ToString("N") + ".tmp";
         File.WriteAllText(temp, JsonSerializer.Serialize(state));
         File.Move(temp, path, overwrite: true);
     }

@@ -90,8 +90,9 @@ public static unsafe class ShellLinkNative
     /// <summary>
     /// Opens a file path, a .lnk, a shell: item or a URI the way the desktop would: through Explorer, so the program
     /// runs at the user's normal integrity rather than inheriting this uiAccess process's High token (Chromium browsers
-    /// quit at once under it — live bug 2026-11-19). Falls back to a direct ShellExecuteEx (logged) only when Explorer's
-    /// desktop is not available, e.g. while Explorer restarts. Returns false (never throws) if both fail.
+    /// quit at once under it — live bug 2026-11-19). When Explorer's desktop is not available (Explorer restarting or
+    /// killed) nothing is started: a direct start would hand this process's raised token to whatever the click names
+    /// (security review 2026-11-21, #3). Returns false (never throws).
     /// </summary>
     public static bool Open(string path)
     {
@@ -101,36 +102,16 @@ public static unsafe class ShellLinkNative
         string? dir;
         try { dir = System.IO.Path.IsPathRooted(path) ? System.IO.Path.GetDirectoryName(path) : null; }
         catch (ArgumentException) { dir = null; }
-        if (UnelevatedShell.Open(path, dir, OnError)) return true;
-        OnError?.Invoke("launch: Explorer unavailable, starting directly (inherits this process's integrity)", null);
-        return OpenDirect(path, dir);
+        if (UnelevatedOpener(path, dir)) return true;
+        OnError?.Invoke("launch: Explorer unavailable, nothing started (never with this process's raised rights)", null);
+        LastError = 1;
+        return false;
     }
 
-    private static bool OpenDirect(string path, string? dir)
-    {
-        try
-        {
-            fixed (char* file = path)
-            fixed (char* verb = "open")
-            fixed (char* folder = dir)
-            {
-                var info = new SHELLEXECUTEINFOW
-                {
-                    cbSize = (uint)sizeof(SHELLEXECUTEINFOW),
-                    // SEE_MASK_ASYNCOK (0x100000) | SEE_MASK_FLAG_NO_UI (0x400) | SEE_MASK_NOASYNC would block, so not used.
-                    fMask = 0x100000 | 0x400,
-                    lpVerb = verb,
-                    lpFile = file,
-                    lpDirectory = folder,
-                    nShow = 1, // SW_SHOWNORMAL
-                };
-                var ok = PInvoke.ShellExecuteEx(&info);
-                if (!ok) LastError = System.Runtime.InteropServices.Marshal.GetLastWin32Error();
-                return ok;
-            }
-        }
-        catch (Exception) { LastError = -1; return false; }
-    }
+    /// <summary>How a launch reaches Explorer (tests replace it).</summary>
+    public static Func<string, string?, bool> UnelevatedOpener { get; set; } = (path, dir) => UnelevatedShell.Open(path, dir, OnError);
+
+
 
     /// <summary>Win32 error of the last failed <see cref="Open"/> on this thread (0 after a success; -1 for an exception).</summary>
     [ThreadStatic] private static int t_lastError;

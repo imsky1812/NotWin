@@ -47,7 +47,12 @@ public sealed class ClipboardService : IDisposable
 
     public event Action? Changed;
 
-    public string ImagePath(string id) => Path.Combine(_clipsDir, id + ".png");
+    /// <summary>The image's path in the clips folder; ids read back from clipboard.json are checked first (security review).</summary>
+    public string ImagePath(string id) => Path.Combine(_clipsDir, SafeImageName(id) ?? "invalid.png");
+
+    /// <summary>"&lt;id&gt;.png" for an id of 1–64 letters and digits, else null (never a path outside the clips folder).</summary>
+    public static string? SafeImageName(string? id) =>
+        id is { Length: > 0 and <= 64 } && id.All(char.IsAsciiLetterOrDigit) ? id + ".png" : null;
 
     /// <summary>A small cached thumbnail of a stored image (null if its file is gone).</summary>
     public ImageSource? Thumbnail(string id)

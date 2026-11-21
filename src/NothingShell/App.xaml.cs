@@ -54,6 +54,7 @@ public partial class App : Application
 
     protected override void OnStartup(StartupEventArgs e)
     {
+        DllSearch.Restrict(); // only the app folder and System32 (security review 2026-11-21)
         base.OnStartup(e);
         // `--quit`: ask the running shell to quit cleanly, then exit (never becomes a shell itself).
         if (QuitCommand.IsRequested(e.Args))

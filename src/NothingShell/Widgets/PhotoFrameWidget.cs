@@ -144,6 +144,7 @@ public sealed class PhotoFrameWidget : IDesktopWidget
         try
         {
             var path = _store.PhotoPath(_id, name);
+            if (path is null) return null;
             if (!File.Exists(path)) return null;
             var image = new BitmapImage();
             image.BeginInit();
@@ -319,7 +320,7 @@ public sealed class PhotoManagePopup : Window
         try
         {
             var path = _store.ThumbPath(_frameId, name);
-            if (File.Exists(path))
+            if (path is not null && File.Exists(path))
             {
                 var bmp = new BitmapImage();
                 bmp.BeginInit();

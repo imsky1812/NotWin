@@ -50,8 +50,9 @@ public sealed class PhotoStoreTests : IDisposable
         return path;
     }
 
-    private static (int W, int H) SizeOf(string path)
+    private static (int W, int H) SizeOf(string? path)
     {
+        Assert.NotNull(path);
         (int, int) size = default;
         OnSta(() =>
         {

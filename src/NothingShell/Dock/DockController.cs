@@ -359,7 +359,7 @@ public sealed class DockController : IDisposable
         // A Store app pinned by its exe inside WindowsApps cannot be run directly: start it by its app id instead.
         if (PackagedApps.Resolve(path, StoreApps.ReadText, StoreApps.CurrentRoot) is { } packaged) path = packaged;
         // ShellExecuteEx with ASYNCOK: returns immediately; shortcuts, exes and shell:AppsFolder\<AUMID> all work.
-        if (!ShellLinkNative.Open(path)) Log.Info($"launch failed for {item.AppId} ({path}) error={ShellLinkNative.LastError}");
+        if (!ShellLinkNative.Open(path)) Log.Info($"launch failed error={ShellLinkNative.LastError}"); // never the path (privacy)
     }
 
     private void Pin(DockItem item)
