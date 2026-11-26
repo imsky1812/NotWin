@@ -47,6 +47,11 @@ public static class WidgetTheme
     /// <summary>Dashed outlines (an empty photo frame or folder slot).</summary>
     public static Brush Dash => Light ? LightDash : DarkDash;
 
+    private static readonly Brush DarkPopup = TileChrome.Frozen(0x1A, 0x1A, 0x1A), LightPopup = TileChrome.Frozen(0xFF, 0xFF, 0xFF);
+
+    /// <summary>An opaque card for popups next to a widget (the Notes editor).</summary>
+    public static Brush Popup => Light ? LightPopup : DarkPopup;
+
     /// <summary>A tile under the pointer inside a card.</summary>
     public static Brush Hover => Light ? LightHover : DarkHover;
 

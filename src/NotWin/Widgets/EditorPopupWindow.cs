@@ -16,7 +16,8 @@ public class EditorPopupWindow : Window
 {
     private bool _closed;
 
-    protected EditorPopupWindow(FrameworkElement content, double width)
+    /// <param name="themed">Follow the widgets' light / dark theme (the Notes editor, user 2026-11-26); otherwise dark.</param>
+    protected EditorPopupWindow(FrameworkElement content, double width, bool themed = false)
     {
         WindowStyle = WindowStyle.None;
         AllowsTransparency = true;
@@ -28,8 +29,8 @@ public class EditorPopupWindow : Window
         Width = width;
         Content = new Border
         {
-            Background = WidgetCard.CardBrush, BorderBrush = WidgetCard.EdgeBrush, BorderThickness = new Thickness(1.5),
-            CornerRadius = new CornerRadius(20), Padding = new Thickness(14), Child = content,
+            Background = themed ? WidgetTheme.Popup : WidgetCard.CardBrush, BorderBrush = themed ? WidgetTheme.Edge : WidgetCard.EdgeBrush,
+            BorderThickness = new Thickness(1.5), CornerRadius = new CornerRadius(20), Padding = new Thickness(14), Child = content,
         };
         Deactivated += (_, _) => CloseIfOpen();
         PreviewKeyDown += (_, e) => { if (e.Key == Key.Escape) { e.Handled = true; CloseIfOpen(); } };

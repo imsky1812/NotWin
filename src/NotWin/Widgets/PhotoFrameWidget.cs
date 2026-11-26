@@ -65,10 +65,10 @@ public sealed class PhotoFrameWidget : IDesktopWidget
         _host.MouseLeftButtonUp += (_, e) => { e.Handled = true; PhotoManagePopup.Guard(OnClick); };
         Fill();
         if (!Circle) return _host;
-        // The normal card's black, edge and 16 px padding, but round (frame sizes are always square).
+        // The normal card (the theme's colour, edge and 16 px padding), but round (frame sizes are always square).
         return new Border
         {
-            Background = WidgetCard.CardBrush, BorderBrush = WidgetCard.EdgeBrush, BorderThickness = new Thickness(1.5),
+            Background = WidgetTheme.Card, BorderBrush = WidgetTheme.Edge, BorderThickness = new Thickness(1.5),
             CornerRadius = new CornerRadius(size.PxW / 2.0), Padding = new Thickness(16), Child = _host,
         };
     }

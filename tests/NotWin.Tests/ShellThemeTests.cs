@@ -19,6 +19,21 @@ public sealed class ShellThemeTests
         foreach (var key in ShellTheme.Keys) Assert.True(((Brush)r[key]).IsFrozen, key);
     }
 
+    // User 2026-11-26: the notch, quick settings (Win+A / Win+N) and the dock's window preview follow the theme too.
+    [Fact]
+    public void Light_ShellSurfacesAreLightWithInk()
+    {
+        var r = new ResourceDictionary();
+        ShellTheme.Apply(r, light: true);
+        Assert.Equal(Color.FromArgb(0xF2, 0xF7, 0xF7, 0xF7), C(r, "Shell.Glass"));
+        Assert.Equal(Color.FromArgb(0xF2, 0xFF, 0xFF, 0xFF), C(r, "Shell.Pill"));
+        Assert.Equal(Color.FromRgb(0x10, 0x10, 0x10), C(r, "Shell.Text"));
+        Assert.Equal(Color.FromRgb(0x1A, 0x1A, 0x1A), C(r, "Shell.OnBg")); // an "on" tile is ink in light mode
+        ShellTheme.Apply(r, light: false);
+        Assert.Equal(Color.FromRgb(0x00, 0x00, 0x00), C(r, "Shell.Pill"));
+        Assert.Equal(Color.FromRgb(0xE8, 0xE8, 0xE8), C(r, "Shell.OnBg"));
+    }
+
     [Fact]
     public void Dark_IsTodaysBlackDock()
     {

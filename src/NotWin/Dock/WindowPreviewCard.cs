@@ -8,6 +8,8 @@ using NotWin.Core.Dock;
 using NotWin.Native;
 using NotWin.Notch.Dashboard;
 
+using NotWin.Theme;
+
 namespace NotWin.Dock;
 
 /// <summary>One window's preview: its handle, the area its live picture fills, its title and its ✕.</summary>
@@ -22,7 +24,7 @@ public sealed record PreviewCell(nint Hwnd, Border Area, TextBlock Title, Border
 public sealed class WindowPreviewCard
 {
     public const double CellWidth = PreviewRules.MaxW, CellGap = 12, AreaHeight = PreviewRules.MaxH;
-    private static readonly Brush CardBrush = TileChrome.Frozen(0x1A, 0x1A, 0x1A), AreaBrush = TileChrome.Frozen(0x0E, 0x0E, 0x0E);
+    // Colours follow light / dark (user 2026-11-26): Shell.Glass card, Shell.Tile picture area, Shell.Text titles.
     private readonly List<PreviewCell> _cells = [];
     private readonly List<DwmThumbnail> _thumbs = [];
     private readonly StackPanel _row = new() { Orientation = Orientation.Horizontal };
@@ -53,13 +55,13 @@ public sealed class WindowPreviewCard
         foreach (var w in windows)
         {
             var hwnd = w.Handle;
-            var area = new Border { Width = CellWidth, Height = AreaHeight, CornerRadius = new CornerRadius(10), Background = AreaBrush, Cursor = Cursors.Hand };
+            var area = new Border { Width = CellWidth, Height = AreaHeight, CornerRadius = new CornerRadius(10), Cursor = Cursors.Hand }.Themed(Border.BackgroundProperty, "Shell.Tile");
             area.MouseLeftButtonUp += (_, e) => { e.Handled = true; Activate?.Invoke(hwnd); };
             var title = new TextBlock
             {
-                Text = w.Title, FontFamily = TileChrome.Font, FontSize = 12, Foreground = TileChrome.Text,
+                Text = w.Title, FontFamily = TileChrome.Font, FontSize = 12,
                 TextTrimming = TextTrimming.CharacterEllipsis, VerticalAlignment = VerticalAlignment.Center,
-            };
+            }.Themed(TextBlock.ForegroundProperty, "Shell.Text");
             var close = new Border
             {
                 // A red dot with a white ✕ (user, 2026-11-21).
@@ -97,9 +99,11 @@ public sealed class WindowPreviewCard
             var w = new Window
             {
                 WindowStyle = WindowStyle.None, ResizeMode = ResizeMode.NoResize, ShowInTaskbar = false, ShowActivated = false, Topmost = true,
-                SizeToContent = SizeToContent.WidthAndHeight, Background = CardBrush, Left = -32000, Top = -32000,
-                Content = new Border { Padding = new Thickness(12), BorderBrush = TileChrome.FrozenArgb(0x21, 0xFF, 0xFF, 0xFF), BorderThickness = new Thickness(1.5), Child = scroller },
+                SizeToContent = SizeToContent.WidthAndHeight, Left = -32000, Top = -32000,
+                Content = new Border { Padding = new Thickness(12), BorderThickness = new Thickness(1.5), Child = scroller }
+                    .Themed(Border.BorderBrushProperty, "Shell.Line"),
             };
+            w.SetResourceReference(Window.BackgroundProperty, "Shell.Glass");
             // Closed by something else (Windows, the owner going): tidy up and say so, or the dock stays held up.
             w.Closed += (_, _) =>
             {

@@ -31,15 +31,17 @@ public sealed class SlidersSection
         _chipText = new TextBlock
         {
             FontFamily = (FontFamily)Application.Current.FindResource("Font.Mono"),
-            FontWeight = FontWeights.Medium, FontSize = 11, Foreground = (Brush)Application.Current.FindResource("Brush.Text"),
+            FontWeight = FontWeights.Medium, FontSize = 11,
             VerticalAlignment = VerticalAlignment.Center,
         };
+        _chipText.SetResourceReference(TextBlock.ForegroundProperty, "Shell.Text");
         _chip = new Border
         {
-            Background = new SolidColorBrush(Color.FromRgb(0x26, 0x26, 0x26)), CornerRadius = new CornerRadius(12),
+            CornerRadius = new CornerRadius(12),
             Padding = new Thickness(10, 6, 10, 6), Child = _chipText, Cursor = System.Windows.Input.Cursors.Hand,
             ToolTip = "Switch output device",
         };
+        _chip.SetResourceReference(Border.BackgroundProperty, "Shell.Tile");
         _chip.MouseLeftButtonUp += (_, _) => SwitchOutput();
 
         host.Children.Add(Row(SpeakerGlyph(), _volume, _chip));
@@ -108,22 +110,20 @@ public sealed class SlidersSection
         return g;
     }
 
-    private static FrameworkElement Glyph(string data) => new Viewbox
+    private static FrameworkElement Glyph(string data)
     {
-        Width = 18, Height = 18, VerticalAlignment = VerticalAlignment.Center,
-        Child = new Canvas
+        var path = new Path
         {
-            Width = 24, Height = 24,
-            Children =
-            {
-                new Path
-                {
-                    Data = Geometry.Parse(data), Stroke = (Brush)Application.Current.FindResource("Brush.Text"), StrokeThickness = 1.8,
-                    StrokeLineJoin = PenLineJoin.Round, StrokeStartLineCap = PenLineCap.Round, StrokeEndLineCap = PenLineCap.Round,
-                },
-            },
-        },
-    };
+            Data = Geometry.Parse(data), StrokeThickness = 1.8,
+            StrokeLineJoin = PenLineJoin.Round, StrokeStartLineCap = PenLineCap.Round, StrokeEndLineCap = PenLineCap.Round,
+        };
+        path.SetResourceReference(Shape.StrokeProperty, "Shell.Text"); // follows light / dark
+        return new Viewbox
+        {
+            Width = 18, Height = 18, VerticalAlignment = VerticalAlignment.Center,
+            Child = new Canvas { Width = 24, Height = 24, Children = { path } },
+        };
+    }
 
     private static FrameworkElement SpeakerGlyph() => Glyph("M4,9 L8,9 L13,5 L13,19 L8,15 L4,15 Z M16.5,8.5 A5,5 0 0 1 16.5,15.5 M19,6 A8.5,8.5 0 0 1 19,18");
 

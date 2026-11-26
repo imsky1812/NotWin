@@ -7,15 +7,11 @@ using System.Windows.Shapes;
 namespace NotWin.Panel;
 
 /// <summary>
-/// A quick-settings tile (mockup .tile): 60 tall, radius 20, #262626 (on: #F2F2F2 with dark text). The main area
+/// A quick-settings tile (mockup .tile): 60 tall, radius 20, Shell.Tile (on: Shell.OnBg — light in dark mode, ink in light). The main area
 /// toggles; the ▸ area on the right expands the tile's list.
 /// </summary>
 public sealed class Tile : Border
 {
-    private static readonly Brush OffBg = Freeze(new SolidColorBrush(Color.FromRgb(0x26, 0x26, 0x26)));
-    private static readonly Brush OnBg = Freeze(new SolidColorBrush(Color.FromRgb(0xE8, 0xE8, 0xE8)));
-    private static readonly Brush Dark = Freeze(new SolidColorBrush(Color.FromRgb(0x11, 0x11, 0x11)));
-    private static readonly Brush DarkDim = Freeze(new SolidColorBrush(Color.FromRgb(0x55, 0x55, 0x55)));
     private readonly TextBlock _title, _sub;
     private readonly Path _glyph, _chevron;
 
@@ -26,7 +22,6 @@ public sealed class Tile : Border
     {
         Height = 60;
         CornerRadius = new CornerRadius(20);
-        Background = OffBg;
         ClipToBounds = true;
 
         _glyph = new Path { Data = Geometry.Parse(glyphData), StrokeThickness = 1.8, StrokeStartLineCap = PenLineCap.Round, StrokeEndLineCap = PenLineCap.Round, StrokeLineJoin = PenLineJoin.Round };
@@ -63,18 +58,17 @@ public sealed class Tile : Border
         SetOn(false, "");
     }
 
+    // Colours are theme resources (Shell.*, user 2026-11-26), so an open panel follows light / dark mode at once.
     public void SetOn(bool on, string subline)
     {
-        Background = on ? OnBg : OffBg;
-        var fg = on ? Dark : (Brush)Application.Current.FindResource("Brush.Text");
-        _title.Foreground = fg;
-        _sub.Foreground = on ? DarkDim : (Brush)Application.Current.FindResource("Brush.Dim");
+        SetResourceReference(BackgroundProperty, on ? "Shell.OnBg" : "Shell.Tile");
+        var fg = on ? "Shell.OnText" : "Shell.Text";
+        _title.SetResourceReference(TextBlock.ForegroundProperty, fg);
+        _sub.SetResourceReference(TextBlock.ForegroundProperty, on ? "Shell.OnDim" : "Shell.Dim");
         _sub.Text = subline.ToUpperInvariant();
-        _glyph.Stroke = fg;
-        _chevron.Stroke = fg;
+        _glyph.SetResourceReference(Shape.StrokeProperty, fg);
+        _chevron.SetResourceReference(Shape.StrokeProperty, fg);
     }
-
-    private static Brush Freeze(Brush b) { b.Freeze(); return b; }
 }
 
 /// <summary>A tile's expanded list (mockup .list): rounded #0D FFFFFF box, rows with a right-hand action label.</summary>
@@ -84,7 +78,7 @@ public sealed class TileList : Border
 
     public TileList()
     {
-        Background = new SolidColorBrush(Color.FromArgb(0x0D, 0xFF, 0xFF, 0xFF));
+        SetResourceReference(BackgroundProperty, "Shell.Card");
         CornerRadius = new CornerRadius(16);
         Padding = new Thickness(6);
         Margin = new Thickness(0, 0, 0, 8);
@@ -99,22 +93,22 @@ public sealed class TileList : Border
         var label = new TextBlock
         {
             Text = action?.ToUpperInvariant() ?? "", FontFamily = (FontFamily)Application.Current.FindResource("Font.Mono"),
-            FontSize = 11, FontWeight = FontWeights.Medium, Foreground = (Brush)Application.Current.FindResource("Brush.Dim"),
+            FontSize = 11, FontWeight = FontWeights.Medium,
             VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(10, 0, 0, 0),
         };
+        label.SetResourceReference(TextBlock.ForegroundProperty, "Shell.Dim");
         DockPanel.SetDock(label, System.Windows.Controls.Dock.Right);
         var name = new TextBlock
         {
             Text = text, FontSize = 13, TextTrimming = TextTrimming.CharacterEllipsis, VerticalAlignment = VerticalAlignment.Center,
-            Foreground = (Brush)Application.Current.FindResource(dim ? "Brush.Dim" : "Brush.Text"),
         };
+        name.SetResourceReference(TextBlock.ForegroundProperty, dim ? "Shell.Dim" : "Shell.Text");
         var row = new Border
         {
             CornerRadius = new CornerRadius(10), Padding = new Thickness(10, 9, 10, 9), Background = Brushes.Transparent,
             Cursor = onClick is null ? Cursors.Arrow : Cursors.Hand, Child = new DockPanel { Children = { label, name } },
         };
-        var hover = new SolidColorBrush(Color.FromArgb(0x0F, 0xFF, 0xFF, 0xFF));
-        row.MouseEnter += (_, _) => { if (onClick is not null) row.Background = hover; };
+        row.MouseEnter += (_, _) => { if (onClick is not null) row.SetResourceReference(BackgroundProperty, "Shell.Hover"); };
         row.MouseLeave += (_, _) => row.Background = Brushes.Transparent;
         if (onClick is not null) row.MouseLeftButtonUp += (_, _) => onClick();
         _rows.Children.Add(row);

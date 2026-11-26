@@ -6,6 +6,7 @@ using NotWin.Widgets;
 
 namespace NotWin.Tests;
 
+[Collection("WidgetTheme")]
 public sealed class PhotoFrameShapeTests
 {
     private static void OnSta(Action body)
@@ -31,7 +32,7 @@ public sealed class PhotoFrameShapeTests
         Assert.True(((IDesktopWidget)frame).Bare); // no square WidgetCard around it
         var card = Assert.IsType<Border>(built);
         Assert.Equal(WidgetSize.Px(2) / 2.0, card.CornerRadius.TopLeft);
-        Assert.Same(WidgetCard.CardBrush, card.Background);
+        Assert.Same(WidgetTheme.Card, card.Background); // the ring follows light / dark (user 2026-11-26)
     });
 
     [Fact]
