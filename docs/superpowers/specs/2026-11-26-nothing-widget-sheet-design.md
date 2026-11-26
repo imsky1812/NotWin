@@ -267,3 +267,13 @@ dot art; a blocked mic / camera is a plain card with a slashed icon.
   two files used in turn). **Builder's call:** only while one of NotWin's own Lucent wallpapers (bundled or tinted) is
   showing — a wallpaper the user picked is never replaced; picking a Lucent wallpaper (Dark mode tile or Settings) turns
   it on, picking any other turns it off.
+
+### Fifth follow-up (user, 2026-11-26): smoother wallpaper changes, notch tiles, a better snake
+- Wallpaper changes from NotWin (photo tint, Dark mode tile) use Explorer's cross-fade (IActiveDesktop after the
+  Progman 0x052C message), falling back to the instant change. The tint's "is this our wallpaper" check reads the
+  Active Desktop source path, since Windows may report its cached TranscodedWallpaper copy.
+- The notch dashboard's tiles follow light / dark (Notch/Dashboard/DashChrome: TileChrome's API with theme colours;
+  TileChrome itself stays dark for Settings and the edit popups).
+- Snake: a theme-aware shade between games (no grey slab in light mode), quieter empty dots, a fading tail and a
+  slightly larger head, a gently pulsing red food dot, "BEST n" / "NEW BEST" (red) on game over, and it speeds up as you
+  score (120 ms, 3 ms quicker per point, never under 70 ms).

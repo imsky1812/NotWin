@@ -197,3 +197,16 @@ public sealed class SnakeGameTests
         Assert.True(game.BodyVisible);
     }
 }
+
+// Plan 13 follow-up (user, 2026-11-26: "the snake widget can be more better"): it speeds up as you score.
+public sealed class SnakeSpeedTests
+{
+    [Fact]
+    public void TickFor_StartsAt120_SpeedsUp_CapsAt70()
+    {
+        Assert.Equal(TimeSpan.FromMilliseconds(120), SnakeGame.TickFor(0));
+        Assert.Equal(TimeSpan.FromMilliseconds(105), SnakeGame.TickFor(5));
+        Assert.Equal(TimeSpan.FromMilliseconds(70), SnakeGame.TickFor(40));
+        Assert.Equal(TimeSpan.FromMilliseconds(70), SnakeGame.TickFor(999));
+    }
+}
