@@ -29,5 +29,12 @@
     <Geometry x:Key="Icon.laptop">M 5.5 6 H 18.5 A 1.5 1.5 0 0 1 20 7.5 V 14.5 A 1.5 1.5 0 0 1 18.5 16 H 5.5 A 1.5 1.5 0 0 1 4 14.5 V 7.5 A 1.5 1.5 0 0 1 5.5 6 Z M 2 19 h 20</Geometry>
     <Geometry x:Key="Icon.head">M 4 14 v -2 a 8 8 0 0 1 16 0 v 2 M 4.5 14 H 5.5 A 1.5 1.5 0 0 1 7 15.5 V 18.5 A 1.5 1.5 0 0 1 5.5 20 H 4.5 A 1.5 1.5 0 0 1 3 18.5 V 15.5 A 1.5 1.5 0 0 1 4.5 14 Z M 18.5 14 H 19.5 A 1.5 1.5 0 0 1 21 15.5 V 18.5 A 1.5 1.5 0 0 1 19.5 20 H 18.5 A 1.5 1.5 0 0 1 17 18.5 V 15.5 A 1.5 1.5 0 0 1 18.5 14 Z</Geometry>
     <Geometry x:Key="Icon.mouse">M 12 3 H 12 A 5 5 0 0 1 17 8 V 16 A 5 5 0 0 1 12 21 H 12 A 5 5 0 0 1 7 16 V 8 A 5 5 0 0 1 12 3 Z M 12 7 v 3</Geometry>
+    <!-- Plan 13 toggle tiles. "slash" is drawn over mic / camera when they are blocked. -->
+    <Geometry x:Key="Icon.wifi">M 2 9 A 15 15 0 0 1 22 9 M 5.5 12.5 A 10 10 0 0 1 18.5 12.5 M 9 16 A 5 5 0 0 1 15 16 M 12 19.5 L 12 19.6</Geometry>
+    <Geometry x:Key="Icon.bluetooth">M 7 7 L 17 17 L 12 22 L 12 2 L 17 7 L 7 17</Geometry>
+    <Geometry x:Key="Icon.contrast">M 12 3 A 9 9 0 1 1 12 21 A 9 9 0 1 1 12 3 Z M 12 3 V 21 M 12 7 h 5 M 12 11 h 8 M 12 15 h 7.5 M 12 19 h 4</Geometry>
+    <Geometry x:Key="Icon.mic">M 12 3 A 3 3 0 0 1 15 6 V 11 A 3 3 0 0 1 9 11 V 6 A 3 3 0 0 1 12 3 Z M 6 11 A 6 6 0 0 0 18 11 M 12 17 V 21 M 9 21 h 6</Geometry>
+    <Geometry x:Key="Icon.camera">M 5 7 H 14 A 2 2 0 0 1 16 9 V 15 A 2 2 0 0 1 14 17 H 5 A 2 2 0 0 1 3 15 V 9 A 2 2 0 0 1 5 7 Z M 16 11 L 21 8 V 16 L 16 13</Geometry>
+    <Geometry x:Key="Icon.slash">M 4 4 L 20 20</Geometry>
     <Geometry x:Key="Icon.speaker">M 8 3 H 16 A 2 2 0 0 1 18 5 V 19 A 2 2 0 0 1 16 21 H 8 A 2 2 0 0 1 6 19 V 5 A 2 2 0 0 1 8 3 Z M 9 14 A 3 3 0 1 0 15 14 A 3 3 0 1 0 9 14 Z M 11 7 A 1 1 0 1 0 13 7 A 1 1 0 1 0 11 7 Z</Geometry>
 </ResourceDictionary>

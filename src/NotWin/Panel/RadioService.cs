@@ -29,7 +29,8 @@ public static class RadioService
         }
     }
 
-    private static async Task<Radio?> FindAsync(RadioKind kind)
+    /// <summary>The radio of this kind, or null when there is none or access is denied (Plan 13 toggles watch its StateChanged).</summary>
+    public static async Task<Radio?> FindAsync(RadioKind kind)
     {
         try
         {
