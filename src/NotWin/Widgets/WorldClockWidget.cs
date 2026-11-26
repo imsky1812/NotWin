@@ -73,7 +73,7 @@ public sealed class WorldClockWidget : IDesktopWidget
                 HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center,
                 Children =
                 {
-                    new DotMatrix { Text = time, Dot = 3, Gap = 1.2, Fill = TileChrome.Text, HorizontalAlignment = HorizontalAlignment.Center },
+                    new DotMatrix { Text = time, Dot = 2.4, Gap = 1, Fill = TileChrome.Text, HorizontalAlignment = HorizontalAlignment.Center },
                     Centered(TileChrome.Label($"{label} · {Day(there, "ddd")}"), 8),
                 },
             };

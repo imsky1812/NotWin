@@ -86,7 +86,7 @@ public sealed class SunCompassWidget : IDesktopWidget
         var (azimuth, elevation) = SolarPosition.Position(utc, place.Lat, place.Lon);
         ArrowAngle = azimuth;
         SunDown = elevation < -0.833;
-        var face = Face(big ? 220 : 112, azimuth, SunDown);
+        var face = Face(big ? 168 : 112, azimuth, SunDown);
         if (!big)
         {
             _host.Child = face;
@@ -104,7 +104,9 @@ public sealed class SunCompassWidget : IDesktopWidget
         var grid = new Grid();
         grid.Children.Add(face);
         lines.VerticalAlignment = VerticalAlignment.Bottom;
-        lines.Margin = new Thickness(0, 0, 0, 36);
+        lines.Margin = new Thickness(0, 0, 0, 22);
+        face.VerticalAlignment = VerticalAlignment.Top;
+        face.Margin = new Thickness(0, 10, 0, 0);
         grid.Children.Add(lines);
         _host.Child = grid;
     }
