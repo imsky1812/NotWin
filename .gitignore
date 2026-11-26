@@ -22,3 +22,7 @@ out/
 
 # promo videos and their source stay local
 promo/
+
+# Reference images (other people's artwork) stay local; only the notes are committed
+docs/references/*.webp
+docs/references/dribbble/

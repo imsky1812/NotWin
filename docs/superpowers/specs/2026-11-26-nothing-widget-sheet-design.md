@@ -1,0 +1,211 @@
+# Plan 13: the Nothing widget sheet — eight new desktop widgets (design)
+
+**Why (user, 2026-11-26):** NotWin's desktop should look like Nothing OS's widget sheet
+(`docs/references/nothing-widgets.webp`, kept local): small round and rounded-square tiles in black, light grey and red,
+with dot-matrix numbers. The user picked all eight widgets below from a proposed list. Research notes (the sheet and
+Dribbble patterns) are in `docs/references/widget-research.md`.
+
+**Approach (user picked A):** every widget is its own `WidgetKind`, class in `src/NotWin/Widgets` and testable logic in
+`NotWin.Core`, like the existing widgets. Toggle and World clock can be added many times; what each copy is (which
+toggle, which time zone, and the analogue clock's face) is chosen from a small list that opens when you click the widget
+in edit mode.
+- Rejected B — one kind per toggle ("Wi-Fi toggle", "Bluetooth toggle", …): six more picker rows, one of each only, and
+  world clocks would still need a chooser.
+- Rejected C — a toggle strip (one card with 2–4 buttons): reads as a control panel, not Nothing's separate tiles.
+
+## Goals
+- Eight new widgets that look like they belong on the reference sheet, built with the app's tokens (Ink `#101010`,
+  card `#1A1A1A`, text `#E8E8E8`, red `#D71921` only for "on / notice this"), Space Grotesk / Space Mono and dot-matrix
+  numerals (`DotMatrix`) and dot icons (`DotArtView`).
+- Light on the machine: nothing polls faster than it must; every timer stops while a full-screen app is in front
+  (`SetPaused`) and when the widget is disposed. System events instead of polling where Windows has them.
+
+## Non-goals
+- Do Not Disturb and Night light (no supported API; only undocumented hacks), Airplane mode (apps can only flip
+  single radios), Hotspot, a real compass heading or step counter (no sensors on a PC).
+- A dot-matrix "now playing" and a "next trip" card: later, as new looks for the existing Media and Up next widgets.
+- Per-app screen time; syncing screen time between PCs.
+
+## Anti-goals (a failure even if it works)
+- Showing or logging personal data: no SSID, Bluetooth device names, city, adapter names, window or app titles. Logs
+  say only things like `toggle wifi -> on`.
+- Changing any setting without the user's click on that tile.
+- A widget that keeps a timer running while nothing on screen changes.
+
+## Shared pieces
+
+### Kinds, sizes, rules (`WidgetLayout.cs`)
+New kinds are appended (saved as numbers): `Toggle = 13, AnalogClock, WorldClock, StackedClock, Stopwatch, ScreenTime,
+SystemMeters, SunCompass`. A new tall size `S12 = (1, 2)`.
+
+| Kind | Sizes (first = default) | Round? | Repeatable |
+|---|---|---|---|
+| Toggle | 1×1, 2×1 | yes (circle / pill) | yes |
+| AnalogClock | 1×1, 2×2 | yes (circle) | no |
+| WorldClock | 1×1, 2×1 | yes (circle / pill) | yes |
+| StackedClock | 1×2, 1×1 | yes (tall pill / circle) | no |
+| Stopwatch | 1×1, 2×1 | yes (circle / pill) | no |
+| ScreenTime | 2×1, 2×2 | no (radius 26) | no |
+| SystemMeters | 2×1, 2×2 | no | no |
+| SunCompass | 1×1, 2×2 | yes (circle) | no |
+
+- `WidgetRules.IsRound(WidgetPlacement)`: true for the round kinds above and for a photo frame with shape `circle`
+  (moves today's photo-only check out of `EditBackdrop`). "Round" = corner radius half the shorter side, so 1×1 and 2×2
+  are circles, 2×1 and 1×2 are pills. Edit mode's outline uses the same rule.
+- `IsRepeatable`: Photo, Folder, **Toggle, WorldClock**.
+- Picker order: the new kinds join the list grouped with their relatives (Toggle after Folder; the clocks after Clock;
+  Stopwatch after Timer; ScreenTime, SystemMeters, SunCompass at the end). Exact order is the builder's call.
+
+### Per-widget choice (`WidgetConfig.Choice`)
+- `WidgetConfig` gains `string? Choice`. Its meaning depends on the kind: a toggle id (`wifi`, `bluetooth`, `dark`,
+  `awake`, `mic`, `camera`), a Windows time-zone id, or an analogue face (`light`, `dark`).
+- `WidgetChoices` (Core) lists the options per kind and gives the default:
+  - a new Toggle gets the first toggle not already on the desktop (all used → `wifi`);
+  - a new World clock gets `UTC`;
+  - the analogue clock defaults to `light`.
+  - An unknown or missing choice falls back to the default (sanitised on load).
+- World-clock options are a fixed list of about 24 Windows zone ids, one per common offset from UTC−10 to UTC+13
+  (including +05:30, +05:45, +09:30), labelled in the list by the zone's Windows display name. A zone missing on this PC
+  is skipped.
+- **Choosing:** in edit mode, a click without moving on a Toggle, World clock or Analogue clock opens a **choice list**
+  under the widget, in the same black popup style as ＋ Add, with the current choice ticked. A pick saves the config and
+  rebuilds the widget; Esc or a click outside closes it. (The folder's "click steps to the next picture" stays as is.)
+
+### Card surfaces (`WidgetCard`)
+- `WidgetCard.Wrap(content, surface, round, bare)` with `Surface = Dark | Light | Red`:
+  - Dark: today's card (`#1A1A1A`, 1.5 px edge `rgba(255,255,255,0.13)`).
+  - Light: `#E8E8E8` with Ink `#101010` content, edge `rgba(0,0,0,0.08)`.
+  - Red: `#D71921` with `#FFFFFF` content, no edge.
+- Round cards use radius = half the shorter side and a smaller padding (10) so content fits the circle.
+- `IDesktopWidget` gains `Surface Surface => Dark` and `bool Round => false`. A widget whose surface changes (a toggle
+  turning on) rebuilds only its own card.
+
+### Dot primitives
+- **DotRing** (new, `NotWin/Notch`): N dots on a circle; `Lit` count drawn in a lit brush (red or ink/text), the rest in
+  a dim brush. Core `DotRing.Points(n, radius)` gives the positions (tested). Used by the Stopwatch and Sun compass.
+- `DotMatrix` and `DotArtView` as today; new dot pictures (sun, moon, arrow) go in `DotArt`.
+
+## The eight widgets
+
+### 1. Toggle (repeatable; 1×1 circle, 2×1 pill)
+- **Choices:** Wi-Fi, Bluetooth, Dark mode, Keep awake, Mic access, Camera access.
+- **Look:**
+  - 1×1: a line icon, centred.
+  - 2×1: icon on the left; the name ("Wi-Fi") and the state ("On" / "Off" / "Blocked") on the right. Never an SSID or
+    device name.
+  - Off: Dark card, light icon. On: Light card, ink icon.
+  - Mic / Camera: allowed = Light, **blocked = Red** with a slashed icon.
+  - Unavailable (no radio, access denied): Dark with a dim icon; a click opens the matching `ms-settings:` page.
+- **Click** (outside edit mode) flips it:
+  - Wi-Fi / Bluetooth: `RadioService.SetAsync`.
+  - Dark mode: HKCU `…\Themes\Personalize` `AppsUseLightTheme` and `SystemUsesLightTheme` (both 0 = dark), then
+    broadcast `WM_SETTINGCHANGE` with `"ImmersiveColorSet"`.
+  - Keep awake: the same `KeepAwakeService` as quick settings, so both stay in step.
+  - Mic / Camera: HKCU
+    `Software\Microsoft\Windows\CurrentVersion\CapabilityAccessManager\ConsentStore\{microphone|webcam}`:
+    - "allowed" = `Value` and `NonPackaged\Value` both `Allow`;
+    - blocking writes `Deny` to both, allowing writes `Allow` to both.
+    - If the machine-wide HKLM switch is `Deny`, the tile shows Blocked and a click opens
+      `ms-settings:privacy-microphone` / `privacy-webcam` (it can't be changed without admin).
+- **Staying current without polling:**
+  - radios: `Radio.StateChanged`;
+  - dark mode: `SystemEvents.UserPreferenceChanged`;
+  - keep awake: `KeepAwakeService.Changed`;
+  - mic / camera: a registry change notification (`RegNotifyChangeKeyValue`) on the two keys while the tile exists.
+- **Check before building on it:** whether running desktop apps honour a mic / camera change at once is verified on the
+  user's PC, only with their OK, since it changes a privacy setting.
+
+### 2. Analogue clock (1×1, 2×2 circle; choice: light / dark face)
+- No numerals.
+  - 12 tick marks; the 12, 3, 6 and 9 ticks are longer.
+- **Light face:** Light card, ink hour and minute hands, a thin red seconds hand. It ticks once a second, and only while
+  not paused.
+- **Dark face:** Dark card, chunky light hands with rounded ends, a single red dot at the centre. No seconds hand, so it
+  ticks once a minute.
+- Hand angles come from Core `ClockHands.Angles(TimeOnly)` (tested).
+
+### 3. World clock (repeatable; 1×1 circle, 2×1 pill; choice: time zone)
+- **1×1:** dot `HH:MM` for that zone, then under it the offset label ("GMT+1") and the day (`TUE`).
+- **2×1:** dot `HH:MM` on the left. On the right: the day ("TUESDAY", mono caps), the offset label, and the difference
+  from local time ("+4H 30M", "SAME TIME", "−1H").
+- Core `ZoneLabels`:
+  - `GmtLabel(offset)`: `GMT`, `GMT+1`, `GMT−3`, `GMT+5:30`, with daylight saving applied for "now";
+  - `Difference(local, zone)`.
+- Ticks once a minute, on the minute (like `ClockWidget`). No city is shown on the tile; the choice list shows Windows'
+  zone names.
+
+### 4. Stacked clock (1×2 tall pill, 1×1 circle)
+- Dark card. `HH` above `MM` in large dot matrix, centred. The 1×1 version is smaller. Ticks once a minute.
+
+### 5. Stopwatch (1×1 circle, 2×1 pill)
+- A `StopwatchService` (in memory; not saved; starts at zero each launch). Its logic sits in Core `StopwatchModel` with
+  an injected clock (tested).
+- **1×1:** a ring of 60 dots, with the seconds of the current minute lit red. In the middle, dot `MM:SS`
+  (`H:MM` once past an hour).
+- **2×1:** the ring on the left. On the right: "STOPWATCH", the dot time, and the state ("TAP TO START" / "RUNNING" /
+  "PAUSED · DOUBLE-CLICK TO RESET").
+- **Click:** start / pause. **Double-click while paused:** reset.
+- Redraws once per elapsed second, timed to the next whole second, only while running and not paused.
+
+### 6. Screen time (2×1, 2×2)
+- **What counts:** time the user is at the PC while NotWin runs.
+  - A minute counts when the session is unlocked and the last input (`GetLastInputInfo`) was under 5 minutes ago.
+  - Sampled once a minute by one app-wide `ScreenTimeTracker`; lock / unlock from `SystemEvents.SessionSwitch`.
+  - It runs whether or not the widget is on the desktop, so the week is filled in when the widget is added later.
+- **Storage:** `screentime.json` in the data folder, `{ "yyyy-MM-dd": minutes }`.
+  - Only the last 8 days are kept.
+  - Written at most once every 5 minutes, and on exit.
+  - Not synced.
+  - Day rollover is at local midnight.
+- Core `ScreenTimeLog` does the accumulation, trimming and the week view (tested).
+- **2×1:** big dot "6H20", label "TODAY", and a small "AVG 5H10" for the last 7 days.
+- **2×2:** "6H20 · TODAY" on top, and a 7-day dot chart under it:
+  - one column per day, one dot per hour (rounded, up to 12);
+  - today's column is red, the other days light;
+  - day letters (M T W T F S S) underneath.
+- Redraws when the tracker changes (once a minute at most).
+
+### 7. System meters (2×1, 2×2)
+- **CPU %:** from `GetSystemTimes` deltas.
+- **RAM % used:** `GlobalMemoryStatusEx`.
+- **Network:** down and up bytes per second, summed over non-loopback interfaces that are up (`NetworkInterface`
+  IPv4 statistics deltas).
+- Core `MeterMath` does the deltas and the formatting ("1.2 MB/s", "340 KB/s"), and `DotBar.Lit(value, dots)`
+  (tested).
+- **2×1:** three rows, CPU / RAM / NET: a caps label, a 10-dot bar and the value. A bar's lit dots turn red above 90%.
+- **2×2:** CPU history as dot columns (last 20 samples × 8 rows), then the RAM and NET bars.
+- Samples every 2 s, and only while the widget exists and isn't paused. Adapter names are never shown.
+
+### 8. Sun compass (1×1, 2×2 circle)
+- A compass face pointing at the sun instead of north:
+  - Dark card with a ring of dots, "N" in red at the top, and tiny E / S / W;
+  - a dot arrow from the centre toward the sun's direction (azimuth).
+  - When the sun is down, the arrow is dim and the 2×2 shows "BELOW HORIZON".
+- **2×2** adds "SUNRISE 06:42", "SUNSET 17:58" and "SUN 34°" (elevation).
+- **Place:** the latitude and longitude from the weather setting (`WeatherService.Place`). The city is never shown.
+  With no city set: "SET A CITY IN SETTINGS".
+- Core `SolarPosition`:
+  - `Position(utc, lat, lon)` → azimuth and elevation (NOAA algorithm);
+  - `SunTimes(date, lat, lon, zone)` → sunrise and sunset, or none for polar day / night.
+  - Tested against NOAA reference values within ±1° / ±2 min.
+- Redraws every 5 minutes (the sun moves about 1.25° in that time), and when the weather place changes.
+
+## Testing
+- **Core (xUnit):**
+  - kinds, sizes, repeatable and picker order;
+  - `IsRound`;
+  - `WidgetChoices` (defaults, first unused toggle, sanitising);
+  - `ZoneLabels`, `ClockHands`, `StopwatchModel`, `ScreenTimeLog`, `MeterMath` / `DotBar`, `SolarPosition`,
+    `DotRing`;
+  - layout sanitising with the new kinds and the 1×2 size.
+- **App (STA tests, like `WidgetRootTests`):**
+  - `WidgetCard` surfaces and round radius;
+  - each widget builds at each of its sizes without throwing;
+  - the choice list's options for each kind.
+- `dotnet test NotWin.sln` green before asking to reinstall.
+
+## Left to the builder
+- Exact dot sizes and gaps per size, the line icons' geometry, and the choice popup's look (within the Add picker's
+  style).
+- Picker order within the groups above.
+- Whether the registry watcher for mic / camera is one shared watcher or one per tile.
