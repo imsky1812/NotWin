@@ -99,9 +99,9 @@ public sealed class EditChrome
         Outline = new Rectangle
         {
             Stroke = TileChrome.Red, StrokeThickness = 2 / scale, StrokeDashArray = [4, 3],
-            // A circle photo frame is round, so its overlap outline is too.
-            RadiusX = p.Kind == WidgetKind.Photo && p.Config?.Shape == "circle" ? p.Size.PxW / 2.0 : 26,
-            RadiusY = p.Kind == WidgetKind.Photo && p.Config?.Shape == "circle" ? p.Size.PxH / 2.0 : 26,
+            // A round card (a circle photo frame, Plan 13's round tiles) has a round overlap outline too.
+            RadiusX = WidgetRules.IsRound(p) ? Math.Min(p.Size.PxW, p.Size.PxH) / 2.0 : 26,
+            RadiusY = WidgetRules.IsRound(p) ? Math.Min(p.Size.PxW, p.Size.PxH) / 2.0 : 26,
             IsHitTestVisible = false, Visibility = overlaps ? Visibility.Visible : Visibility.Collapsed,
         };
         // Alpha 1, not 0: fully transparent pixels of a per-pixel-transparent window pass clicks through (the bare clock).
