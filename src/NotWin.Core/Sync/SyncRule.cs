@@ -36,7 +36,7 @@ public static class SyncRule
     }
 
     /// <summary>
-    /// The other PC's settings, keeping what belongs to this PC: start with Windows, the sync folder, the pin import and
+    /// The other PC's settings, keeping what belongs to this PC: start with Windows, the sync folder, the pin import, the remembered wallpaper and
     /// each photo frame's photos (files on this PC; a frame new here starts empty).
     /// </summary>
     /// Pins (security review 2026-11-21): a pin this PC also has keeps this PC's own entry; another pin is taken only
@@ -54,7 +54,7 @@ public static class SyncRule
         var merged = theirs with
         {
             StartWithWindows = mine.StartWithWindows, SyncFolder = mine.SyncFolder, PinsImported = mine.PinsImported,
-            PinnedApps = pins, Widgets = mine.Widgets,
+            PinnedApps = pins, Widgets = mine.Widgets, WallpaperBeforeDark = mine.WallpaperBeforeDark,
         };
         if (theirs.WidgetList is not { } layout) return merged;
         var myPhotos = (mine.WidgetList?.Widgets ?? []).Where(p => p.Config?.Photos is not null)
@@ -69,7 +69,7 @@ public static class SyncRule
     /// <summary>The settings as every PC shares them: this PC's own fields and the photo lists blanked (for comparing).</summary>
     public static ShellSettings Shared(ShellSettings s) => s with
     {
-        StartWithWindows = true, SyncFolder = null, PinsImported = false,
+        StartWithWindows = true, SyncFolder = null, PinsImported = false, WallpaperBeforeDark = null,
         WidgetList = s.WidgetList is { } l
             ? new Widgets.DesktopLayout([.. l.Widgets.Select(p => p.Config is null ? p : p with { Config = p.Config with { Photos = null } })])
             : null,
