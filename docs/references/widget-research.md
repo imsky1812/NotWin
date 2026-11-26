@@ -54,3 +54,15 @@ screens via image search; macOS desktop widgets):
   halftone fights everything placed on it.
 - **Ink stays black, red stays the only accent**; unlit dots get much lighter in light mode (~8% black), or the grid
   turns heavy.
+
+## Folder icons and the notch (2026-11-27)
+Searched Dribbble ("nothing folder icon", "dynamic island concept") and image search (Nothing OS 3 home screens,
+Phone (3) Glyph Matrix). Findings:
+- **Nothing OS folders** are frosted round / squircle tiles showing the folder's own apps as a small grid of
+  monochrome icons — you can tell what is inside without opening it. No folder glyph.
+- **Glyph Matrix (Phone 3)**: a circular dot display (~25×25 dots inside a circle) with unlit dots faintly visible and
+  pixel-art "toys" (battery %, clock, bottle, faces) lit in white — the most recognisable Nothing motif right now.
+- **Islands / notches** (Dribbble concepts, Dynamic Island): always black, like the camera cutout they grow from —
+  black reads as hardware in both light and dark themes; content morphs inside with a springy width change; one
+  live indicator at each end (leading = activity, trailing = status), never a full status bar.
+- Nothing's hardware language: a single red dot for "recording / live", thin light strips (Glyph bars) as progress.
