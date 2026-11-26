@@ -319,6 +319,9 @@ public partial class App : Application
             case Core.Widgets.WidgetKind.AnalogClock: return new Widgets.AnalogClockWidget(() => DateTime.Now);
             case Core.Widgets.WidgetKind.WorldClock: return new Widgets.WorldClockWidget(() => DateTime.UtcNow);
             case Core.Widgets.WidgetKind.StackedClock: return new Widgets.StackedClockWidget(() => DateTime.Now);
+            case Core.Widgets.WidgetKind.Stopwatch:
+                return new Widgets.StopwatchWidget(() => TimeSpan.FromTicks(System.Diagnostics.Stopwatch.GetTimestamp() * TimeSpan.TicksPerSecond / System.Diagnostics.Stopwatch.Frequency));
+            case Core.Widgets.WidgetKind.SystemMeters: return new Widgets.SystemMetersWidget(() => new Widgets.MeterSampler(Widgets.MeterSampler.ReadSystem));
             case Core.Widgets.WidgetKind.Timer: return _timer is null ? null : new Widgets.TimerWidget(_timer);
             case Core.Widgets.WidgetKind.Calendar: return new Widgets.CalendarWidget(_calendar, () => _widgets?.Editing == true);
             case Core.Widgets.WidgetKind.Agenda: return new Widgets.AgendaWidget(_calendar);
