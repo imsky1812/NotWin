@@ -55,18 +55,20 @@ public sealed class ToggleWidgetTests
     [Fact]
     public void ToggleWidget_Surfaces() => OnSta(() =>
     {
-        Assert.Equal(Surface.Light, Make("wifi", ToggleState.On).Widget.Surface);
+        // Follow-up (user): on = red; everything else is the theme's card.
+        Assert.Equal(Surface.Red, Make("wifi", ToggleState.On).Widget.Surface);
+        Assert.Equal(Surface.Red, Make("mic", ToggleState.On).Widget.Surface);
         Assert.Equal(Surface.Dark, Make("wifi", ToggleState.Off).Widget.Surface);
-        Assert.Equal(Surface.Red, Make("mic", ToggleState.Blocked).Widget.Surface);
+        Assert.Equal(Surface.Dark, Make("mic", ToggleState.Blocked).Widget.Surface);
         Assert.Equal(Surface.Dark, Make("bluetooth", ToggleState.Unavailable).Widget.Surface);
     });
 
-    // Spec: mic / camera "allowed = Light, blocked = Red" — blocked by this user (Off) is red too, labelled Blocked.
+    // Follow-up (user): a blocked mic / camera is a plain card with the slashed icon, labelled Blocked.
     [Fact]
-    public void ToggleWidget_PrivacyOff_IsRedBlocked() => OnSta(() =>
+    public void ToggleWidget_PrivacyOff_IsPlainBlocked() => OnSta(() =>
     {
         var (w, _, _) = Make("camera", ToggleState.Off);
-        Assert.Equal(Surface.Red, w.Surface);
+        Assert.Equal(Surface.Dark, w.Surface);
         Assert.Equal(["Camera access", "Blocked"], Rendered(w.Build(new WidgetSize(2, 1))));
     });
 
@@ -89,7 +91,7 @@ public sealed class ToggleWidgetTests
         w.CardChanged += () => changed++;
         w.Click();
         Assert.Equal(1, backend.Flips);
-        Assert.Equal(Surface.Light, w.Surface);
+        Assert.Equal(Surface.Red, w.Surface);
         Assert.True(changed >= 1);
         Assert.Empty(launched);
     });
@@ -144,6 +146,43 @@ public sealed class ToggleWidgetTests
         w.Configure(new WidgetConfig(Choice: "camera"));
         Assert.Equal(["wifi", "camera"], asked);
     });
+
+    private sealed class Walls
+    {
+        public string? Current = @"C:\me\beach.jpg";
+        public string? Remembered;
+        public List<string> Applied = [];
+    }
+
+    // The theme is written under a throwaway HKCU key and nothing is broadcast; the wallpaper goes through fakes.
+    [Fact]
+    public async Task DarkModeToggle_SwitchesWallpaperAndBack()
+    {
+        var root = $@"Software\NotWin.Tests\{Guid.NewGuid():N}\Personalize";
+        const string dark = @"C:\NotWin\Wallpapers\nothing_halftone_dark.png";
+        try
+        {
+            using (var k = Registry.CurrentUser.CreateSubKey(root)) k.SetValue("AppsUseLightTheme", 1, RegistryValueKind.DWord);
+            var w = new Walls();
+            using var toggle = new DarkModeToggle(new DarkModeWallpaperHost(
+                () => w.Current, p => { w.Applied.Add(p); w.Current = p; }, () => w.Remembered, r => w.Remembered = r, dark, _ => true),
+                themeKey: root, broadcast: false);
+            Assert.Equal(ToggleState.Off, await toggle.ReadAsync());
+            await toggle.FlipAsync();
+            Assert.Equal(ToggleState.On, await toggle.ReadAsync());
+            Assert.Equal([dark], w.Applied);
+            Assert.Equal(@"C:\me\beach.jpg", w.Remembered);
+            using (var k = Registry.CurrentUser.OpenSubKey(root)!) Assert.Equal(0, k.GetValue("SystemUsesLightTheme"));
+            await toggle.FlipAsync();
+            Assert.Equal(ToggleState.Off, await toggle.ReadAsync());
+            Assert.Equal([dark, @"C:\me\beach.jpg"], w.Applied);
+            Assert.Null(w.Remembered);
+        }
+        finally
+        {
+            Registry.CurrentUser.DeleteSubKeyTree(@"Software\NotWin.Tests\" + root.Split('\\')[2], throwOnMissingSubKey: false);
+        }
+    }
 
     [Fact]
     public async Task PrivacyToggle_FlipsBothValues()

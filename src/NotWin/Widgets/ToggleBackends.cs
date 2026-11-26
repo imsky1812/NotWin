@@ -26,10 +26,10 @@ public interface IToggleBackend : IDisposable
 public static class ToggleBackends
 {
     /// <summary>The backend for a toggle id (<see cref="WidgetChoices.Toggles"/>).</summary>
-    public static IToggleBackend For(string id, KeepAwakeService awake) => id switch
+    public static IToggleBackend For(string id, KeepAwakeService awake, DarkModeWallpaperHost? wallpaper = null) => id switch
     {
         "bluetooth" => new RadioToggle(RadioKind.Bluetooth, "ms-settings:bluetooth"),
-        "dark" => new DarkModeToggle(),
+        "dark" => new DarkModeToggle(wallpaper),
         "awake" => new KeepAwakeToggle(awake),
         "mic" => new PrivacyToggle("microphone"),
         "camera" => new PrivacyToggle("webcam"),
@@ -74,18 +74,41 @@ public sealed class RadioToggle(RadioKind kind, string settingsUri) : IToggleBac
 }
 
 /// <summary>Windows' app and system theme together (HKCU Personalize), then the theme-change broadcast.</summary>
+/// <summary>
+/// What the Dark mode tile needs to swap the wallpaper (Plan 13 follow-up): the current wallpaper and a way to set it,
+/// the remembered one (settings, per PC), NotWin's dark dot wallpaper and a file-exists check.
+/// </summary>
+public sealed record DarkModeWallpaperHost(Func<string?> Current, Action<string> Apply, Func<string?> Remembered, Action<string?> Remember,
+    string DarkPath, Func<string, bool> Exists);
+
+/// <summary>
+/// Windows' app and system theme together (HKCU Personalize), then the theme-change broadcast. With a
+/// <see cref="DarkModeWallpaperHost"/>, turning dark also switches to NotWin's dark dot wallpaper and turning light puts
+/// the previous one back (<see cref="DarkModeWallpaper"/>); only this click ever changes the wallpaper.
+/// </summary>
 public sealed class DarkModeToggle : IToggleBackend
 {
-    private const string Key = @"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize";
+    private const string DefaultKey = @"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize";
+    private readonly DarkModeWallpaperHost? _wallpaper;
+    private readonly string _key;
+    private readonly bool _broadcast;
 
-    public DarkModeToggle() => SystemEvents.UserPreferenceChanged += OnPreference;
+    /// <param name="themeKey">The Personalize key under HKCU (tests use a throwaway key).</param>
+    /// <param name="broadcast">Tell running apps the theme changed (off in tests).</param>
+    public DarkModeToggle(DarkModeWallpaperHost? wallpaper = null, string themeKey = DefaultKey, bool broadcast = true)
+    {
+        _wallpaper = wallpaper;
+        _key = themeKey;
+        _broadcast = broadcast;
+        SystemEvents.UserPreferenceChanged += OnPreference;
+    }
 
     public string SettingsUri => "ms-settings:colors";
     public event Action? Changed;
 
     public Task<ToggleState> ReadAsync()
     {
-        using var k = Registry.CurrentUser.OpenSubKey(Key);
+        using var k = Registry.CurrentUser.OpenSubKey(_key);
         if (k is null) return Task.FromResult(ToggleState.Unavailable);
         return Task.FromResult(k.GetValue("AppsUseLightTheme") is int light && light == 0 ? ToggleState.On : ToggleState.Off);
     }
@@ -93,13 +116,24 @@ public sealed class DarkModeToggle : IToggleBackend
     public async Task FlipAsync()
     {
         var dark = await ReadAsync() == ToggleState.On;
-        using (var k = Registry.CurrentUser.CreateSubKey(Key))
+        using (var k = Registry.CurrentUser.CreateSubKey(_key))
         {
             var light = dark ? 1 : 0; // dark on -> off means light
             k.SetValue("AppsUseLightTheme", light, RegistryValueKind.DWord);
             k.SetValue("SystemUsesLightTheme", light, RegistryValueKind.DWord);
         }
-        await Task.Run(() => SystemNative.BroadcastSettingChange("ImmersiveColorSet"));
+        if (_broadcast) await Task.Run(() => SystemNative.BroadcastSettingChange("ImmersiveColorSet"));
+        if (_wallpaper is { } w)
+        {
+            var (apply, remember) = DarkModeWallpaper.OnFlip(!dark, w.Current(), w.Remembered(), w.DarkPath, w.Exists);
+            w.Remember(remember);
+            if (apply is not null)
+            {
+                var path = apply;
+                await Task.Run(() => w.Apply(path));
+            }
+            Log.Info($"dark mode -> {(!dark ? "on" : "off")}, wallpaper changed={apply is not null}");
+        }
         Changed?.Invoke();
     }
 

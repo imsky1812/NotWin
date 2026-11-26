@@ -11,7 +11,7 @@ namespace NotWin.Widgets;
 /// <summary>
 /// Toggle tile (Plan 13): Wi-Fi, Bluetooth, Dark mode, Keep awake, Mic access or Camera access, chosen in edit mode. 1×1
 /// a centred line icon on a circle; 2×1 a pill with the icon, the name and the state ("On", never an SSID or device
-/// name). Off is a dark card, on a light card; mic / camera turn red while blocked (slashed icon). A click flips it; an
+/// name). On is a red card; off is the theme's card; a blocked mic / camera keeps the card with a slashed icon. A click flips it; an
 /// unavailable tile, or one blocked by the machine-wide switch, opens Settings instead.
 /// </summary>
 public sealed class ToggleWidget : IDesktopWidget
@@ -44,13 +44,8 @@ public sealed class ToggleWidget : IDesktopWidget
 
     private bool IsPrivacy => _id is "mic" or "camera";
 
-    public Surface Surface => _state switch
-    {
-        ToggleState.On => Surface.Light,
-        ToggleState.Blocked => Surface.Red,
-        ToggleState.Off when IsPrivacy => Surface.Red,
-        _ => Surface.Dark,
-    };
+    // Follow-up (user, 2026-11-26): on = red; off, blocked and unavailable are the theme's card.
+    public Surface Surface => _state == ToggleState.On ? Surface.Red : Surface.Dark;
 
     private string StateWord => _state switch
     {
