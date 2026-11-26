@@ -249,7 +249,13 @@ public partial class App : Application
         }
         catch (Exception e) { Log.Error("screen time failed to start", e); }
         // Widget cards follow Windows' light / dark app theme (Plan 13 follow-up).
-        try { Widgets.WidgetTheme.FollowWindows(); }
+        try
+        {
+            // The dock follows too (user 2026-11-26: "everything should softly blend").
+            Widgets.WidgetTheme.Changed += () => Theme.ShellTheme.Apply(Resources, Widgets.WidgetTheme.Light);
+            Widgets.WidgetTheme.FollowWindows();
+            Theme.ShellTheme.Apply(Resources, Widgets.WidgetTheme.Light);
+        }
         catch (Exception e) { Log.Error("widget theme failed to start", e); }
         try { StartWidgets(); }
         catch (Exception e) { Log.Error("desktop widgets failed to start", e); }

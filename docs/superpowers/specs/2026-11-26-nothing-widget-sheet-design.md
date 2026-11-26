@@ -237,3 +237,12 @@ dot art; a blocked mic / camera is a plain card with a slashed icon.
 
 ### Non-goals
 - Per-widget colour choices; changing the dock, notch, launcher or quick-settings colours with the theme.
+
+### Second follow-up (user, 2026-11-26, after seeing light mode)
+- "fix the widgets for white theme": every widget's text, icons and dots draw in the theme's ink in light mode (Up next,
+  Snake, folders, the dark analogue face and the rest were still white-on-light).
+- "use a white wallpaper for white theme": the Dark mode tile now pairs NotWin's dark dot wallpaper (dark mode) with its
+  white dot wallpaper (light mode); the remembered-wallpaper idea is dropped.
+- "why the taskbar is black, change its colour too; everything should softly blend": the dock follows Windows' theme
+  (a soft #EDEDED pill with ink glyphs in light mode; black as before in dark mode).
+- Not changed yet: the notch pill and its dashboard, the launcher and quick settings stay dark — offered as the next step.

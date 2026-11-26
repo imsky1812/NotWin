@@ -81,7 +81,7 @@ public sealed class AnalogClockWidget : IDesktopWidget
     /// <summary>The face, drawn to fit the smaller side of the space it gets.</summary>
     private sealed class Face(bool light) : FrameworkElement
     {
-        private static readonly Brush Ink = TileChrome.Frozen(0x10, 0x10, 0x10), Light = TileChrome.Text;
+        private static readonly Brush Ink = TileChrome.Frozen(0x10, 0x10, 0x10);
         private TimeOnly _time;
 
         public TimeOnly Time
@@ -103,8 +103,8 @@ public sealed class AnalogClockWidget : IDesktopWidget
             var r = Math.Min(ActualWidth, ActualHeight) / 2;
             if (r <= 0) return;
             var c = new Point(ActualWidth / 2, ActualHeight / 2);
-            var hand = light ? Ink : Light;
-            var tickBrush = light ? Ink : TileChrome.FrozenArgb(0x99, 0xE8, 0xE8, 0xE8);
+            var hand = light ? Ink : WidgetTheme.Text; // the dark face is the theme's card (light grey in light mode)
+            var tickBrush = light ? Ink : WidgetTheme.Dim;
             for (var i = 0; i < 12; i++)
             {
                 var major = i % 3 == 0;
