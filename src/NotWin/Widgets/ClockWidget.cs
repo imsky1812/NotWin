@@ -21,7 +21,7 @@ public sealed class ClockWidget : IDesktopWidget
 {
     private static readonly Brush Dark = TileChrome.Frozen(0x14, 0x14, 0x14), Light = TileChrome.Text;
     private static readonly Brush DateOnDark = TileChrome.Frozen(0xBB, 0xBB, 0xBB), DateOnLight = TileChrome.Frozen(0x33, 0x33, 0x33);
-    private readonly DispatcherTimer _minute = new();
+    private readonly MinuteTicker _minute;
     private DotMatrix? _dots;
     private TextBlock? _date;
     private bool _darkDots;
@@ -29,7 +29,7 @@ public sealed class ClockWidget : IDesktopWidget
 
     public ClockWidget()
     {
-        _minute.Tick += (_, _) => Tick();
+        _minute = new MinuteTicker(Tick);
         SystemEvents.UserPreferenceChanged += OnPreferenceChanged;
     }
 
@@ -82,9 +82,7 @@ public sealed class ClockWidget : IDesktopWidget
         var now = DateTime.Now;
         if (_dots is not null) _dots.Text = now.ToString("HH:mm", CultureInfo.InvariantCulture);
         if (_date is not null) _date.Text = now.ToString("ddd, d MMM", CultureInfo.InvariantCulture);
-        _minute.Stop();
-        _minute.Interval = TimeSpan.FromSeconds(60 - now.Second) - TimeSpan.FromMilliseconds(now.Millisecond) + TimeSpan.FromMilliseconds(50);
-        _minute.Start();
+        if (!_minute.Running) _minute.Start();
     }
 
     public void Dispose()

@@ -316,6 +316,9 @@ public partial class App : Application
             case Core.Widgets.WidgetKind.Clock: return new Widgets.ClockWidget();
             case Core.Widgets.WidgetKind.Toggle:
                 return new Widgets.ToggleWidget(id => Widgets.ToggleBackends.For(id, _awake), uri => Native.ShellLinkNative.Open(uri));
+            case Core.Widgets.WidgetKind.AnalogClock: return new Widgets.AnalogClockWidget(() => DateTime.Now);
+            case Core.Widgets.WidgetKind.WorldClock: return new Widgets.WorldClockWidget(() => DateTime.UtcNow);
+            case Core.Widgets.WidgetKind.StackedClock: return new Widgets.StackedClockWidget(() => DateTime.Now);
             case Core.Widgets.WidgetKind.Timer: return _timer is null ? null : new Widgets.TimerWidget(_timer);
             case Core.Widgets.WidgetKind.Calendar: return new Widgets.CalendarWidget(_calendar, () => _widgets?.Editing == true);
             case Core.Widgets.WidgetKind.Agenda: return new Widgets.AgendaWidget(_calendar);
