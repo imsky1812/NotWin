@@ -202,7 +202,7 @@ public partial class LauncherWindow : Window
             }
             else
             {
-                child.Background = isSel ? (Brush)FindResource("Brush.RowSel") : Brushes.Transparent;
+                child.Background = isSel ? (Brush)FindResource("Shell.RowSel") : Brushes.Transparent;
             }
         }
     }
@@ -214,7 +214,7 @@ public partial class LauncherWindow : Window
         Width = circle,
         Height = circle,
         CornerRadius = new CornerRadius(circle / 2),
-        Background = (Brush)FindResource("Brush.Circle"),
+        Background = (Brush)FindResource("Shell.Circle"),
         Child = new Image { Width = icon, Height = icon, Source = LauncherIcons.For(item, px) },
     };
 
@@ -224,7 +224,7 @@ public partial class LauncherWindow : Window
         stack.Children.Add(Circle(item, 48, 28, 48));
         stack.Children.Add(new TextBlock
         {
-            Text = item.Name, FontSize = 11.5, FontWeight = FontWeights.Medium, Foreground = (Brush)FindResource("Brush.SoftText"),
+            Text = item.Name, FontSize = 11.5, FontWeight = FontWeights.Medium, Foreground = (Brush)FindResource("Shell.Soft"),
             Margin = new Thickness(4, 7, 4, 0), TextTrimming = TextTrimming.CharacterEllipsis,
             HorizontalAlignment = HorizontalAlignment.Center, MaxWidth = 92,
         });
@@ -244,7 +244,7 @@ public partial class LauncherWindow : Window
         var card = new Border
         {
             Name = "Best", CornerRadius = new CornerRadius(18), Padding = new Thickness(14), Margin = new Thickness(0, 0, 0, 10),
-            Background = (Brush)FindResource("Brush.BestCard"), BorderBrush = (Brush)FindResource("Brush.Text"), Child = row,
+            Background = (Brush)FindResource("Shell.BestCard"), BorderBrush = (Brush)FindResource("Shell.Text"), Child = row,
         };
         return Interactive(card, item);
     }

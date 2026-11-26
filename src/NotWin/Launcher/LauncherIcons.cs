@@ -17,6 +17,7 @@ public static class LauncherIcons
 {
     private static AppIconCache? s_cache;
     private static ImageSource? s_gear;
+    private static bool s_gearLight; // the gear is drawn for one theme (light / dark, Plan 13 follow-up)
 
     /// <summary>For XAML bindings on a <see cref="LaunchItem"/>.</summary>
     public static IValueConverter Converter { get; } = new ItemConverter();
@@ -33,9 +34,10 @@ public static class LauncherIcons
 
     private static ImageSource Gear()
     {
-        if (s_gear is not null) return s_gear;
+        if (s_gear is not null && s_gearLight == NotWin.Theme.ShellTheme.Light) return s_gear;
+        s_gearLight = NotWin.Theme.ShellTheme.Light;
         // Line gear (stroke #F2F2F2) drawn once as a frozen DrawingImage.
-        var pen = new Pen(new SolidColorBrush(Color.FromRgb(0xE8, 0xE8, 0xE8)), 1.8) { StartLineCap = PenLineCap.Round, EndLineCap = PenLineCap.Round };
+        var pen = new Pen(new SolidColorBrush(NotWin.Theme.ShellTheme.Light ? Color.FromRgb(0x10, 0x10, 0x10) : Color.FromRgb(0xE8, 0xE8, 0xE8)), 1.8) { StartLineCap = PenLineCap.Round, EndLineCap = PenLineCap.Round };
         var g = new GeometryGroup();
         g.Children.Add(new EllipseGeometry(new Point(12, 12), 3, 3));
         for (var i = 0; i < 8; i++)

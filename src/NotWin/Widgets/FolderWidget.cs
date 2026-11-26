@@ -216,7 +216,7 @@ public sealed class FolderPopup : WidgetPopupWindow
     private FolderPopup(FrameworkElement content) =>
         Content = new Border
         {
-            Background = WidgetCard.CardBrush, BorderBrush = WidgetCard.EdgeBrush, BorderThickness = new Thickness(1.5),
+            Background = WidgetTheme.Popup, BorderBrush = WidgetTheme.Edge, BorderThickness = new Thickness(1.5),
             CornerRadius = new CornerRadius(26), Padding = new Thickness(10), Child = content,
         };
 
@@ -255,13 +255,13 @@ public sealed class AppChooser : WidgetPopupWindow
         _search = new TextBox
         {
             FontFamily = TileChrome.Font, FontSize = 14, Foreground = WidgetTheme.Text, CaretBrush = WidgetTheme.Text,
-            Background = TileChrome.Frozen(0x26, 0x26, 0x26), BorderThickness = new Thickness(0), Padding = new Thickness(12, 8, 12, 8),
+            Background = WidgetTheme.Hover, BorderThickness = new Thickness(0), Padding = new Thickness(12, 8, 12, 8),
             Margin = new Thickness(0, 0, 0, 8),
         };
         _search.TextChanged += (_, _) => Fill();
         Content = new Border
         {
-            Background = WidgetCard.CardBrush, BorderBrush = WidgetCard.EdgeBrush, BorderThickness = new Thickness(1.5),
+            Background = WidgetTheme.Popup, BorderBrush = WidgetTheme.Edge, BorderThickness = new Thickness(1.5),
             CornerRadius = new CornerRadius(20), Padding = new Thickness(10), Width = 320,
             Child = new DockPanel
             {
@@ -308,7 +308,7 @@ public sealed class AppChooser : WidgetPopupWindow
                 },
             };
             var item = app;
-            row.MouseEnter += (_, _) => row.Background = TileChrome.Frozen(0x2A, 0x2A, 0x2A);
+            row.MouseEnter += (_, _) => row.Background = WidgetTheme.Hover;
             row.MouseLeave += (_, _) => row.Background = Brushes.Transparent;
             row.MouseLeftButtonUp += (_, e) =>
             {

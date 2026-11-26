@@ -16,6 +16,7 @@ public static class ShellTheme
         "Dock.Bg", "Dock.Line", "Dock.Text", "Dock.Dim", "Dock.Hover", "Dock.Active", "Dock.RunDot", "Dock.Ink",
         "Shell.Glass", "Shell.Pill", "Shell.PillEdge", "Shell.Text", "Shell.Dim", "Shell.Soft", "Shell.Faint", "Shell.Line",
         "Shell.Tile", "Shell.Card", "Shell.Hover", "Shell.OnBg", "Shell.OnText", "Shell.OnDim", "Shell.Fill", "Shell.Ink",
+        "Shell.Field", "Shell.Circle", "Shell.Icon", "Shell.Placeholder", "Shell.RowSel", "Shell.Scrim", "Shell.BestCard",
     ];
 
     /// <summary>True after <see cref="Apply"/> with light (for code that picks colours when it builds).</summary>
@@ -43,6 +44,14 @@ public static class ShellTheme
         ["Shell.OnDim"] = (Color.FromRgb(0x55, 0x55, 0x55), Color.FromRgb(0x99, 0x99, 0x99)),
         ["Shell.Fill"] = (Color.FromRgb(0xE8, 0xE8, 0xE8), Color.FromRgb(0x1A, 0x1A, 0x1A)),           // slider fill, dots
         ["Shell.Ink"] = (Color.FromRgb(0x00, 0x00, 0x00), Color.FromRgb(0xFF, 0xFF, 0xFF)),            // a glyph cut out of Fill
+        // The launcher (user 2026-11-26: "why did you leave the start menu like that"). Dark values = the old tokens.
+        ["Shell.Field"] = (Color.FromArgb(0x0F, 0xFF, 0xFF, 0xFF), Color.FromArgb(0x0D, 0x00, 0x00, 0x00)),     // search box
+        ["Shell.Circle"] = (Color.FromRgb(0x26, 0x26, 0x26), Color.FromRgb(0xE6, 0xE6, 0xE6)),                // app icon circle
+        ["Shell.Icon"] = (Color.FromRgb(0xAA, 0xAA, 0xAA), Color.FromRgb(0x55, 0x55, 0x55)),
+        ["Shell.Placeholder"] = (Color.FromRgb(0x66, 0x66, 0x66), Color.FromRgb(0x9A, 0x9A, 0x9A)),
+        ["Shell.RowSel"] = (Color.FromArgb(0x17, 0xFF, 0xFF, 0xFF), Color.FromArgb(0x0F, 0x00, 0x00, 0x00)),
+        ["Shell.Scrim"] = (Color.FromArgb(0x73, 0x00, 0x00, 0x00), Color.FromArgb(0x33, 0x00, 0x00, 0x00)),
+        ["Shell.BestCard"] = (Color.FromArgb(0x12, 0xFF, 0xFF, 0xFF), Color.FromArgb(0x0A, 0x00, 0x00, 0x00)),
         ["Dock.Bg"] = (Color.FromArgb(0xE6, 0x00, 0x00, 0x00), Color.FromArgb(0xE6, 0xFF, 0xFF, 0xFF)), // frosted (Lucent)
         ["Dock.Line"] = (Color.FromArgb(0x1A, 0xFF, 0xFF, 0xFF), Color.FromArgb(0x14, 0x00, 0x00, 0x00)),
         ["Dock.Text"] = (Color.FromRgb(0xE8, 0xE8, 0xE8), Color.FromRgb(0x10, 0x10, 0x10)),

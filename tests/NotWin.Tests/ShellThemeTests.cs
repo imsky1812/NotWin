@@ -29,6 +29,8 @@ public sealed class ShellThemeTests
         Assert.Equal(Color.FromArgb(0xF2, 0xFF, 0xFF, 0xFF), C(r, "Shell.Pill"));
         Assert.Equal(Color.FromRgb(0x10, 0x10, 0x10), C(r, "Shell.Text"));
         Assert.Equal(Color.FromRgb(0x1A, 0x1A, 0x1A), C(r, "Shell.OnBg")); // an "on" tile is ink in light mode
+        Assert.Equal(Color.FromRgb(0xE6, 0xE6, 0xE6), C(r, "Shell.Circle")); // the launcher's app circles (user 2026-11-26)
+        Assert.Equal(Color.FromRgb(0x9A, 0x9A, 0x9A), C(r, "Shell.Placeholder"));
         ShellTheme.Apply(r, light: false);
         Assert.Equal(Color.FromRgb(0x00, 0x00, 0x00), C(r, "Shell.Pill"));
         Assert.Equal(Color.FromRgb(0xE8, 0xE8, 0xE8), C(r, "Shell.OnBg"));

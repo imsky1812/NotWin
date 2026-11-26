@@ -283,7 +283,7 @@ public sealed class PhotoManagePopup : Window
         _note.Margin = new Thickness(6, 8, 0, 0);
         Content = new Border
         {
-            Background = WidgetCard.CardBrush, BorderBrush = WidgetCard.EdgeBrush, BorderThickness = new Thickness(1.5),
+            Background = WidgetTheme.Popup, BorderBrush = WidgetTheme.Edge, BorderThickness = new Thickness(1.5),
             CornerRadius = new CornerRadius(20), Padding = new Thickness(10),
             Child = new StackPanel { Children = { _grid, _note } },
         };
@@ -346,7 +346,7 @@ public sealed class PhotoManagePopup : Window
         };
         var close = new Border
         {
-            Width = 22, Height = 22, CornerRadius = new CornerRadius(11), Background = TileChrome.Frozen(0x2A, 0x2A, 0x2A),
+            Width = 22, Height = 22, CornerRadius = new CornerRadius(11), Background = WidgetTheme.Popup,
             HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(0, 3, 3, 0),
             Cursor = Cursors.Hand,
             Child = new TextBlock { Text = "✕", FontSize = 11, Foreground = WidgetTheme.Text, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center },

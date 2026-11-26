@@ -277,3 +277,9 @@ dot art; a blocked mic / camera is a plain card with a slashed icon.
 - Snake: a theme-aware shade between games (no grey slab in light mode), quieter empty dots, a fading tail and a
   slightly larger head, a gently pulsing red food dot, "BEST n" / "NEW BEST" (red) on game over, and it speeds up as you
   score (120 ms, 3 ms quicker per point, never under 70 ms).
+
+### Sixth follow-up (user, 2026-11-26): the launcher and the remaining popups
+- The launcher (start menu) follows light / dark: its window uses Shell.* DynamicResources (glass, search field, app
+  circles, selected row, placeholder, scrim, best-match card); the settings gear is drawn per theme.
+- The Alarm editor, the app-folder popup and app chooser, and the photo frame's manage popup follow the widgets' theme
+  (white cards with ink text in light mode). The ringing-alarm card stays dark, as an alert.
