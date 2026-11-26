@@ -15,11 +15,12 @@ namespace NotWin.Widgets;
 public static class WidgetTheme
 {
     private const string Personalize = @"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize";
-    private static readonly Brush DarkCard = TileChrome.Frozen(0x1A, 0x1A, 0x1A), LightCard = TileChrome.Frozen(0xE8, 0xE8, 0xE8);
-    private static readonly Brush DarkEdge = TileChrome.FrozenArgb(0x21, 0xFF, 0xFF, 0xFF), LightEdge = TileChrome.FrozenArgb(0x14, 0, 0, 0);
+    // Lucent (user, 2026-11-26): frosted cards — slightly see-through, so the soft blurred wallpaper shows through.
+    private static readonly Brush DarkCard = TileChrome.FrozenArgb(0xE0, 0x22, 0x22, 0x22), LightCard = TileChrome.FrozenArgb(0xE6, 0xFF, 0xFF, 0xFF);
+    private static readonly Brush DarkEdge = TileChrome.FrozenArgb(0x21, 0xFF, 0xFF, 0xFF), LightEdge = TileChrome.FrozenArgb(0x12, 0, 0, 0);
     private static readonly Brush DarkText = TileChrome.Text, LightText = TileChrome.Frozen(0x10, 0x10, 0x10);
     private static readonly Brush DarkDim = TileChrome.Dim, LightDim = TileChrome.Frozen(0x6B, 0x6B, 0x6B);
-    private static readonly Brush DarkUnlit = TileChrome.FrozenArgb(0x40, 0xE8, 0xE8, 0xE8), LightUnlit = TileChrome.FrozenArgb(0x33, 0x10, 0x10, 0x10);
+    private static readonly Brush DarkUnlit = TileChrome.FrozenArgb(0x40, 0xE8, 0xE8, 0xE8), LightUnlit = TileChrome.FrozenArgb(0x1F, 0x10, 0x10, 0x10);
     private static bool s_following;
 
     public static bool Light { get; private set; }

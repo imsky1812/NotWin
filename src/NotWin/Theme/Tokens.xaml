@@ -31,7 +31,7 @@
     <SolidColorBrush x:Key="Brush.SoftText" Color="#FFCCCCCC" po:Freeze="True" />
     <SolidColorBrush x:Key="Brush.Icon" Color="#FFAAAAAA" po:Freeze="True" />
     <!-- The dock's colours (Plan 13 follow-up): dark defaults here; Theme/ShellTheme.cs swaps them for Windows' light mode. -->
-    <SolidColorBrush x:Key="Dock.Bg" Color="#FF000000" po:Freeze="True" />
+    <SolidColorBrush x:Key="Dock.Bg" Color="#E6000000" po:Freeze="True" />
     <SolidColorBrush x:Key="Dock.Line" Color="#1AFFFFFF" po:Freeze="True" />
     <SolidColorBrush x:Key="Dock.Text" Color="#FFE8E8E8" po:Freeze="True" />
     <SolidColorBrush x:Key="Dock.Dim" Color="#FF999999" po:Freeze="True" />

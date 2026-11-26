@@ -113,3 +113,31 @@ for gy in range(Pm // 2, H, Pm):
         cv2.circle(img, (gx * 4, gy * 4), int(2.4 * 4), (205, 205, 205), -1, cv2.LINE_AA, shift=2)
 red_dot(img, Pm // 2 + Pm * 71, Pm // 2 + Pm * 40, 14)
 save('nothing_grid_light', img)
+
+
+# E · Lucent (Plan 13 follow-up, user 2026-11-26): soft, blurred, grainy fields like Nothing OS 5's "Lucent" home
+# screens, one light and one dark. Large out-of-focus blobs with a faint tint, film grain, and nothing sharp behind
+# the widgets (the frosted cards let this show through).
+def lucent(seed, base, blobs, grain):
+    img = np.zeros((H, W, 3), np.float32)
+    img[:] = base
+    r = np.random.default_rng(seed)
+    for (fx, fy, fr, col, a) in blobs:
+        m = radial(W * fx, H * fy, min(W, H) * fr) ** 2
+        img += (np.array(col, np.float32) - base) * (m[:, :, None] * a)
+    k = int(min(W, H) * 0.35) | 1
+    img = cv2.GaussianBlur(img, (k, k), 0)
+    img += r.normal(0, grain, (H, W, 1)).astype(np.float32)  # monochrome grain
+    return np.clip(img, 0, 255).astype(np.uint8)
+
+
+# BGR colours: soft warm grey, cool grey-lilac and a sage tint on light; charcoal with a faint warm and a deep red glow
+# on dark (the one red accent).
+img = lucent(51, np.array((226, 226, 228), np.float32),
+             [(0.20, 0.22, 0.80, (206, 208, 220), 1.0), (0.80, 0.28, 0.75, (226, 196, 214), 1.0),
+              (0.55, 0.90, 0.85, (196, 216, 200), 1.0), (0.98, 0.98, 0.45, (242, 242, 244), 0.9)], grain=3.0)
+save('nothing_lucent_light', img)
+img = lucent(53, np.array((18, 18, 20), np.float32),
+             [(0.25, 0.30, 0.80, (38, 38, 42), 1.0), (0.80, 0.25, 0.70, (40, 32, 48), 0.9),
+              (0.72, 0.92, 0.55, (26, 24, 84), 0.6), (0.10, 0.95, 0.55, (30, 34, 32), 0.9)], grain=2.6)
+save('nothing_lucent_dark', img)

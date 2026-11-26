@@ -333,10 +333,10 @@ public partial class App : Application
             case Core.Widgets.WidgetKind.Clock: return new Widgets.ClockWidget();
             case Core.Widgets.WidgetKind.Toggle:
             {
-                // The Dark mode tile also switches between NotWin's dark and white dot wallpapers (Plan 13 follow-up).
+                // The Dark mode tile also switches between NotWin's soft blurred Lucent wallpapers, dark and light (Plan 13 follow-up).
                 var walls = Path.Combine(AppContext.BaseDirectory, "Wallpapers");
                 var wallpaper = new Widgets.DarkModeWallpaperHost(path => Native.WallpaperNative.Apply(path),
-                    Path.Combine(walls, "nothing_halftone_dark.png"), Path.Combine(walls, "nothing_halftone_light.png"), File.Exists);
+                    Path.Combine(walls, "nothing_lucent_dark.png"), Path.Combine(walls, "nothing_lucent_light.png"), File.Exists);
                 return new Widgets.ToggleWidget(id => Widgets.ToggleBackends.For(id, _awake, wallpaper), uri => Native.ShellLinkNative.Open(uri));
             }
             case Core.Widgets.WidgetKind.AnalogClock: return new Widgets.AnalogClockWidget(() => DateTime.Now);

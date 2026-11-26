@@ -246,3 +246,13 @@ dot art; a blocked mic / camera is a plain card with a slashed icon.
 - "why the taskbar is black, change its colour too; everything should softly blend": the dock follows Windows' theme
   (a soft #EDEDED pill with ink glyphs in light mode; black as before in dark mode).
 - Not changed yet: the notch pill and its dashboard, the launcher and quick settings stay dark — offered as the next step.
+
+### Third follow-up (user, 2026-11-26): Lucent light mode, blur in both modes
+- Light mode separated nothing from the halftone wallpaper. User picked "Lucent" (Nothing OS 5 style) and asked for
+  blur on the wallpaper in both modes.
+- Two new bundled wallpapers, `nothing_lucent_light` / `nothing_lucent_dark` (wallpapers/make_wallpapers.py, section E):
+  soft blurred tinted blobs with film grain, nothing sharp behind widgets. The Dark mode tile switches between them.
+  Both are also in Settings › Wallpaper.
+- Cards are frosted: white at ~90% opacity in light mode, #222 at ~88% in dark mode; unlit dots lighter in light mode.
+  The dock pill is frosted too. (A live blur behind desktop widgets isn't possible for these windows, so the wallpaper
+  itself is the blurred layer.)

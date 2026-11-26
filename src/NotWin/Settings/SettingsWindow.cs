@@ -218,7 +218,7 @@ public sealed class SettingsWindow : Window
         s_open.Show();
     }
 
-    // Widgets: size S / M / L (applies live) and "Edit widgets"; Wallpaper: the four Nothing wallpapers (spec §5, §6.7).
+    // Widgets: size S / M / L (applies live) and "Edit widgets"; Wallpaper: the bundled Nothing wallpapers (spec §5, §6.7; two Lucent ones added in Plan 13).
     // The wallpaper changes only when the user clicks one.
     private void AddWidgetSections(StackPanel stack, WidgetOptions w)
     {
@@ -270,7 +270,7 @@ public sealed class SettingsWindow : Window
                 files.AddRange(WallpaperMaker.List(g).Select(f => (f, WallpaperMaker.PreviewOf(f), "made by you")));
             var mine = files.Select(f => f.Full).ToHashSet(StringComparer.OrdinalIgnoreCase);
             if (bundledDir is not null)
-                foreach (var name in new[] { "nothing_halftone_light", "nothing_halftone_dark", "nothing_glyph_dark", "nothing_grid_light" })
+                foreach (var name in new[] { "nothing_lucent_light", "nothing_lucent_dark", "nothing_halftone_light", "nothing_halftone_dark", "nothing_glyph_dark", "nothing_grid_light" })
                     files.Add((System.IO.Path.Combine(bundledDir, name + ".png"), System.IO.Path.Combine(bundledDir, name + "_preview.jpg"),
                         name.Replace("nothing_", "").Replace('_', ' ')));
             foreach (var (full, preview, tip) in files)
@@ -289,7 +289,7 @@ public sealed class SettingsWindow : Window
                 var path = full;
                 if (mine.Contains(full) && w.GeneratedDir is { } genDir)
                 {
-                    // ✕ (on hover) deletes a wallpaper you made; the bundled four cannot be deleted.
+                    // ✕ (on hover) deletes a wallpaper you made; the bundled ones cannot be deleted.
                     var delete = new Border
                     {
                         Width = 24, Height = 24, CornerRadius = new CornerRadius(12), Margin = new Thickness(6),

@@ -19,7 +19,7 @@ public sealed class WidgetThemeTests
         {
             WidgetTheme.Apply(light: false);
             var card = (Border)WidgetCard.Wrap(new Grid(), Surface.Dark, false, new WidgetSize(2, 2), bare: false);
-            Assert.Equal(Color.FromRgb(0x1A, 0x1A, 0x1A), C(card.Background));
+            Assert.Equal(Color.FromArgb(0xE0, 0x22, 0x22, 0x22), C(card.Background)); // frosted (Lucent)
             Assert.Equal(Color.FromRgb(0xE8, 0xE8, 0xE8), C(WidgetCard.Ink(Surface.Dark)));
             var changed = 0;
             WidgetTheme.Changed += Count;
@@ -29,7 +29,7 @@ public sealed class WidgetThemeTests
             WidgetTheme.Changed -= Count;
             Assert.Equal(1, changed);
             card = (Border)WidgetCard.Wrap(new Grid(), Surface.Dark, false, new WidgetSize(2, 2), bare: false);
-            Assert.Equal(Color.FromRgb(0xE8, 0xE8, 0xE8), C(card.Background));
+            Assert.Equal(Color.FromArgb(0xE6, 0xFF, 0xFF, 0xFF), C(card.Background)); // frosted white (Lucent)
             Assert.Equal(Color.FromRgb(0x10, 0x10, 0x10), C(WidgetCard.Ink(Surface.Dark)));
             Assert.Equal(Color.FromRgb(0x10, 0x10, 0x10), C(WidgetTheme.Text));
             Assert.True(WidgetTheme.Light);

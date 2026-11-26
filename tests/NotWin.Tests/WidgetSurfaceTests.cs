@@ -30,7 +30,7 @@ public sealed class WidgetSurfaceTests
     public void Wrap_Dark_IsTodaysCard() => OnSta(() =>
     {
         var b = Wrap(Surface.Dark, false, 2, 2);
-        Assert.Equal(Color.FromRgb(0x1A, 0x1A, 0x1A), Bg(b));
+        Assert.Equal(Color.FromArgb(0xE0, 0x22, 0x22, 0x22), Bg(b)); // frosted (Lucent)
         Assert.Equal(new Thickness(1.5), b.BorderThickness);
     });
 
