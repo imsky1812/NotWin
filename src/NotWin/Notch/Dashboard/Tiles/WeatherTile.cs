@@ -43,7 +43,7 @@ public sealed class WeatherTile : ITileView
     public FrameworkElement Build(TileSize size)
     {
         _size = size;
-        _tile = TileChrome.Tile(new Grid(), center: size == TileSize.One);
+        _tile = DashChrome.Tile(new Grid(), center: size == TileSize.One);
         Fill();
         return _tile;
     }
@@ -55,7 +55,7 @@ public sealed class WeatherTile : ITileView
         var r = _weather.Current;
         if (place is null || r is null)
         {
-            var hint = TileChrome.Label(place is null ? "Set a city" : "No data yet");
+            var hint = DashChrome.Label(place is null ? "Set a city" : "No data yet");
             hint.HorizontalAlignment = HorizontalAlignment.Center;
             hint.VerticalAlignment = VerticalAlignment.Center;
             var box = new Grid { Background = System.Windows.Media.Brushes.Transparent, Cursor = place is null ? Cursors.Hand : null, Children = { hint } };
@@ -81,8 +81,8 @@ public sealed class WeatherTile : ITileView
     private static FrameworkElement One(WeatherPlace p, WeatherReport r, bool stale)
     {
         var stack = new StackPanel { HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
-        stack.Children.Add(new DotMatrix { Text = Deg(r.Temp), Dot = 3, Gap = 1, Fill = TileChrome.Text, HorizontalAlignment = HorizontalAlignment.Center });
-        var label = TileChrome.Label(stale ? Updated(r) : p.Name);
+        stack.Children.Add(new DotMatrix { Text = Deg(r.Temp), Dot = 3, Gap = 1, Fill = DashChrome.Text, HorizontalAlignment = HorizontalAlignment.Center });
+        var label = DashChrome.Label(stale ? Updated(r) : p.Name);
         label.Margin = new Thickness(0, 6, 0, 0);
         label.HorizontalAlignment = HorizontalAlignment.Center;
         stack.Children.Add(label);
@@ -92,28 +92,28 @@ public sealed class WeatherTile : ITileView
     private static FrameworkElement Wide(WeatherPlace p, WeatherReport r, bool stale)
     {
         var row = new DockPanel { VerticalAlignment = VerticalAlignment.Center };
-        var icon = TileChrome.Icon(IconFor(r.Kind), 20);
+        var icon = DashChrome.Icon(IconFor(r.Kind), 20);
         icon.Margin = new Thickness(0, 0, 8, 0);
         DockPanel.SetDock(icon, System.Windows.Controls.Dock.Left);
         row.Children.Add(icon);
         var right = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
-        var city = TileChrome.Label(p.Name);
+        var city = DashChrome.Label(p.Name);
         city.HorizontalAlignment = HorizontalAlignment.Right;
         right.Children.Add(city);
-        var range = TileChrome.Body($"↑{Deg(r.High)} ↓{Deg(r.Low)}", 11, FontWeights.Normal, TileChrome.Frozen(0xCC, 0xCC, 0xCC));
+        var range = DashChrome.Body($"↑{Deg(r.High)} ↓{Deg(r.Low)}", 11, FontWeights.Normal, DashChrome.Muted);
         range.Margin = new Thickness(0, 3, 0, 0);
         range.HorizontalAlignment = HorizontalAlignment.Right;
         right.Children.Add(range);
         if (stale)
         {
-            var upd = TileChrome.Label(Updated(r));
+            var upd = DashChrome.Label(Updated(r));
             upd.HorizontalAlignment = HorizontalAlignment.Right;
             right.Children.Add(upd);
         }
         DockPanel.SetDock(right, System.Windows.Controls.Dock.Right);
         row.Children.Add(right);
         // Dot 3 / gap 1.1 (not the mockup's 4 / 1.4): "-12°" must fit beside the city column in a 178 DIP tile.
-        row.Children.Add(new DotMatrix { Text = Deg(r.Temp), Dot = 3, Gap = 1.1, Fill = TileChrome.Text, VerticalAlignment = VerticalAlignment.Center });
+        row.Children.Add(new DotMatrix { Text = Deg(r.Temp), Dot = 3, Gap = 1.1, Fill = DashChrome.Text, VerticalAlignment = VerticalAlignment.Center });
         return row;
     }
 
@@ -128,13 +128,13 @@ public sealed class WeatherTile : ITileView
         foreach (var d in r.Days.Take(5))
         {
             var col = new StackPanel { HorizontalAlignment = HorizontalAlignment.Center };
-            var name = TileChrome.Label(d.Date.ToString("ddd", CultureInfo.InvariantCulture)[..1]);
+            var name = DashChrome.Label(d.Date.ToString("ddd", CultureInfo.InvariantCulture)[..1]);
             name.HorizontalAlignment = HorizontalAlignment.Center;
             col.Children.Add(name);
-            var ic = TileChrome.Icon(IconFor(d.Kind), 16);
+            var ic = DashChrome.Icon(IconFor(d.Kind), 16);
             ic.Margin = new Thickness(0, 4, 0, 4);
             col.Children.Add(ic);
-            var hi = TileChrome.Body(Deg(d.High), 11, FontWeights.Normal);
+            var hi = DashChrome.Body(Deg(d.High), 11, FontWeights.Normal);
             hi.HorizontalAlignment = HorizontalAlignment.Center;
             col.Children.Add(hi);
             days.Children.Add(col);

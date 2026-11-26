@@ -18,7 +18,7 @@ namespace NotWin.Notch.Dashboard.Tiles;
 /// </summary>
 public sealed class ShelfTile : ITileView, IFileDropTarget
 {
-    private static readonly Brush ChipBrush = TileChrome.Frozen(0x22, 0x22, 0x22);
+    private static Brush ChipBrush => DashChrome.Chip;
     private readonly ShelfStore _store;
     private readonly ShelfList _shelf;
     private readonly AppIconCache _icons;
@@ -48,7 +48,7 @@ public sealed class ShelfTile : ITileView, IFileDropTarget
         _size = size;
         // Drops arrive through the notch window (WM_DROPFILES, see FileDropNative), not WPF drag-and-drop: OLE drops
         // from Explorer cannot reach this High-integrity process.
-        _tile = TileChrome.Tile(new Grid(), center: size == TileSize.One);
+        _tile = DashChrome.Tile(new Grid(), center: size == TileSize.One);
         Fill();
         return _tile;
     }
@@ -60,17 +60,17 @@ public sealed class ShelfTile : ITileView, IFileDropTarget
         if (_size == TileSize.One)
         {
             var stack = new StackPanel { HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
-            var icon = TileChrome.Icon("shelf", 20);
+            var icon = DashChrome.Icon("shelf", 20);
             icon.Margin = new Thickness(0, 0, 0, 6);
             stack.Children.Add(icon);
-            var label = TileChrome.Label($"Shelf · {count}");
+            var label = DashChrome.Label($"Shelf · {count}");
             label.HorizontalAlignment = HorizontalAlignment.Center;
             stack.Children.Add(label);
             _tile.Child = stack;
             return;
         }
         var panel = new DockPanel();
-        var header = TileChrome.Header("shelf", "Shelf", TileChrome.Label(count == 1 ? "1 file" : $"{count} files"));
+        var header = DashChrome.Header("shelf", "Shelf", DashChrome.Label(count == 1 ? "1 file" : $"{count} files"));
         DockPanel.SetDock(header, System.Windows.Controls.Dock.Top);
         panel.Children.Add(header);
         if (count == 0) panel.Children.Add(DropArea());
@@ -87,16 +87,16 @@ public sealed class ShelfTile : ITileView, IFileDropTarget
     private static FrameworkElement DropArea()
     {
         var text = new StackPanel { HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
-        var line = TileChrome.Body("Drop files here", 12, FontWeights.Normal, TileChrome.Frozen(0xAA, 0xAA, 0xAA));
+        var line = DashChrome.Body("Drop files here", 12, FontWeights.Normal, DashChrome.Muted);
         line.HorizontalAlignment = HorizontalAlignment.Center;
         text.Children.Add(line);
-        var hint = TileChrome.Label("Click to copy · drag out");
+        var hint = DashChrome.Label("Click to copy · drag out");
         hint.Margin = new Thickness(0, 4, 0, 0);
         hint.HorizontalAlignment = HorizontalAlignment.Center;
         text.Children.Add(hint);
         var dashes = new Rectangle
         {
-            Stroke = TileChrome.Frozen(0x3A, 0x3A, 0x3A), StrokeThickness = 1.5, StrokeDashArray = [3, 2], RadiusX = 14, RadiusY = 14,
+            Stroke = DashChrome.Dim, StrokeThickness = 1.5, StrokeDashArray = [3, 2], RadiusX = 14, RadiusY = 14,
         };
         return new Grid { Margin = new Thickness(0, 8, 0, 0), Children = { dashes, text } };
     }
@@ -105,13 +105,13 @@ public sealed class ShelfTile : ITileView, IFileDropTarget
     {
         var name = new TextBlock
         {
-            Text = Path.GetFileName(path.TrimEnd('\\')), FontFamily = TileChrome.Font, FontSize = 11, Foreground = TileChrome.Text,
+            Text = Path.GetFileName(path.TrimEnd('\\')), FontFamily = DashChrome.Font, FontSize = 11, Foreground = DashChrome.Text,
             MaxWidth = 92, TextTrimming = TextTrimming.CharacterEllipsis, VerticalAlignment = VerticalAlignment.Center,
             Margin = new Thickness(6, 0, 0, 0),
         };
         var x = new TextBlock
         {
-            Text = "✕", FontSize = 9, Foreground = TileChrome.Dim, Margin = new Thickness(6, 0, 0, 0), Visibility = Visibility.Hidden,
+            Text = "✕", FontSize = 9, Foreground = DashChrome.Dim, Margin = new Thickness(6, 0, 0, 0), Visibility = Visibility.Hidden,
             VerticalAlignment = VerticalAlignment.Center, Cursor = Cursors.Hand, Background = Brushes.Transparent,
         };
         x.MouseLeftButtonUp += (_, e) => { e.Handled = true; _shelf.Remove(index); Save(); };

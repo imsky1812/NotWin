@@ -41,29 +41,29 @@ public sealed class KeepAwakeTile : ITileView
         if (_size == TileSize.One)
         {
             var stack = new StackPanel { HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
-            var icon = TileChrome.Icon("cup", 20, on ? TileChrome.Dark : TileChrome.Text);
+            var icon = DashChrome.Icon("cup", 20, on ? DashChrome.Dark : DashChrome.Text);
             icon.Margin = new Thickness(0, 0, 0, 6);
             stack.Children.Add(icon);
-            var label = TileChrome.Label(on ? "Awake" : "Sleep ok", on ? TileChrome.Dark : null);
+            var label = DashChrome.Label(on ? "Awake" : "Sleep ok", on ? DashChrome.Dark : null);
             label.HorizontalAlignment = HorizontalAlignment.Center;
             stack.Children.Add(label);
-            _tile.Child = TileChrome.Tile(stack, center: true, background: on ? TileChrome.Text : null);
+            _tile.Child = DashChrome.Tile(stack, center: true, background: on ? DashChrome.Text : null);
             return;
         }
         var row = new DockPanel { VerticalAlignment = VerticalAlignment.Center };
-        var cup = TileChrome.Icon("cup", 20);
+        var cup = DashChrome.Icon("cup", 20);
         cup.Margin = new Thickness(0, 0, 10, 0);
         DockPanel.SetDock(cup, System.Windows.Controls.Dock.Left);
         row.Children.Add(cup);
-        var toggle = TileChrome.Toggle(on);
+        var toggle = DashChrome.Toggle(on);
         toggle.VerticalAlignment = VerticalAlignment.Center;
         DockPanel.SetDock(toggle, System.Windows.Controls.Dock.Right);
         row.Children.Add(toggle);
         var text = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
-        text.Children.Add(TileChrome.Body("Keep awake", 13, FontWeights.SemiBold));
-        text.Children.Add(TileChrome.Label(on ? "On" : "Off"));
+        text.Children.Add(DashChrome.Body("Keep awake", 13, FontWeights.SemiBold));
+        text.Children.Add(DashChrome.Label(on ? "On" : "Off"));
         row.Children.Add(text);
-        _tile.Child = TileChrome.Tile(row);
+        _tile.Child = DashChrome.Tile(row);
     }
 
     public void Opened() => Fill();

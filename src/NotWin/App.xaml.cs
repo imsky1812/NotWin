@@ -258,8 +258,8 @@ public partial class App : Application
             Theme.ShellTheme.Apply(Resources, Widgets.WidgetTheme.Light);
             // The Lucent wallpaper takes its colours from the photo frame and re-tints when the theme flips (only while a
             // NotWin Lucent wallpaper is showing; a wallpaper the user picked is never replaced).
-            _tint = new Widgets.PhotoTint(Path.Combine(DataDir, "lucent"), Native.WallpaperNative.Current,
-                path => Task.Run(() => Native.WallpaperNative.Apply(path)), () => Widgets.WidgetTheme.Light);
+            _tint = new Widgets.PhotoTint(Path.Combine(DataDir, "lucent"), Native.WallpaperNative.CurrentSource,
+                path => Task.Run(() => Native.WallpaperNative.ApplyFaded(path)), () => Widgets.WidgetTheme.Light); // cross-fade
             Widgets.WidgetTheme.Changed += _tint.Schedule;
         }
         catch (Exception e) { Log.Error("widget theme failed to start", e); }
@@ -341,7 +341,7 @@ public partial class App : Application
             {
                 // The Dark mode tile also switches between NotWin's soft blurred Lucent wallpapers, dark and light (Plan 13 follow-up).
                 var walls = Path.Combine(AppContext.BaseDirectory, "Wallpapers");
-                var wallpaper = new Widgets.DarkModeWallpaperHost(path => Native.WallpaperNative.Apply(path),
+                var wallpaper = new Widgets.DarkModeWallpaperHost(path => Native.WallpaperNative.ApplyFaded(path),
                     Path.Combine(walls, "nothing_lucent_dark.png"), Path.Combine(walls, "nothing_lucent_light.png"), File.Exists);
                 return new Widgets.ToggleWidget(id => Widgets.ToggleBackends.For(id, _awake, wallpaper), uri => Native.ShellLinkNative.Open(uri));
             }

@@ -23,24 +23,24 @@ public sealed class ToolTile(TileKind kind, Action<TileKind> run) : ITileView
             var row = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
             row.Children.Add(new Border
             {
-                Width = 36, Height = 36, CornerRadius = new CornerRadius(18), Background = TileChrome.Frozen(0x22, 0x22, 0x22),
-                Margin = new Thickness(0, 0, 12, 0), Child = TileChrome.Icon(icon, 20),
+                Width = 36, Height = 36, CornerRadius = new CornerRadius(18), Background = DashChrome.Chip,
+                Margin = new Thickness(0, 0, 12, 0), Child = DashChrome.Icon(icon, 20),
             });
-            var name = TileChrome.Body(title, 13, FontWeights.SemiBold);
+            var name = DashChrome.Body(title, 13, FontWeights.SemiBold);
             name.VerticalAlignment = VerticalAlignment.Center;
             row.Children.Add(name);
-            tile = TileChrome.Tile(row);
+            tile = DashChrome.Tile(row);
         }
         else
         {
             var stack = new StackPanel();
-            var ic = TileChrome.Icon(icon, 20);
+            var ic = DashChrome.Icon(icon, 20);
             ic.Margin = new Thickness(0, 0, 0, 6);
             stack.Children.Add(ic);
-            var label = TileChrome.Label(title);
+            var label = DashChrome.Label(title);
             label.HorizontalAlignment = HorizontalAlignment.Center;
             stack.Children.Add(label);
-            tile = TileChrome.Tile(stack, center: true);
+            tile = DashChrome.Tile(stack, center: true);
         }
         tile.Cursor = Cursors.Hand;
         tile.MouseLeftButtonUp += (_, e) => { e.Handled = true; run(kind); };
