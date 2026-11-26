@@ -60,7 +60,7 @@ public sealed class BatteryWidget : IDesktopWidget
         _host.Children.Clear();
         if (list.Count == 0)
         {
-            var none = TileChrome.Label("No battery");
+            var none = WidgetTheme.Label("No battery");
             none.HorizontalAlignment = HorizontalAlignment.Center;
             none.VerticalAlignment = VerticalAlignment.Center;
             _host.Children.Add(none);
@@ -88,7 +88,7 @@ public sealed class BatteryWidget : IDesktopWidget
         var low = d.Percent is < 20;
         var ring = new Grid { Width = ringSize, Height = ringSize, ToolTip = d.Percent is { } p ? $"{d.Name} · {p}%" : d.Name };
         if (d.Percent is { } pct) ring.Children.Add(Ring(ringSize, pct, low));
-        var icon = TileChrome.Icon(d.Icon, iconSize, low ? TileChrome.Red : TileChrome.Text);
+        var icon = TileChrome.Icon(d.Icon, iconSize, low ? TileChrome.Red : WidgetTheme.Text);
         icon.HorizontalAlignment = HorizontalAlignment.Center;
         icon.VerticalAlignment = VerticalAlignment.Center;
         ring.Children.Add(icon);
@@ -96,7 +96,7 @@ public sealed class BatteryWidget : IDesktopWidget
         {
             var bolt = new TextBlock
             {
-                Text = "⚡", FontSize = iconSize * 0.45, Foreground = TileChrome.Text,
+                Text = "⚡", FontSize = iconSize * 0.45, Foreground = WidgetTheme.Text,
                 HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Bottom, Margin = new Thickness(0, 0, 0, ringSize * 0.14),
             };
             ring.Children.Add(bolt);
@@ -109,7 +109,7 @@ public sealed class BatteryWidget : IDesktopWidget
         var name = TileChrome.Body(d.Name, 17, FontWeights.SemiBold);
         name.TextTrimming = TextTrimming.CharacterEllipsis;
         text.Children.Add(name);
-        var state = TileChrome.Label(low ? "Low · charge soon" : d.Percent is null ? "Connected" : d.Charging ? "Charging" : "OK", low ? TileChrome.Red : null);
+        var state = WidgetTheme.Label(low ? "Low · charge soon" : d.Percent is null ? "Connected" : d.Charging ? "Charging" : "OK", low ? TileChrome.Red : null);
         state.Margin = new Thickness(0, 6, 0, 0);
         text.Children.Add(state);
         ring.HorizontalAlignment = HorizontalAlignment.Center;
@@ -127,7 +127,7 @@ public sealed class BatteryWidget : IDesktopWidget
         var stroke = size * 0.09;
         var r = (size - stroke) / 2 - 1;
         var c = size / 2;
-        var track = new Ellipse { Width = r * 2, Height = r * 2, Stroke = TileChrome.Frozen(0x2C, 0x2C, 0x2C), StrokeThickness = stroke, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
+        var track = new Ellipse { Width = r * 2, Height = r * 2, Stroke = WidgetTheme.Unlit, StrokeThickness = stroke, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
         var grid = new Grid { Width = size, Height = size, Children = { track } };
         var pct = Math.Clamp(percent, 0, 100);
         if (pct <= 0) return grid;
@@ -137,7 +137,7 @@ public sealed class BatteryWidget : IDesktopWidget
         figure.Segments.Add(new ArcSegment(end, new Size(r, r), 0, pct > 50, SweepDirection.Clockwise, true));
         grid.Children.Add(new Path
         {
-            Data = new PathGeometry([figure]), Stroke = low ? TileChrome.Red : TileChrome.Text, StrokeThickness = stroke,
+            Data = new PathGeometry([figure]), Stroke = low ? TileChrome.Red : WidgetTheme.Text, StrokeThickness = stroke,
             StrokeStartLineCap = PenLineCap.Round, StrokeEndLineCap = PenLineCap.Round,
         });
         return grid;
@@ -149,7 +149,7 @@ public sealed class BatteryWidget : IDesktopWidget
         for (var i = 0; i < count; i++)
         {
             var index = i;
-            var dot = new Ellipse { Width = 7, Height = 7, Fill = i == _pages.Current ? TileChrome.Text : TileChrome.Frozen(0x44, 0x44, 0x44) };
+            var dot = new Ellipse { Width = 7, Height = 7, Fill = i == _pages.Current ? WidgetTheme.Text : WidgetTheme.Unlit };
             var hit = new Border { Padding = new Thickness(3, 3.5, 3, 3.5), Background = Brushes.Transparent, Cursor = Cursors.Hand, Child = dot };
             hit.MouseLeftButtonUp += (_, e) => { e.Handled = true; _pages.Go(index); Fill(); };
             stack.Children.Add(hit);

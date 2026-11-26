@@ -15,7 +15,7 @@ namespace NotWin.Widgets;
 /// </summary>
 public sealed class SystemMetersWidget : IDesktopWidget
 {
-    private static readonly Brush Unlit = TileChrome.FrozenArgb(0x26, 0xE8, 0xE8, 0xE8);
+    private static Brush Unlit => WidgetTheme.Unlit;
     private readonly MeterSampler _sampler;
     private (int Cpu, int Ram, double Down, double Up) _last;
     private readonly Dictionary<string, (DotBar Bar, TextBlock Value)> _rows = [];
@@ -57,7 +57,7 @@ public sealed class SystemMetersWidget : IDesktopWidget
             var head = new DockPanel { Margin = new Thickness(0, 0, 0, 8) };
             DockPanel.SetDock(_cpuValue, System.Windows.Controls.Dock.Right);
             head.Children.Add(_cpuValue);
-            head.Children.Add(TileChrome.Label("CPU"));
+            head.Children.Add(WidgetTheme.Label("CPU"));
             _history = new DotChartView
             {
                 ColumnCount = MeterSampler.HistoryLength, Rows = 8, Dot = 5, Gap = 3, ColumnGap = 6, Off = Unlit,
@@ -79,7 +79,7 @@ public sealed class SystemMetersWidget : IDesktopWidget
         var bar = new DotBar { Count = 10, Dot = 6, Gap = 4, Off = Unlit, VerticalAlignment = VerticalAlignment.Center };
         var value = Value();
         _rows[name] = (bar, value);
-        var label = TileChrome.Label(name);
+        var label = WidgetTheme.Label(name);
         label.Width = 44;
         var grid = new DockPanel { Margin = new Thickness(0, 3, 0, 3) };
         DockPanel.SetDock(label, System.Windows.Controls.Dock.Left);
@@ -92,7 +92,7 @@ public sealed class SystemMetersWidget : IDesktopWidget
 
     private static TextBlock Value() => new()
     {
-        FontFamily = TileChrome.Mono, FontSize = 11, Foreground = TileChrome.Text, MinWidth = 64, TextAlignment = TextAlignment.Right,
+        FontFamily = TileChrome.Mono, FontSize = 11, Foreground = WidgetTheme.Text, MinWidth = 64, TextAlignment = TextAlignment.Right,
         VerticalAlignment = VerticalAlignment.Center,
     };
 
@@ -108,14 +108,14 @@ public sealed class SystemMetersWidget : IDesktopWidget
         if (_history is not null)
         {
             _history.Columns = _sampler.CpuHistory.Select(v => MeterMath.Lit(v, 8)).ToList();
-            _history.On = MeterMath.Hot(cpu) ? TileChrome.Red : TileChrome.Text;
+            _history.On = MeterMath.Hot(cpu) ? TileChrome.Red : WidgetTheme.Text;
         }
     }
 
     private void Set(string name, int percent, string text, bool hot)
     {
         if (!_rows.TryGetValue(name, out var row)) return;
-        var brush = hot ? TileChrome.Red : TileChrome.Text;
+        var brush = hot ? TileChrome.Red : WidgetTheme.Text;
         row.Bar.On = brush;
         row.Bar.Accent = brush;
         row.Bar.Lit = MeterMath.Lit(percent, row.Bar.Count);

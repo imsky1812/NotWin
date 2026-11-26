@@ -10,7 +10,12 @@ namespace NotWin.Notch.Dashboard;
 /// </summary>
 public sealed class GridTimerView : FrameworkElement
 {
-    private static readonly Brush Lit = TileChrome.Text, Gone = TileChrome.Frozen(0x2C, 0x2C, 0x2C), Red = TileChrome.Red;
+    private static readonly Brush Red = TileChrome.Red;
+
+    /// <summary>Lit and gone dots (the desktop timer widget passes its theme colours, Plan 13 follow-up).</summary>
+    public Brush Lit { get; init; } = TileChrome.Text;
+
+    public Brush Gone { get; init; } = TileChrome.Frozen(0x2C, 0x2C, 0x2C);
     private readonly double _size;
     private readonly int _n;
     private double _fraction = 1;

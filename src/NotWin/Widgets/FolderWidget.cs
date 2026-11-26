@@ -123,7 +123,7 @@ public sealed class FolderWidget : IDesktopWidget
             ToolTip = item.Name, Tag = item,
             Child = new Image { Source = icon, Width = 40, Height = 40, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center },
         };
-        tile.MouseEnter += (_, _) => tile.Background = TileChrome.Frozen(0x2A, 0x2A, 0x2A);
+        tile.MouseEnter += (_, _) => tile.Background = WidgetTheme.Hover;
         tile.MouseLeave += (_, _) => tile.Background = Brushes.Transparent;
         tile.MouseLeftButtonUp += (_, e) => { e.Handled = true; Guard(() => open(item)); };
         tile.MouseRightButtonUp += (_, e) =>
@@ -144,8 +144,8 @@ public sealed class FolderWidget : IDesktopWidget
         var tile = new Border
         {
             Width = 52, Height = 52, CornerRadius = new CornerRadius(14), Cursor = Cursors.Hand, Tag = "add",
-            BorderBrush = TileChrome.FrozenArgb(0x66, 0xE8, 0xE8, 0xE8), BorderThickness = new Thickness(1.5), Background = Brushes.Transparent,
-            Child = new TextBlock { Text = "＋", FontSize = 22, Foreground = TileChrome.Text, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center },
+            BorderBrush = WidgetTheme.Dash, BorderThickness = new Thickness(1.5), Background = Brushes.Transparent,
+            Child = new TextBlock { Text = "＋", FontSize = 22, Foreground = WidgetTheme.Text, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center },
         };
         tile.MouseLeftButtonUp += (_, e) => { e.Handled = true; Guard(add); };
         return tile;
@@ -254,7 +254,7 @@ public sealed class AppChooser : WidgetPopupWindow
         _pick = pick;
         _search = new TextBox
         {
-            FontFamily = TileChrome.Font, FontSize = 14, Foreground = TileChrome.Text, CaretBrush = TileChrome.Text,
+            FontFamily = TileChrome.Font, FontSize = 14, Foreground = WidgetTheme.Text, CaretBrush = WidgetTheme.Text,
             Background = TileChrome.Frozen(0x26, 0x26, 0x26), BorderThickness = new Thickness(0), Padding = new Thickness(12, 8, 12, 8),
             Margin = new Thickness(0, 0, 0, 8),
         };
@@ -303,7 +303,7 @@ public sealed class AppChooser : WidgetPopupWindow
                     Children =
                     {
                         new Image { Source = icon, Width = 24, Height = 24, Margin = new Thickness(0, 0, 10, 0) },
-                        new TextBlock { Text = app.Name, FontFamily = TileChrome.Font, FontSize = 14, Foreground = TileChrome.Text, VerticalAlignment = VerticalAlignment.Center },
+                        new TextBlock { Text = app.Name, FontFamily = TileChrome.Font, FontSize = 14, Foreground = WidgetTheme.Text, VerticalAlignment = VerticalAlignment.Center },
                     },
                 },
             };

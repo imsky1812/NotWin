@@ -73,8 +73,8 @@ public sealed class WorldClockWidget : IDesktopWidget
                 HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center,
                 Children =
                 {
-                    new DotMatrix { Text = time, Dot = 2.4, Gap = 1, Fill = TileChrome.Text, HorizontalAlignment = HorizontalAlignment.Center },
-                    Centered(TileChrome.Label($"{label} · {Day(there, "ddd")}"), 8),
+                    new DotMatrix { Text = time, Dot = 2.4, Gap = 1, Fill = WidgetTheme.Text, HorizontalAlignment = HorizontalAlignment.Center },
+                    Centered(WidgetTheme.Label($"{label} · {Day(there, "ddd")}"), 8),
                 },
             };
             return;
@@ -84,15 +84,15 @@ public sealed class WorldClockWidget : IDesktopWidget
             VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(16, 0, 0, 0),
             Children =
             {
-                TileChrome.Label(Day(there, "dddd"), TileChrome.Text),
-                Spaced(TileChrome.Label(label)),
-                Spaced(TileChrome.Label(ZoneLabels.Difference(ZoneLabels.Offset(_local, utc), offset))),
+                WidgetTheme.Label(Day(there, "dddd"), WidgetTheme.Text),
+                Spaced(WidgetTheme.Label(label)),
+                Spaced(WidgetTheme.Label(ZoneLabels.Difference(ZoneLabels.Offset(_local, utc), offset))),
             },
         };
         _host.Child = new StackPanel
         {
             Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(14, 0, 0, 0),
-            Children = { new DotMatrix { Text = time, Dot = 4.2, Gap = 1.5, Fill = TileChrome.Text, VerticalAlignment = VerticalAlignment.Center }, right },
+            Children = { new DotMatrix { Text = time, Dot = 4.2, Gap = 1.5, Fill = WidgetTheme.Text, VerticalAlignment = VerticalAlignment.Center }, right },
         };
     }
 

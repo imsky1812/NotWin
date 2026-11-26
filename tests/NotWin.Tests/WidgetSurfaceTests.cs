@@ -8,6 +8,7 @@ using NotWin.Widgets;
 namespace NotWin.Tests;
 
 /// <summary>Plan 13: light / red / round cards, the dot ring and the edit-mode choice lists.</summary>
+[Collection("WidgetTheme")]
 public sealed class WidgetSurfaceTests
 {
     internal static void OnSta(Action body)

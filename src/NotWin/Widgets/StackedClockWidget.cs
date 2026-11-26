@@ -26,8 +26,8 @@ public sealed class StackedClockWidget : IDesktopWidget
     public FrameworkElement Build(WidgetSize size)
     {
         var (dot, gap, space) = size.H == 2 ? (6.5, 2.3, 18.0) : (3.6, 1.3, 8.0);
-        _hours = new DotMatrix { Dot = dot, Gap = gap, Fill = TileChrome.Text, HorizontalAlignment = HorizontalAlignment.Center };
-        _minutes = new DotMatrix { Dot = dot, Gap = gap, Fill = TileChrome.Text, HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, space, 0, 0) };
+        _hours = new DotMatrix { Dot = dot, Gap = gap, Fill = WidgetTheme.Text, HorizontalAlignment = HorizontalAlignment.Center };
+        _minutes = new DotMatrix { Dot = dot, Gap = gap, Fill = WidgetTheme.Text, HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, space, 0, 0) };
         Tick();
         if (!_paused) _minute.Start();
         return new StackPanel { VerticalAlignment = VerticalAlignment.Center, Children = { _hours, _minutes } };

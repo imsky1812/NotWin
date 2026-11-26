@@ -9,6 +9,7 @@ using static NotWin.Tests.WidgetSurfaceTests;
 namespace NotWin.Tests;
 
 /// <summary>Plan 13 toggle tiles. Nothing here touches the real radios, theme, keep-awake or privacy settings.</summary>
+[Collection("WidgetTheme")]
 public sealed class ToggleWidgetTests
 {
     private sealed class FakeBackend(ToggleState state) : IToggleBackend

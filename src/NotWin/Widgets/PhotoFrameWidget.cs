@@ -25,7 +25,7 @@ namespace NotWin.Widgets;
 /// </summary>
 public sealed class PhotoFrameWidget : IDesktopWidget
 {
-    private static readonly Brush DashBrush = TileChrome.FrozenArgb(0x66, 0xE8, 0xE8, 0xE8);
+    private static Brush DashBrush => WidgetTheme.Dash;
     private readonly string _id;
     private readonly PhotoStore _store;
     private readonly Action<WidgetConfig> _save;
@@ -128,7 +128,7 @@ public sealed class PhotoFrameWidget : IDesktopWidget
         Shape outline = Circle
             ? new Ellipse { Stroke = DashBrush, StrokeThickness = 1.5, StrokeDashArray = [4, 4] }
             : new Rectangle { Stroke = DashBrush, StrokeThickness = 1.5, StrokeDashArray = [4, 4], RadiusX = 14, RadiusY = 14 };
-        var label = TileChrome.Label("Add photos");
+        var label = WidgetTheme.Label("Add photos");
         label.HorizontalAlignment = HorizontalAlignment.Center;
         label.Margin = new Thickness(0, 10, 0, 0);
         var center = new StackPanel
@@ -258,7 +258,7 @@ public sealed class PhotoManagePopup : Window
     private readonly Action<string> _remove;
     private readonly Action _add;
     private readonly WrapPanel _grid = new() { MaxWidth = 4 * 84 };
-    private readonly TextBlock _note = TileChrome.Label("");
+    private readonly TextBlock _note = WidgetTheme.Label("");
     private bool _closed;
 
     private PhotoManagePopup(PhotoStore store, string frameId, Action<string> remove, Action add)
@@ -343,7 +343,7 @@ public sealed class PhotoManagePopup : Window
             Width = 22, Height = 22, CornerRadius = new CornerRadius(11), Background = TileChrome.Frozen(0x2A, 0x2A, 0x2A),
             HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(0, 3, 3, 0),
             Cursor = Cursors.Hand,
-            Child = new TextBlock { Text = "✕", FontSize = 11, Foreground = TileChrome.Text, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center },
+            Child = new TextBlock { Text = "✕", FontSize = 11, Foreground = WidgetTheme.Text, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center },
         };
         close.MouseLeftButtonUp += (_, e) => { e.Handled = true; Guard(() => _remove(name)); };
         return new Grid { Margin = new Thickness(6), Children = { image, close } };
@@ -354,8 +354,8 @@ public sealed class PhotoManagePopup : Window
         var tile = new Border
         {
             Width = 72, Height = 72, CornerRadius = new CornerRadius(10), Margin = new Thickness(6), Cursor = Cursors.Hand,
-            BorderBrush = TileChrome.FrozenArgb(0x66, 0xE8, 0xE8, 0xE8), BorderThickness = new Thickness(1.5), Background = Brushes.Transparent,
-            Child = new TextBlock { Text = "＋", FontSize = 26, Foreground = TileChrome.Text, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center },
+            BorderBrush = WidgetTheme.Dash, BorderThickness = new Thickness(1.5), Background = Brushes.Transparent,
+            Child = new TextBlock { Text = "＋", FontSize = 26, Foreground = WidgetTheme.Text, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center },
         };
         tile.MouseLeftButtonUp += (_, e) => { e.Handled = true; RequestAdd(); };
         return tile;

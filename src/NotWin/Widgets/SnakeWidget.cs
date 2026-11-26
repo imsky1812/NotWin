@@ -19,7 +19,8 @@ namespace NotWin.Widgets;
 /// </summary>
 public sealed class SnakeWidget : IDesktopWidget
 {
-    private static readonly Brush Unlit = TileChrome.Frozen(0x26, 0x26, 0x26), Dead = TileChrome.Frozen(0x77, 0x77, 0x77);
+    private static readonly Brush Dead = TileChrome.Frozen(0x77, 0x77, 0x77);
+    private static Brush Unlit => WidgetTheme.Unlit;
     private readonly SnakeGame _game;
     private readonly Action<int> _saveBest;
     private readonly DispatcherTimer _tick = new(DispatcherPriority.Render) { Interval = TimeSpan.FromMilliseconds(120) };
@@ -49,7 +50,7 @@ public sealed class SnakeWidget : IDesktopWidget
         if (_game.Size != n) _game.Resize(n);
         _board = new Board(_game);
         _overlay = new Grid();
-        _ring = new Border { BorderBrush = TileChrome.Text, BorderThickness = new Thickness(2), CornerRadius = new CornerRadius(14), Margin = new Thickness(-6), Visibility = Visibility.Collapsed, IsHitTestVisible = false };
+        _ring = new Border { BorderBrush = WidgetTheme.Text, BorderThickness = new Thickness(2), CornerRadius = new CornerRadius(14), Margin = new Thickness(-6), Visibility = Visibility.Collapsed, IsHitTestVisible = false };
         var root = _root = new Grid { Background = Brushes.Transparent, Cursor = Cursors.Hand, Children = { _board, _overlay, _ring } };
         root.MouseLeftButtonUp += (_, e) => { e.Handled = true; Click(); };
         Sync();
@@ -155,20 +156,20 @@ public sealed class SnakeWidget : IDesktopWidget
         {
             case SnakeState.Idle:
                 center.Children.Add(Centered(TileChrome.Body("Snake", 18, FontWeights.SemiBold)));
-                center.Children.Add(Centered(TileChrome.Label("Click · arrows / WASD", TileChrome.Frozen(0xCC, 0xCC, 0xCC)), 6));
-                center.Children.Add(Centered(TileChrome.Label("Best " + _game.Best.ToString(CultureInfo.InvariantCulture)), 4));
+                center.Children.Add(Centered(WidgetTheme.Label("Click · arrows / WASD", WidgetTheme.Soft), 6));
+                center.Children.Add(Centered(WidgetTheme.Label("Best " + _game.Best.ToString(CultureInfo.InvariantCulture)), 4));
                 break;
             case SnakeState.Paused:
-                center.Children.Add(Centered(TileChrome.Label("Paused · click to resume", TileChrome.Frozen(0xDD, 0xDD, 0xDD))));
+                center.Children.Add(Centered(WidgetTheme.Label("Paused · click to resume", WidgetTheme.Soft)));
                 break;
             case SnakeState.Over:
-                center.Children.Add(Centered(new DotMatrix { Text = _game.Score.ToString(CultureInfo.InvariantCulture), Dot = 5, Gap = 2, Fill = TileChrome.Text }));
-                center.Children.Add(Centered(TileChrome.Label("Game over · space to retry", TileChrome.Frozen(0xDD, 0xDD, 0xDD)), 10));
+                center.Children.Add(Centered(new DotMatrix { Text = _game.Score.ToString(CultureInfo.InvariantCulture), Dot = 5, Gap = 2, Fill = WidgetTheme.Text }));
+                center.Children.Add(Centered(WidgetTheme.Label("Game over · space to retry", WidgetTheme.Soft), 10));
                 break;
             default:
                 _overlay.Children.Add(new DotMatrix
                 {
-                    Text = _game.Score.ToString(CultureInfo.InvariantCulture), Dot = 2.4, Gap = 1, Fill = TileChrome.Text,
+                    Text = _game.Score.ToString(CultureInfo.InvariantCulture), Dot = 2.4, Gap = 1, Fill = WidgetTheme.Text,
                     HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(0, 0, 2, 0),
                 });
                 return;
@@ -218,8 +219,8 @@ public sealed class SnakeWidget : IDesktopWidget
                     var p = (x, y);
                     Brush b = Unlit;
                     var rr = r;
-                    if (game.BodyVisible && body.Contains(p)) b = over ? Dead : TileChrome.Text;
-                    if (game.BodyVisible && p == head) { b = over ? TileChrome.Red : Brushes.White; if (!over) rr = r * 1.12; }
+                    if (game.BodyVisible && body.Contains(p)) b = over ? Dead : WidgetTheme.Text;
+                    if (game.BodyVisible && p == head) { b = over ? TileChrome.Red : WidgetTheme.Text; if (!over) rr = r * 1.12; }
                     if (p == game.Food) b = TileChrome.Red;
                     dc.DrawEllipse(b, null, new Point(ox + x * pitch + pitch / 2, oy + y * pitch + pitch / 2), rr, rr);
                 }

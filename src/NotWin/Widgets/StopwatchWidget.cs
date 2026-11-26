@@ -40,23 +40,23 @@ public sealed class StopwatchWidget : IDesktopWidget
         FrameworkElement content;
         if (size.W == 1)
         {
-            _ring = new DotRingView { Count = 60, Radius = 54, Dot = 3, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
-            _time = new DotMatrix { Dot = 2.4, Gap = 1, Fill = TileChrome.Text, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
+            _ring = new DotRingView { Count = 60, Radius = 54, Dot = 3, DimFill = WidgetTheme.Unlit, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
+            _time = new DotMatrix { Dot = 2.4, Gap = 1, Fill = WidgetTheme.Text, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
             _state = null;
             content = new Grid { Children = { _ring, _time } };
         }
         else
         {
-            _ring = new DotRingView { Count = 60, Radius = 50, Dot = 3, VerticalAlignment = VerticalAlignment.Center };
-            _time = new DotMatrix { Dot = 3.4, Gap = 1.2, Fill = TileChrome.Text, Margin = new Thickness(0, 8, 0, 8) };
-            _state = TileChrome.Label("");
+            _ring = new DotRingView { Count = 60, Radius = 50, Dot = 3, DimFill = WidgetTheme.Unlit, VerticalAlignment = VerticalAlignment.Center };
+            _time = new DotMatrix { Dot = 3.4, Gap = 1.2, Fill = WidgetTheme.Text, Margin = new Thickness(0, 8, 0, 8) };
+            _state = WidgetTheme.Label("");
             content = new StackPanel
             {
                 Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center,
                 Children =
                 {
                     _ring,
-                    new StackPanel { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(16, 0, 0, 0), Children = { TileChrome.Label("Stopwatch"), _time, _state } },
+                    new StackPanel { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(16, 0, 0, 0), Children = { WidgetTheme.Label("Stopwatch"), _time, _state } },
                 },
             };
         }

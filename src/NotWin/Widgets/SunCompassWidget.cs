@@ -74,7 +74,7 @@ public sealed class SunCompassWidget : IDesktopWidget
         var big = _size.W == 2;
         if (_place() is not { } place)
         {
-            var hint = TileChrome.Label("Set a city in Settings");
+            var hint = WidgetTheme.Label("Set a city in Settings");
             hint.TextWrapping = TextWrapping.Wrap;
             hint.TextAlignment = TextAlignment.Center;
             hint.HorizontalAlignment = HorizontalAlignment.Center;
@@ -96,11 +96,11 @@ public sealed class SunCompassWidget : IDesktopWidget
         var times = SolarPosition.SunTimes(DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeFromUtc(utc, TimeZoneInfo.Local)), place.Lat, place.Lon, TimeZoneInfo.Local);
         if (times is { } t)
         {
-            lines.Children.Add(Center(TileChrome.Label($"Sunrise {Hm(t.Rise)}")));
-            lines.Children.Add(Center(TileChrome.Label($"Sunset {Hm(t.Set)}")));
+            lines.Children.Add(Center(WidgetTheme.Label($"Sunrise {Hm(t.Rise)}")));
+            lines.Children.Add(Center(WidgetTheme.Label($"Sunset {Hm(t.Set)}")));
         }
         var sun = SunDown ? "Below horizon" : $"Sun {Math.Round(elevation).ToString(CultureInfo.InvariantCulture)}°";
-        lines.Children.Add(Center(TileChrome.Label(sun, SunDown ? null : TileChrome.Text)));
+        lines.Children.Add(Center(WidgetTheme.Label(sun, SunDown ? null : WidgetTheme.Text)));
         var grid = new Grid();
         grid.Children.Add(face);
         lines.VerticalAlignment = VerticalAlignment.Bottom;
@@ -115,13 +115,13 @@ public sealed class SunCompassWidget : IDesktopWidget
     {
         var ring = new DotRingView
         {
-            Count = 36, Radius = diameter / 2 - 4, Dot = diameter > 150 ? 3.5 : 2.4, Lit = 0,
+            Count = 36, DimFill = WidgetTheme.Unlit, Radius = diameter / 2 - 4, Dot = diameter > 150 ? 3.5 : 2.4, Lit = 0,
             HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center,
         };
         var dot = diameter > 150 ? 4.2 : 2.6;
         var arrow = new DotArtView
         {
-            Rows = DotArt.Rows("arrow"), Dot = dot, Gap = dot * 0.35, Fill = TileChrome.Text, Opacity = down ? 0.3 : 1,
+            Rows = DotArt.Rows("arrow"), Dot = dot, Gap = dot * 0.35, Fill = WidgetTheme.Text, Opacity = down ? 0.3 : 1,
             HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center,
             RenderTransformOrigin = new Point(0.5, 0.5), RenderTransform = new RotateTransform(azimuth),
         };

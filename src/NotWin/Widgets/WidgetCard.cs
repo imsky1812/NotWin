@@ -61,18 +61,30 @@ public static class WidgetCard
     {
         if (bare) return content;
         var radius = round ? Math.Min(size.PxW, size.PxH) / 2.0 : 26;
+        // Plan 13 follow-up: a dark card is the theme's card (light grey in Windows' light mode).
+        var (background, edge) = surface switch
+        {
+            Surface.Light => (LightBrush, LightEdge),
+            Surface.Red => (TileChrome.Red, EdgeBrush),
+            _ => (WidgetTheme.Card, WidgetTheme.Edge),
+        };
         return new Border
         {
-            Background = surface switch { Surface.Light => LightBrush, Surface.Red => TileChrome.Red, _ => CardBrush },
-            BorderBrush = surface == Surface.Light ? LightEdge : EdgeBrush,
+            Background = background,
+            BorderBrush = edge,
             BorderThickness = new Thickness(surface == Surface.Red ? 0 : 1.5),
             CornerRadius = new CornerRadius(radius), Padding = new Thickness(round ? 10 : 16), ClipToBounds = true, Child = content,
         };
     }
 
     /// <summary>The content colour on a surface: text on dark, ink on light, white on red.</summary>
-    public static Brush Ink(Surface surface) => surface switch { Surface.Light => InkBrush, Surface.Red => White, _ => TileChrome.Text };
+    public static Brush Ink(Surface surface) => surface switch { Surface.Light => InkBrush, Surface.Red => White, _ => WidgetTheme.Text };
 
     /// <summary>A quieter content colour (labels, unlit dots) on a surface.</summary>
-    public static Brush Dim(Surface surface) => surface switch { Surface.Light => DimLight, Surface.Red => DimRed, _ => DimDark };
+    public static Brush Dim(Surface surface) => surface switch
+    {
+        Surface.Light => DimLight,
+        Surface.Red => DimRed,
+        _ => WidgetTheme.Light ? DimLight : DimDark,
+    };
 }

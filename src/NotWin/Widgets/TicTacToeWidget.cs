@@ -45,9 +45,9 @@ public sealed class TicTacToeWidget : IDesktopWidget
     {
         _board = new TicTacToeBoard(_game) { Cursor = Cursors.Hand };
         _board.CellClicked += OnCell;
-        _status = TileChrome.Label("");
+        _status = WidgetTheme.Label("");
         _status.Margin = new Thickness(0, 0, 0, 6);
-        _tally = TileChrome.Label("");
+        _tally = WidgetTheme.Label("");
         _tally.HorizontalAlignment = HorizontalAlignment.Center;
         _tally.Margin = new Thickness(0, 6, 0, 0);
         var panel = new DockPanel();
@@ -121,7 +121,7 @@ public sealed class TicTacToeBoard(TicTacToe game) : FrameworkElement
 {
     private static readonly string[] XArt = ["#...#", ".#.#.", "..#..", ".#.#.", "#...#"];
     private static readonly string[] OArt = [".###.", "#...#", "#...#", "#...#", ".###."];
-    private static readonly Brush GridBrush = TileChrome.Frozen(0x3A, 0x3A, 0x3A);
+    private static Brush GridBrush => WidgetTheme.Unlit;
     private bool _dim;
 
     public event Action<int>? CellClicked;
@@ -171,7 +171,7 @@ public sealed class TicTacToeBoard(TicTacToe game) : FrameworkElement
             var c = game.Cells[i];
             if (c == '.') continue;
             var art = c == 'X' ? XArt : OArt;
-            Brush brush = c == 'X' ? TileChrome.Red : TileChrome.Text;
+            Brush brush = c == 'X' ? TileChrome.Red : WidgetTheme.Text;
             if (_dim && line.Contains(i)) brush = GridBrush;
             var pitch = cell * 0.56 / 4;
             double ox = left + (i % 3) * cell + cell / 2 - 2 * pitch, oy = top + (i / 3) * cell + cell / 2 - 2 * pitch;

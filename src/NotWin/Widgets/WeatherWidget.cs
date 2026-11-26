@@ -53,7 +53,7 @@ public sealed class WeatherWidget : IDesktopWidget
     };
 
     private static DotMatrix Dots(string text, double dot, double gap) =>
-        new() { Text = text, Dot = dot, Gap = gap, Fill = TileChrome.Text, VerticalAlignment = VerticalAlignment.Center };
+        new() { Text = text, Dot = dot, Gap = gap, Fill = WidgetTheme.Text, VerticalAlignment = VerticalAlignment.Center };
 
     private void Fill()
     {
@@ -62,7 +62,7 @@ public sealed class WeatherWidget : IDesktopWidget
         var r = _weather.Current;
         if (place is null || r is null)
         {
-            var hint = TileChrome.Label(place is null ? "Set a city in Settings" : "No data yet");
+            var hint = WidgetTheme.Label(place is null ? "Set a city in Settings" : "No data yet");
             hint.HorizontalAlignment = HorizontalAlignment.Center;
             hint.VerticalAlignment = VerticalAlignment.Center;
             hint.TextWrapping = TextWrapping.Wrap;
@@ -94,7 +94,7 @@ public sealed class WeatherWidget : IDesktopWidget
         t.HorizontalAlignment = HorizontalAlignment.Center;
         t.Margin = new Thickness(0, 8, 0, 8);
         stack.Children.Add(t);
-        var city = TileChrome.Label(stale ? Updated(r) : p.Name);
+        var city = WidgetTheme.Label(stale ? Updated(r) : p.Name);
         city.HorizontalAlignment = HorizontalAlignment.Center;
         stack.Children.Add(city);
         return stack;
@@ -107,7 +107,7 @@ public sealed class WeatherWidget : IDesktopWidget
         DockPanel.SetDock(days, System.Windows.Controls.Dock.Bottom);
         panel.Children.Add(days);
         var top = new DockPanel { VerticalAlignment = VerticalAlignment.Top };
-        var city = TileChrome.Label(stale ? Updated(r) : p.Name);
+        var city = WidgetTheme.Label(stale ? Updated(r) : p.Name);
         city.VerticalAlignment = VerticalAlignment.Top;
         DockPanel.SetDock(city, System.Windows.Controls.Dock.Right);
         top.Children.Add(city);
@@ -119,7 +119,7 @@ public sealed class WeatherWidget : IDesktopWidget
         temp.VerticalAlignment = VerticalAlignment.Center;
         temp.Margin = new Thickness(0, 0, 14, 0);
         row.Children.Add(temp);
-        var hl = TileChrome.Body($"↑ {Deg(r.High)}\n↓ {Deg(r.Low)}", 12, FontWeights.Normal, TileChrome.Frozen(0xCF, 0xCF, 0xCF));
+        var hl = TileChrome.Body($"↑ {Deg(r.High)}\n↓ {Deg(r.Low)}", 12, FontWeights.Normal, WidgetTheme.Soft);
         hl.VerticalAlignment = VerticalAlignment.Center;
         hl.LineHeight = 18;
         row.Children.Add(hl);
@@ -132,10 +132,10 @@ public sealed class WeatherWidget : IDesktopWidget
     {
         var panel = new DockPanel();
         var head = new DockPanel();
-        var cond = TileChrome.Label(stale ? Updated(r) : Condition(r.Kind));
+        var cond = WidgetTheme.Label(stale ? Updated(r) : Condition(r.Kind));
         DockPanel.SetDock(cond, System.Windows.Controls.Dock.Right);
         head.Children.Add(cond);
-        head.Children.Add(TileChrome.Label(p.Name));
+        head.Children.Add(WidgetTheme.Label(p.Name));
         DockPanel.SetDock(head, System.Windows.Controls.Dock.Top);
         panel.Children.Add(head);
         var days = Days(r);
@@ -148,7 +148,7 @@ public sealed class WeatherWidget : IDesktopWidget
         row.Children.Add(g);
         row.Children.Add(Dots(Deg(r.Temp), 6, 2));
         middle.Children.Add(row);
-        middle.Children.Add(TileChrome.Body($"↑ {Deg(r.High)}   ↓ {Deg(r.Low)}", 12, FontWeights.Normal, TileChrome.Frozen(0xCC, 0xCC, 0xCC)));
+        middle.Children.Add(TileChrome.Body($"↑ {Deg(r.High)}   ↓ {Deg(r.Low)}", 12, FontWeights.Normal, WidgetTheme.Soft));
         panel.Children.Add(middle);
         return panel;
     }
@@ -160,7 +160,7 @@ public sealed class WeatherWidget : IDesktopWidget
         foreach (var d in r.Days.Take(5))
         {
             var col = new StackPanel { HorizontalAlignment = HorizontalAlignment.Center };
-            var name = TileChrome.Label(d.Date.ToString("ddd", CultureInfo.InvariantCulture));
+            var name = WidgetTheme.Label(d.Date.ToString("ddd", CultureInfo.InvariantCulture));
             name.HorizontalAlignment = HorizontalAlignment.Center;
             col.Children.Add(name);
             var g = Dots(WeatherRules.Glyph(d.Kind, true).ToString(), 2.4, 0.9);
