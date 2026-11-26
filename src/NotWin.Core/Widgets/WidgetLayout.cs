@@ -6,7 +6,12 @@ namespace NotWin.Core.Widgets;
 /// <summary>Desktop widgets (spec §6.5).</summary>
 [JsonConverter(typeof(TolerantEnumConverter<WidgetKind>))]
 /// <remarks>Saved as numbers: new kinds are only ever appended (Agenda = "Up next", Plan 6b).</remarks>
-public enum WidgetKind { Clock, Snake, Timer, Calendar, Weather, Media, Battery, Photo, Folder, Agenda, TicTacToe, Notes, Alarm }
+public enum WidgetKind
+{
+    Clock, Snake, Timer, Calendar, Weather, Media, Battery, Photo, Folder, Agenda, TicTacToe, Notes, Alarm,
+    // Plan 13: the Nothing widget sheet.
+    Toggle, AnalogClock, WorldClock, StackedClock, Stopwatch, ScreenTime, SystemMeters, SunCompass,
+}
 
 /// <summary>A widget's size in grid cells (136 px cells with 12 px gaps, unscaled; spec §5).</summary>
 public readonly record struct WidgetSize(int W, int H)
@@ -18,9 +23,11 @@ public readonly record struct WidgetSize(int W, int H)
 
 /// <summary>
 /// A widget's own settings (Plan 5b): a photo frame's shape ("square" / "circle") and photo file names in its folder;
-/// an app folder's dot picture and app ids. Null fields = defaults.
+/// an app folder's dot picture and app ids; what a toggle, world clock or analogue clock shows (<see cref="Choice"/>,
+/// Plan 13, see <see cref="WidgetChoices"/>). Null fields = defaults.
 /// </summary>
-public sealed record WidgetConfig(string? Shape = null, IReadOnlyList<string>? Photos = null, string? Picture = null, IReadOnlyList<string>? Apps = null);
+public sealed record WidgetConfig(string? Shape = null, IReadOnlyList<string>? Photos = null, string? Picture = null, IReadOnlyList<string>? Apps = null,
+    string? Choice = null);
 
 /// <summary>
 /// A widget instance at (X, Y): unscaled pixels from the layout origin, on the 74 px snap grid. <see cref="Id"/> tells
@@ -31,7 +38,7 @@ public sealed record WidgetPlacement(WidgetKind Kind, WidgetSize Size, int X, in
 
 public static class WidgetRules
 {
-    private static readonly WidgetSize S11 = new(1, 1), S21 = new(2, 1), S22 = new(2, 2), S31 = new(3, 1), S33 = new(3, 3), S42 = new(4, 2);
+    private static readonly WidgetSize S11 = new(1, 1), S21 = new(2, 1), S22 = new(2, 2), S31 = new(3, 1), S33 = new(3, 3), S42 = new(4, 2), S12 = new(1, 2);
 
     /// <summary>Allowed sizes in cycling order; the first is the default (mockup <c>W[].sizes</c>).</summary>
     public static IReadOnlyList<WidgetSize> Sizes(WidgetKind kind) => kind switch
@@ -48,17 +55,35 @@ public static class WidgetRules
         WidgetKind.Media => [S21, S11, S22],
         WidgetKind.Photo => [S22, S11, S33],
         WidgetKind.Folder => [S11, S22],
+        WidgetKind.Toggle or WidgetKind.WorldClock or WidgetKind.Stopwatch => [S11, S21],
+        WidgetKind.AnalogClock or WidgetKind.SunCompass => [S11, S22],
+        WidgetKind.StackedClock => [S12, S11],
+        WidgetKind.ScreenTime or WidgetKind.SystemMeters => [S21, S22],
         _ => [S11, S21, S22],
     };
 
-    /// <summary>Photo frames and app folders may be added any number of times; every other kind at most once.</summary>
-    public static bool IsRepeatable(WidgetKind kind) => kind is WidgetKind.Photo or WidgetKind.Folder;
+    /// <summary>Photo frames, app folders, toggles and world clocks may be added any number of times; every other kind at most once.</summary>
+    public static bool IsRepeatable(WidgetKind kind) => kind is WidgetKind.Photo or WidgetKind.Folder or WidgetKind.Toggle or WidgetKind.WorldClock;
+
+    /// <summary>
+    /// Round cards (Plan 13): corner radius half the shorter side, so 1×1 / 2×2 are circles and 2×1 / 1×2 pills. A photo
+    /// frame is round when its shape is "circle".
+    /// </summary>
+    public static bool IsRound(WidgetPlacement p) => p.Kind switch
+    {
+        WidgetKind.Toggle or WidgetKind.AnalogClock or WidgetKind.WorldClock or WidgetKind.StackedClock or WidgetKind.Stopwatch
+            or WidgetKind.SunCompass => true,
+        WidgetKind.Photo => p.Config?.Shape == "circle",
+        _ => false,
+    };
 
     /// <summary>The order of the edit mode's ＋ Add picker.</summary>
     public static IReadOnlyList<WidgetKind> PickerOrder { get; } =
     [
-        WidgetKind.Photo, WidgetKind.Folder, WidgetKind.Clock, WidgetKind.Snake, WidgetKind.TicTacToe, WidgetKind.Timer, WidgetKind.Calendar,
+        WidgetKind.Photo, WidgetKind.Folder, WidgetKind.Toggle, WidgetKind.Clock, WidgetKind.AnalogClock, WidgetKind.StackedClock,
+        WidgetKind.WorldClock, WidgetKind.Snake, WidgetKind.TicTacToe, WidgetKind.Timer, WidgetKind.Stopwatch, WidgetKind.Calendar,
         WidgetKind.Agenda, WidgetKind.Notes, WidgetKind.Alarm, WidgetKind.Weather, WidgetKind.Media, WidgetKind.Battery,
+        WidgetKind.ScreenTime, WidgetKind.SystemMeters, WidgetKind.SunCompass,
     ];
 }
 
@@ -139,7 +164,11 @@ public sealed record DesktopLayout(IReadOnlyList<WidgetPlacement> Widgets)
             // Ids name folders on disk (photo frames): only short letters-and-digits ids are kept (security review).
             var id = p.Id is { Length: > 0 and <= 32 } i && i.All(char.IsAsciiLetterOrDigit) ? p.Id : "";
             while (string.IsNullOrEmpty(id) || !seenIds.Add(id)) id = newId();
-            list.Add(p with { Size = size, X = x, Y = y, Id = id });
+            // Plan 13: a choice this build or PC doesn't know (sync, newer build) falls back to the kind's default.
+            var config = WidgetChoices.HasChoice(p.Kind)
+                ? (p.Config ?? new WidgetConfig()) with { Choice = WidgetChoices.Normalize(p.Kind, p.Config?.Choice) }
+                : p.Config;
+            list.Add(p with { Size = size, X = x, Y = y, Id = id, Config = config });
         }
         return new DesktopLayout(list);
     }
