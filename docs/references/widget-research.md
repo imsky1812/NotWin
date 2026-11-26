@@ -38,3 +38,19 @@ shots). Only ideas and patterns below; NotWin's widgets are drawn from scratch.
 - Reuse `DotMatrix` for numerals and `DotArtView` for icons; add a **dotted ring** primitive for progress.
 - Only redraw on change: system events where they exist, else ≥ 1 s (clocks with seconds) / ≥ 2 s (system meters)
   timers that run only while the widget is visible and not paused.
+
+## Light mode research (2026-11-26, after the first light-mode install)
+Problem seen on screen: #E8E8E8 cards on the light halftone wallpaper (#EDEDED + black dots) have no edge; the dots
+run through the bare clock; the snake board is a heavy grey block.
+
+What good light UIs do (Dribbble "light mode widgets", "desktop widgets light"; Behance; Nothing OS 5 "Lucent" home
+screens via image search; macOS desktop widgets):
+- **Separate by value and depth, not lines:** pure white cards on a slightly darker, calm grey or soft-gradient
+  background, plus a very soft wide shadow (large blur, ~6–10% black). The water-intake and neumorphic panels on
+  Dribbble work this way.
+- **Nothing OS 5 "Lucent":** frosted, slightly translucent white widgets over a soft, blurred, low-contrast wallpaper.
+  Busy patterns are kept for dark mode or for small accents, never behind text.
+- **Calm wallpaper behind content:** light themes use low-detail wallpapers (gradient, very faint grain); high-contrast
+  halftone fights everything placed on it.
+- **Ink stays black, red stays the only accent**; unlit dots get much lighter in light mode (~8% black), or the grid
+  turns heavy.
