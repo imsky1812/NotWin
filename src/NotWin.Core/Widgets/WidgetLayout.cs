@@ -24,10 +24,10 @@ public readonly record struct WidgetSize(int W, int H)
 /// <summary>
 /// A widget's own settings (Plan 5b): a photo frame's shape ("square" / "circle") and photo file names in its folder;
 /// an app folder's dot picture and app ids; what a toggle, world clock or analogue clock shows (<see cref="Choice"/>,
-/// Plan 13, see <see cref="WidgetChoices"/>). Null fields = defaults.
+/// Plan 13, see <see cref="WidgetChoices"/>); an app folder's name (<see cref="Title"/>, Plan 13). Null fields = defaults.
 /// </summary>
 public sealed record WidgetConfig(string? Shape = null, IReadOnlyList<string>? Photos = null, string? Picture = null, IReadOnlyList<string>? Apps = null,
-    string? Choice = null);
+    string? Choice = null, string? Title = null);
 
 /// <summary>
 /// A widget instance at (X, Y): unscaled pixels from the layout origin, on the 74 px snap grid. <see cref="Id"/> tells

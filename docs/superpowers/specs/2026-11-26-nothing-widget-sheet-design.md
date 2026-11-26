@@ -290,3 +290,13 @@ dot art; a blocked mic / camera is a plain card with a slashed icon.
 - The Settings window follows light / dark (DashChrome + Shell.Glass) and rebuilds itself when the theme changes.
 - The **Wallpaper** section is gone, with the "✦ New" maker (`WallpaperMaker`, `WallpaperArt`) and the four old dot
   wallpapers; only the two Lucent wallpapers ship. Wallpapers the user made earlier stay in their AppData folder.
+
+### Eighth follow-up (user, 2026-11-27): folder icons and the notch clock
+- Research (docs/references/widget-research.md): Nothing OS folders show their apps as monochrome icons; the Phone (3)
+  Glyph Matrix; islands stay black. Mockups of three folder and three notch options were shown; the user picked
+  **folder C, "Peek + name"**, and for the notch only asked to swap the dot clock for the serif of Nothing's date widget.
+- Folder face: the apps inside as monochrome icon circles (1×1: up to three, the last "+N" when there are more; 2×2: up
+  to six), then the folder's name (mono caps) and "N APPS" ("ADD APPS" when empty). The name is set at the top of the
+  folder's popup (`WidgetConfig.Title`, max 24). The old dot pictures and their edit-mode stepping are gone; the face
+  redraws when apps or the name change.
+- Notch: the resting clock is DM Serif Display (the bundled OFL serif closest to Nothing's NType 82, which can't ship).

@@ -44,22 +44,79 @@ public sealed class FolderWidget : IDesktopWidget
 
     public WidgetKind Kind => WidgetKind.Folder;
 
+    /// <summary>The face shows the apps and the name: it is drawn again when either changes.</summary>
+    public event Action? CardChanged;
+
     private IReadOnlyList<string> AppIds => _config.Apps ?? [];
 
     public void Configure(WidgetConfig? config) => _config = config ?? new WidgetConfig();
 
+    // "Peek + name" (user 2026-11-27, after Nothing OS folders): the apps inside as monochrome icon circles (a 1×1
+    // folder shows up to three, a 2×2 up to six; the last becomes "+N" when there are more), then the folder's name and
+    // how many apps it holds. A click opens the folder.
     public FrameworkElement Build(WidgetSize size)
     {
-        var dot = size.W >= 2 ? 15.0 : 7.0;
-        var art = new DotArtView
+        var big = size.W >= 2;
+        var items = Items;
+        var (shown, more) = FolderFace.Slots(items.Count, big);
+        var circle = big ? 64.0 : 28.0;
+        var gap = big ? 12.0 : 4.0;
+        // 1×1: one row of three; 2×2: two rows of three.
+        System.Windows.Controls.Panel icons = big ? new WrapPanel { Orientation = Orientation.Horizontal, MaxWidth = 3 * (circle + gap) } : new StackPanel { Orientation = Orientation.Horizontal };
+        for (var i = 0; i < shown; i++) icons.Children.Add(AppCircle(items[i], circle, gap));
+        if (more > 0) icons.Children.Add(MoreCircle(more, circle, gap));
+        if (items.Count == 0) icons.Children.Add(AddCircle(circle, gap));
+        var name = new TextBlock
         {
-            Rows = DotArt.Rows(_config.Picture), Dot = dot, Gap = Math.Round(dot * 0.35, 1), Fill = WidgetTheme.Text,
-            HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center,
+            Text = FolderFace.Name(_config.Title), FontFamily = TileChrome.Mono, FontSize = big ? 15 : 11, Foreground = WidgetTheme.Text,
+            TextTrimming = TextTrimming.CharacterEllipsis, Margin = new Thickness(2, 0, 0, 0),
         };
-        var root = new Grid { Background = Brushes.Transparent, Cursor = Cursors.Hand, Children = { art } };
+        var count = WidgetTheme.Label(FolderFace.CountLabel(items.Count));
+        count.Margin = new Thickness(2, 2, 0, 0);
+        var label = new StackPanel { VerticalAlignment = VerticalAlignment.Bottom, Children = { name, count } };
+        var layout = new Grid();
+        layout.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        layout.RowDefinitions.Add(new RowDefinition());
+        layout.Children.Add(icons);
+        Grid.SetRow(label, 1);
+        layout.Children.Add(label);
+        var root = new Grid { Background = Brushes.Transparent, Cursor = Cursors.Hand, Children = { layout } };
         root.MouseLeftButtonUp += (_, e) => { e.Handled = true; Guard(Open); };
         return root;
     }
+
+    private Border AppCircle(LaunchItem item, double size, double gap)
+    {
+        ImageSource? icon = null;
+        try { icon = MonoIcon.From(_icons.Get(item.Id, (int)Math.Ceiling(size * 1.25))); }
+        catch (Exception e) { Log.Info($"folder icon failed: {e.GetType().Name}"); } // no app paths in the log
+        return new Border
+        {
+            Width = size, Height = size, CornerRadius = new CornerRadius(size / 2), Background = WidgetTheme.Hover,
+            Margin = new Thickness(0, 0, gap, gap), Tag = "app",
+            Child = new Image { Source = icon, Width = size * 0.58, Height = size * 0.58, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center },
+        };
+    }
+
+    private static Border MoreCircle(int more, double size, double gap) => new()
+    {
+        Width = size, Height = size, CornerRadius = new CornerRadius(size / 2), Background = WidgetTheme.Text, Margin = new Thickness(0, 0, gap, gap),
+        Child = new TextBlock
+        {
+            Text = "+" + more.ToString(System.Globalization.CultureInfo.InvariantCulture), FontFamily = TileChrome.Mono,
+            FontSize = size > 40 ? 16 : 11, Foreground = WidgetTheme.Popup, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center,
+        },
+    };
+
+    private static Border AddCircle(double size, double gap) => new()
+    {
+        Width = size, Height = size, CornerRadius = new CornerRadius(size / 2), BorderBrush = WidgetTheme.Dash, BorderThickness = new Thickness(1.5),
+        Margin = new Thickness(0, 0, gap, gap),
+        Child = new TextBlock
+        {
+            Text = "＋", FontSize = size > 40 ? 22 : 13, Foreground = WidgetTheme.Text, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center,
+        },
+    };
 
     public void Placed(RectI screen, RectI monitor) => _screen = screen;
 
@@ -68,7 +125,38 @@ public sealed class FolderWidget : IDesktopWidget
     private void Open()
     {
         _popup?.CloseIfOpen();
-        _popup = FolderPopup.Show(BuildPopupContent(Items, _icons, Launch, Remove, Choose), _screen);
+        var content = new StackPanel { Children = { NameRow(), BuildPopupContent(Items, _icons, Launch, Remove, Choose) } };
+        _popup = FolderPopup.Show(content, _screen);
+    }
+
+    // The folder's name, typed at the top of its popup; saved on Enter or when the box loses focus.
+    private FrameworkElement NameRow()
+    {
+        var box = new TextBox
+        {
+            Text = _config.Title ?? "", FontFamily = TileChrome.Mono, FontSize = 13, Foreground = WidgetTheme.Text, CaretBrush = WidgetTheme.Text,
+            Background = WidgetTheme.Hover, BorderThickness = new Thickness(0), Padding = new Thickness(10, 6, 10, 6),
+            MaxLength = FolderFace.MaxName, ToolTip = "Folder name",
+        };
+        box.KeyDown += (_, e) => { if (e.Key == Key.Enter) { e.Handled = true; Rename(box.Text); } };
+        box.LostFocus += (_, _) => Rename(box.Text);
+        var label = WidgetTheme.Label("Name");
+        label.Margin = new Thickness(4, 0, 0, 6);
+        return new StackPanel
+        {
+            Margin = new Thickness(4, 2, 4, 10),
+            Children = { label, new Border { CornerRadius = new CornerRadius(10), ClipToBounds = true, Child = box } },
+        };
+    }
+
+    /// <summary>Sets the folder's name (blank = none, shown as FOLDER), saves it and redraws the face.</summary>
+    internal void Rename(string text)
+    {
+        var title = string.IsNullOrWhiteSpace(text) ? null : text.Trim();
+        if (title == _config.Title) return;
+        _config = _config with { Title = title };
+        _save(_config);
+        CardChanged?.Invoke();
     }
 
     private void Launch(LaunchItem item)
@@ -82,6 +170,7 @@ public sealed class FolderWidget : IDesktopWidget
     {
         _config = _config with { Apps = FolderApps.Remove(AppIds, item.Id) };
         _save(_config);
+        CardChanged?.Invoke();
     }
 
     private void Choose()
@@ -92,6 +181,7 @@ public sealed class FolderWidget : IDesktopWidget
         {
             _config = _config with { Apps = FolderApps.Add(AppIds, item.Id) };
             _save(_config);
+            CardChanged?.Invoke();
         });
     }
 

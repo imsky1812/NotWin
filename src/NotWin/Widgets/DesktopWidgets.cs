@@ -312,9 +312,7 @@ public sealed class DesktopWidgets : IDisposable
         var below = new RectI((int)a.X, (int)a.Y, (int)b.X, (int)b.Y);
         _picker = AddPicker.Show(kinds, below, kind =>
         {
-            var config = kind == WidgetKind.Folder
-                ? new WidgetConfig(Picture: DotArt.Random(Random.Shared))
-                : WidgetChoices.ConfigFor(kind, _layout.Widgets); // Plan 13: the next unused toggle, UTC, the light face
+            var config = WidgetChoices.ConfigFor(kind, _layout.Widgets); // Plan 13: the next unused toggle, UTC, the light face
             var (layout, _) = _layout.Add(kind, Area.W, Area.H, () => DesktopLayout.NewId(Random.Shared), config);
             Log.Info($"widget added: {kind}");
             Apply(layout);
@@ -425,14 +423,6 @@ public sealed class DesktopWidgets : IDisposable
         if (!_slots.TryGetValue(d.Id, out var h)) return;
         var i = _layout.IndexOf(d.Id);
         var still = target is { } s && Math.Abs(s.Rect.Left - d.Start.Left) < 4 && Math.Abs(s.Rect.Top - d.Start.Top) < 4;
-        // A click without movement on a folder steps to its next picture (spec §5.4).
-        if (i >= 0 && still && _layout.Widgets[i].Kind == WidgetKind.Folder)
-        {
-            h.Host.Place(d.Start);
-            var config = _layout.Widgets[i].Config ?? new WidgetConfig();
-            Apply(_layout.WithConfig(d.Id, config with { Picture = DotArt.Next(config.Picture) }));
-            return;
-        }
         // Plan 13: on a toggle, world clock or analogue clock it opens the list of what it can show.
         if (i >= 0 && still && WidgetChoices.HasChoice(_layout.Widgets[i].Kind))
         {

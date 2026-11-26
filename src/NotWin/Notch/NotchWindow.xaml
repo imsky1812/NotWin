@@ -37,8 +37,10 @@
                         <TextBlock x:Name="BatteryText" FontFamily="{StaticResource Font.Mono}" FontWeight="Medium" FontSize="11"
                                    Foreground="{DynamicResource Shell.Soft}" VerticalAlignment="Center" />
                     </StackPanel>
-                    <!-- Mockup rtime: dots(h:m, {d:2.6, gap:1, fill:'#eee'}) -->
-                    <local:DotMatrix x:Name="Clock" Dot="2.6" Gap="1" Fill="{DynamicResource Shell.Text}" VerticalAlignment="Center" HorizontalAlignment="Left" />
+                    <!-- The time in DM Serif Display (user 2026-11-27: "change the dot clock with this font", the serif "6" of
+                         Nothing OS's date widget; DM Serif is the bundled OFL serif closest to it). -->
+                    <TextBlock x:Name="Clock" FontFamily="{StaticResource Font.Serif}" FontSize="21" Foreground="{DynamicResource Shell.Text}"
+                               VerticalAlignment="Center" HorizontalAlignment="Left" Margin="0,-2,0,0" />
                 </DockPanel>
 
                 <!-- Timer (Plan 4): mini 5x5 grid timer | dot countdown (mockup l-timer: gridTimer(22,5) + dots 2.6/1 #eee) -->
