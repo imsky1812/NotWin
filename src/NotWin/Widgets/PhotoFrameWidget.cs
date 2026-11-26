@@ -139,6 +139,11 @@ public sealed class PhotoFrameWidget : IDesktopWidget
         return new Grid { Children = { outline, center } };
     }
 
+    /// <summary>
+    /// The frame now shows this photo (its full path): the Lucent wallpaper takes its colours from it (Plan 13 follow-up).
+    /// </summary>
+    public event Action<string>? PhotoShown;
+
     private ImageSource? Load(string name)
     {
         try
@@ -153,6 +158,7 @@ public sealed class PhotoFrameWidget : IDesktopWidget
             image.DecodePixelWidth = _decodeWidth;
             image.EndInit();
             image.Freeze();
+            PhotoShown?.Invoke(path);
             return image;
         }
         catch (Exception e)

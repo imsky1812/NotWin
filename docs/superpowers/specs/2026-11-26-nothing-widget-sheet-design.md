@@ -256,3 +256,14 @@ dot art; a blocked mic / camera is a plain card with a slashed icon.
 - Cards are frosted: white at ~90% opacity in light mode, #222 at ~88% in dark mode; unlit dots lighter in light mode.
   The dock pill is frosted too. (A live blur behind desktop widgets isn't possible for these windows, so the wallpaper
   itself is the blurred layer.)
+
+### Fourth follow-up (user, 2026-11-26): the rest of the shell follows the theme; the wallpaper follows the photo
+- The notch pill, quick settings (Win+A / Win+N), the dock's window preview, the Notes widget and editor, and the
+  round photo frame's ring follow light / dark (Theme/ShellTheme "Shell.*" resources; code-built parts bind to them
+  with SetResourceReference, so an open panel recolours at once). The notch dashboard's tiles stay dark for now.
+- **Photo-tinted Lucent wallpaper:** whenever a photo frame shows a photo (each slideshow step, about once a minute) or
+  the theme flips, NotWin draws a soft blurred wallpaper from the photo's three strongest colours (pastel on light grey
+  in light mode, deep on charcoal in dark mode, film grain) and sets it (`%AppData%\NotWin\lucent\lucent_tint_*`,
+  two files used in turn). **Builder's call:** only while one of NotWin's own Lucent wallpapers (bundled or tinted) is
+  showing — a wallpaper the user picked is never replaced; picking a Lucent wallpaper (Dark mode tile or Settings) turns
+  it on, picking any other turns it off.

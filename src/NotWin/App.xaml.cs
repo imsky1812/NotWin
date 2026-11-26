@@ -29,6 +29,7 @@ public partial class App : Application
     private Clips.ClipboardService? _clips;
     private readonly Power.KeepAwakeService _awake = new();
     private Widgets.ScreenTimeTracker? _screenTime;
+    private Widgets.PhotoTint? _tint;
     private Forecast.WeatherService? _weather;
     private GoogleCalendar.GoogleCalendarService? _calendar;
     private Notch.Dashboard.SharedNotes? _notes; // the notch tile and the desktop widget share one note (Plan 9)
@@ -255,6 +256,11 @@ public partial class App : Application
             Widgets.WidgetTheme.Changed += () => Theme.ShellTheme.Apply(Resources, Widgets.WidgetTheme.Light);
             Widgets.WidgetTheme.FollowWindows();
             Theme.ShellTheme.Apply(Resources, Widgets.WidgetTheme.Light);
+            // The Lucent wallpaper takes its colours from the photo frame and re-tints when the theme flips (only while a
+            // NotWin Lucent wallpaper is showing; a wallpaper the user picked is never replaced).
+            _tint = new Widgets.PhotoTint(Path.Combine(DataDir, "lucent"), Native.WallpaperNative.Current,
+                path => Task.Run(() => Native.WallpaperNative.Apply(path)), () => Widgets.WidgetTheme.Light);
+            Widgets.WidgetTheme.Changed += _tint.Schedule;
         }
         catch (Exception e) { Log.Error("widget theme failed to start", e); }
         try { StartWidgets(); }
@@ -365,7 +371,11 @@ public partial class App : Application
                 // The Bluetooth watcher runs only while a battery widget is on the desktop (the widget owns it).
                 return _tray is null ? null : new Widgets.BatteryWidget(new Widgets.DeviceBatteryService(_tray), ownsSource: true);
             case Core.Widgets.WidgetKind.Photo:
-                return new Widgets.PhotoFrameWidget(p.Id, p.Config, new Widgets.PhotoStore(Path.Combine(DataDir, "frames")), save);
+            {
+                var frame = new Widgets.PhotoFrameWidget(p.Id, p.Config, new Widgets.PhotoStore(Path.Combine(DataDir, "frames")), save);
+                if (_tint is { } tint) frame.PhotoShown += tint.OnPhoto; // the Lucent wallpaper takes the photo's colours
+                return frame;
+            }
             case Core.Widgets.WidgetKind.Folder:
                 if (_index is not { } index) return null;
                 _folderIcons ??= new Dock.AppIconCache();
@@ -691,6 +701,7 @@ public partial class App : Application
             try { _alarmSound?.Stop(); } catch { /* exiting */ }
             _widgets?.Dispose();
             _screenTime?.Dispose(); // saves today's minutes
+            _tint?.Dispose();
             _controller?.Dispose();
             _tray?.Dispose();
             _mouse?.Dispose();
