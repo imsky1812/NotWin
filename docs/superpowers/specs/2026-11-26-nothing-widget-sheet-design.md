@@ -209,3 +209,31 @@ SystemMeters, SunCompass`. A new tall size `S12 = (1, 2)`.
   style).
 - Picker order within the groups above.
 - Whether the registry watcher for mic / camera is one shared watcher or one per tile.
+
+## Follow-up (user, 2026-11-26, after the first install): dark mode drives the wallpaper and widget colours; on = red
+
+**What the user asked:** "use dark mode to change a black wallpaper, change widgets colours" and "when a toggle is on
+mark it red". Answers to the follow-up questions: black wallpaper + widgets follow; the wallpaper is NotWin's own dark
+dot art; a blocked mic / camera is a plain card with a slashed icon.
+
+### Dark mode tile
+- **On:** remember the current wallpaper (saved in settings), then apply the bundled `nothing_halftone_dark.png`
+  (`<app>\Wallpapers`). Windows goes dark as today.
+- **Off:** Windows goes light; the remembered wallpaper comes back if its file still exists (if there was none — a solid
+  colour or slideshow — the wallpaper is left as it is). The remembered path is then cleared.
+- The wallpaper changes **only** from a click on this tile (project rule: never change the wallpaper unless the user
+  does it). Changing the theme in Windows Settings recolours the widgets but leaves the wallpaper alone.
+
+### Widget colours follow Windows' app theme
+- Dark theme: today's look (`#1A1A1A` cards, light text). Light theme: every card that is dark today becomes light
+  (`#E8E8E8`, ink `#101010` text and dots, a faint dark edge). Red stays red. The bare clock keeps sampling the wallpaper.
+- Done with theme brushes that widgets share (card, text, dim, unlit dots): a theme change recolours every widget in
+  place, without rebuilding. Edit-mode chrome and the Add / choice popups stay dark.
+- The analogue clock's own face choice (light / dark) is kept as chosen.
+
+### Toggle colours
+- **On = red** card with white icon and text. **Off** = the theme's card. **Blocked** mic / camera (by this user or the
+  machine) = the theme's card with the slashed icon and "Blocked". **Unavailable** = the theme's card, dim icon.
+
+### Non-goals
+- Per-widget colour choices; changing the dock, notch, launcher or quick-settings colours with the theme.
