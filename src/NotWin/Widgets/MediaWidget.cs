@@ -94,7 +94,7 @@ public sealed class MediaWidget : IDesktopWidget
 
     private static FrameworkElement Button(string icon, Func<Task<bool>> act)
     {
-        var b = new Border { Background = Brushes.Transparent, Padding = new Thickness(4), Cursor = Cursors.Hand, VerticalAlignment = VerticalAlignment.Center, Child = TileChrome.Icon(icon, 18) };
+        var b = new Border { Background = Brushes.Transparent, Padding = new Thickness(4), Cursor = Cursors.Hand, VerticalAlignment = VerticalAlignment.Center, Child = WidgetTheme.Icon(icon, 18) };
         b.MouseLeftButtonUp += (_, e) => { e.Handled = true; _ = act(); };
         return b;
     }

@@ -115,11 +115,11 @@ public sealed class WeatherWidget : IDesktopWidget
         var g = Dots(glyph, 4, 1.5);
         g.Margin = new Thickness(0, 0, 14, 0);
         row.Children.Add(g);
-        var temp = TileChrome.Body(Deg(r.Temp), 34, FontWeights.Medium);
+        var temp = WidgetTheme.Body(Deg(r.Temp), 34, FontWeights.Medium);
         temp.VerticalAlignment = VerticalAlignment.Center;
         temp.Margin = new Thickness(0, 0, 14, 0);
         row.Children.Add(temp);
-        var hl = TileChrome.Body($"↑ {Deg(r.High)}\n↓ {Deg(r.Low)}", 12, FontWeights.Normal, WidgetTheme.Soft);
+        var hl = WidgetTheme.Body($"↑ {Deg(r.High)}\n↓ {Deg(r.Low)}", 12, FontWeights.Normal, WidgetTheme.Soft);
         hl.VerticalAlignment = VerticalAlignment.Center;
         hl.LineHeight = 18;
         row.Children.Add(hl);
@@ -148,7 +148,7 @@ public sealed class WeatherWidget : IDesktopWidget
         row.Children.Add(g);
         row.Children.Add(Dots(Deg(r.Temp), 6, 2));
         middle.Children.Add(row);
-        middle.Children.Add(TileChrome.Body($"↑ {Deg(r.High)}   ↓ {Deg(r.Low)}", 12, FontWeights.Normal, WidgetTheme.Soft));
+        middle.Children.Add(WidgetTheme.Body($"↑ {Deg(r.High)}   ↓ {Deg(r.Low)}", 12, FontWeights.Normal, WidgetTheme.Soft));
         panel.Children.Add(middle);
         return panel;
     }
@@ -167,7 +167,7 @@ public sealed class WeatherWidget : IDesktopWidget
             g.HorizontalAlignment = HorizontalAlignment.Center;
             g.Margin = new Thickness(0, 5, 0, 5);
             col.Children.Add(g);
-            var hi = TileChrome.Body(Deg(d.High), 11, FontWeights.Normal);
+            var hi = WidgetTheme.Body(Deg(d.High), 11, FontWeights.Normal);
             hi.HorizontalAlignment = HorizontalAlignment.Center;
             col.Children.Add(hi);
             grid.Children.Add(col);

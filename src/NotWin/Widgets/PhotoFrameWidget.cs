@@ -134,7 +134,7 @@ public sealed class PhotoFrameWidget : IDesktopWidget
         var center = new StackPanel
         {
             HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center,
-            Children = { new DotArtView { Rows = DotArt.Rows("camera"), Dot = 5, Gap = 2, HorizontalAlignment = HorizontalAlignment.Center }, label },
+            Children = { new DotArtView { Rows = DotArt.Rows("camera"), Dot = 5, Gap = 2, Fill = WidgetTheme.Text, HorizontalAlignment = HorizontalAlignment.Center }, label },
         };
         return new Grid { Children = { outline, center } };
     }

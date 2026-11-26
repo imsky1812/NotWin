@@ -73,18 +73,16 @@ public sealed class RadioToggle(RadioKind kind, string settingsUri) : IToggleBac
     }
 }
 
-/// <summary>Windows' app and system theme together (HKCU Personalize), then the theme-change broadcast.</summary>
 /// <summary>
-/// What the Dark mode tile needs to swap the wallpaper (Plan 13 follow-up): the current wallpaper and a way to set it,
-/// the remembered one (settings, per PC), NotWin's dark dot wallpaper and a file-exists check.
+/// What the Dark mode tile needs to swap the wallpaper (Plan 13 follow-up): a way to set it, NotWin's dark and white dot
+/// wallpapers and a file-exists check.
 /// </summary>
-public sealed record DarkModeWallpaperHost(Func<string?> Current, Action<string> Apply, Func<string?> Remembered, Action<string?> Remember,
-    string DarkPath, Func<string, bool> Exists);
+public sealed record DarkModeWallpaperHost(Action<string> Apply, string DarkPath, string LightPath, Func<string, bool> Exists);
 
 /// <summary>
 /// Windows' app and system theme together (HKCU Personalize), then the theme-change broadcast. With a
-/// <see cref="DarkModeWallpaperHost"/>, turning dark also switches to NotWin's dark dot wallpaper and turning light puts
-/// the previous one back (<see cref="DarkModeWallpaper"/>); only this click ever changes the wallpaper.
+/// <see cref="DarkModeWallpaperHost"/>, the wallpaper follows: NotWin's dark dot wallpaper in dark mode, its white one in
+/// light mode (<see cref="DarkModeWallpaper"/>); only this click ever changes the wallpaper.
 /// </summary>
 public sealed class DarkModeToggle : IToggleBackend
 {
@@ -125,8 +123,7 @@ public sealed class DarkModeToggle : IToggleBackend
         if (_broadcast) await Task.Run(() => SystemNative.BroadcastSettingChange("ImmersiveColorSet"));
         if (_wallpaper is { } w)
         {
-            var (apply, remember) = DarkModeWallpaper.OnFlip(!dark, w.Current(), w.Remembered(), w.DarkPath, w.Exists);
-            w.Remember(remember);
+            var apply = DarkModeWallpaper.For(!dark, w.DarkPath, w.LightPath, w.Exists);
             if (apply is not null)
             {
                 var path = apply;

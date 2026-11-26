@@ -155,7 +155,7 @@ public sealed class SnakeWidget : IDesktopWidget
         switch (_game.State)
         {
             case SnakeState.Idle:
-                center.Children.Add(Centered(TileChrome.Body("Snake", 18, FontWeights.SemiBold)));
+                center.Children.Add(Centered(WidgetTheme.Body("Snake", 18, FontWeights.SemiBold)));
                 center.Children.Add(Centered(WidgetTheme.Label("Click · arrows / WASD", WidgetTheme.Soft), 6));
                 center.Children.Add(Centered(WidgetTheme.Label("Best " + _game.Best.ToString(CultureInfo.InvariantCulture)), 4));
                 break;

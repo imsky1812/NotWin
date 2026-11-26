@@ -147,36 +147,24 @@ public sealed class ToggleWidgetTests
         Assert.Equal(["wifi", "camera"], asked);
     });
 
-    private sealed class Walls
-    {
-        public string? Current = @"C:\me\beach.jpg";
-        public string? Remembered;
-        public List<string> Applied = [];
-    }
-
-    // The theme is written under a throwaway HKCU key and nothing is broadcast; the wallpaper goes through fakes.
+    // The theme is written under a throwaway HKCU key and nothing is broadcast; the wallpaper goes through a fake.
     [Fact]
-    public async Task DarkModeToggle_SwitchesWallpaperAndBack()
+    public async Task DarkModeToggle_SwitchesBetweenDarkAndWhiteWallpapers()
     {
         var root = $@"Software\NotWin.Tests\{Guid.NewGuid():N}\Personalize";
-        const string dark = @"C:\NotWin\Wallpapers\nothing_halftone_dark.png";
+        const string dark = @"C:\NotWin\Wallpapers\nothing_halftone_dark.png", light = @"C:\NotWin\Wallpapers\nothing_halftone_light.png";
         try
         {
             using (var k = Registry.CurrentUser.CreateSubKey(root)) k.SetValue("AppsUseLightTheme", 1, RegistryValueKind.DWord);
-            var w = new Walls();
-            using var toggle = new DarkModeToggle(new DarkModeWallpaperHost(
-                () => w.Current, p => { w.Applied.Add(p); w.Current = p; }, () => w.Remembered, r => w.Remembered = r, dark, _ => true),
-                themeKey: root, broadcast: false);
+            var applied = new List<string>();
+            using var toggle = new DarkModeToggle(new DarkModeWallpaperHost(applied.Add, dark, light, _ => true), themeKey: root, broadcast: false);
             Assert.Equal(ToggleState.Off, await toggle.ReadAsync());
             await toggle.FlipAsync();
             Assert.Equal(ToggleState.On, await toggle.ReadAsync());
-            Assert.Equal([dark], w.Applied);
-            Assert.Equal(@"C:\me\beach.jpg", w.Remembered);
             using (var k = Registry.CurrentUser.OpenSubKey(root)!) Assert.Equal(0, k.GetValue("SystemUsesLightTheme"));
             await toggle.FlipAsync();
             Assert.Equal(ToggleState.Off, await toggle.ReadAsync());
-            Assert.Equal([dark, @"C:\me\beach.jpg"], w.Applied);
-            Assert.Null(w.Remembered);
+            Assert.Equal([dark, light], applied);
         }
         finally
         {

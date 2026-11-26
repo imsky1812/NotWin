@@ -127,7 +127,7 @@ public sealed class CalendarWidget : IDesktopWidget
         {
             // The next event (Plan 6): when, the title (two lines at most), then the month and year.
             right.Children.Add(WidgetTheme.Label(CalendarFeed.WhenLabel(next, DateTimeOffset.Now, TimeZoneInfo.Local), TileChrome.Red));
-            var title = TileChrome.Body(next.Title, 13, FontWeights.SemiBold);
+            var title = WidgetTheme.Body(next.Title, 13, FontWeights.SemiBold);
             title.TextWrapping = TextWrapping.Wrap;
             title.TextTrimming = TextTrimming.CharacterEllipsis;
             title.LineHeight = 16;
@@ -144,7 +144,7 @@ public sealed class CalendarWidget : IDesktopWidget
             var none = WidgetTheme.Label(hint ? Hint : "No events");
             none.TextWrapping = TextWrapping.Wrap;
             right.Children.Add(none);
-            var month = TileChrome.Body(now.ToString("MMMM", CultureInfo.InvariantCulture), 18, FontWeights.SemiBold);
+            var month = WidgetTheme.Body(now.ToString("MMMM", CultureInfo.InvariantCulture), 18, FontWeights.SemiBold);
             month.Margin = new Thickness(0, 6, 0, 0);
             right.Children.Add(month);
             var year = WidgetTheme.Label(now.Year.ToString(CultureInfo.InvariantCulture));

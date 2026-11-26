@@ -53,7 +53,7 @@ public sealed class FolderWidget : IDesktopWidget
         var dot = size.W >= 2 ? 15.0 : 7.0;
         var art = new DotArtView
         {
-            Rows = DotArt.Rows(_config.Picture), Dot = dot, Gap = Math.Round(dot * 0.35, 1),
+            Rows = DotArt.Rows(_config.Picture), Dot = dot, Gap = Math.Round(dot * 0.35, 1), Fill = WidgetTheme.Text,
             HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center,
         };
         var root = new Grid { Background = Brushes.Transparent, Cursor = Cursors.Hand, Children = { art } };

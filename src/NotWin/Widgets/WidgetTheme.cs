@@ -84,4 +84,10 @@ public static class WidgetTheme
 
     /// <summary><see cref="TileChrome.Label"/> in the theme's dim colour (or <paramref name="brush"/>).</summary>
     public static TextBlock Label(string text, Brush? brush = null) => TileChrome.Label(text, brush ?? Dim);
+
+    /// <summary><see cref="TileChrome.Body"/> in the theme's text colour (or <paramref name="brush"/>).</summary>
+    public static TextBlock Body(string text, double size, FontWeight weight, Brush? brush = null) => TileChrome.Body(text, size, weight, brush ?? Text);
+
+    /// <summary><see cref="TileChrome.Icon"/> stroked in the theme's text colour.</summary>
+    public static FrameworkElement Icon(string name, double size) => TileChrome.Icon(name, size, Text);
 }

@@ -136,7 +136,7 @@ public sealed class AlarmWidget : IDesktopWidget
         if (_host is null) return;
         var now = DateTime.Now;
         var next = AlarmRules.Next(_alarms.Alarms, now);
-        var big = TileChrome.Body(next is { } n ? AlarmLook.Time(n.Alarm) : "--:--", _size.W == 1 ? 30 : 34, FontWeights.SemiBold,
+        var big = Widgets.WidgetTheme.Body(next is { } n ? AlarmLook.Time(n.Alarm) : "--:--", _size.W == 1 ? 30 : 34, FontWeights.SemiBold,
             next is null ? Widgets.WidgetTheme.Dim : Widgets.WidgetTheme.Text);
         FrameworkElement content;
         if (_size.W == 1)

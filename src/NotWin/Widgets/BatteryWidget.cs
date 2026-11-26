@@ -106,7 +106,7 @@ public sealed class BatteryWidget : IDesktopWidget
         // 2×1 (user, 2026-11-21: "pace the content better"): two equal halves — the ring centred on the left, the name and
         // state centred vertically on the right.
         var text = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(6, 0, 16, 0) };
-        var name = TileChrome.Body(d.Name, 17, FontWeights.SemiBold);
+        var name = WidgetTheme.Body(d.Name, 17, FontWeights.SemiBold);
         name.TextTrimming = TextTrimming.CharacterEllipsis;
         text.Children.Add(name);
         var state = WidgetTheme.Label(low ? "Low · charge soon" : d.Percent is null ? "Connected" : d.Charging ? "Charging" : "OK", low ? TileChrome.Red : null);
