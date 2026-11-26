@@ -95,7 +95,10 @@ public sealed class ChoicePicker : Window
         catch (InvalidTimeZoneException) { return null; }
     }
 
-    /// <summary>Shows the list centred under <paramref name="below"/> (physical px).</summary>
+    /// <summary>
+    /// Shows the list centred under <paramref name="below"/> (physical px), or above it when the widget sits too low;
+    /// always on the widget's screen.
+    /// </summary>
     public static ChoicePicker Show(IReadOnlyList<(string Id, string Label)> options, string? current, RectI below, Action<string> pick)
     {
         var picker = new ChoicePicker(options, current, pick) { Opacity = 0, Left = below.Left, Top = below.Bottom };
@@ -104,8 +107,7 @@ public sealed class ChoicePicker : Window
         var scale = VisualTreeHelper.GetDpi(picker).DpiScaleX;
         var w = (int)Math.Ceiling(picker.ActualWidth * scale);
         var h = (int)Math.Ceiling(picker.ActualHeight * scale);
-        var left = (below.Left + below.Right) / 2 - w / 2;
-        var top = below.Bottom + (int)Math.Round(8 * scale);
+        var (left, top) = PopupPlacement.Below(below, DockWindowNative.MonitorOf(below), w, h, (int)Math.Round(8 * scale));
         DockWindowNative.PlaceTopmost(new WindowInteropHelper(picker).Handle, new RectI(left, top, left + w, top + h));
         picker.Opacity = 1;
         picker.Activate();

@@ -51,3 +51,26 @@ public sealed class MeterMathTests
         Assert.False(MeterMath.Hot(90));
     }
 }
+
+// Plan 13 review: per-interface deltas, so an adapter coming up (with its lifetime counters) is not a spike.
+public sealed class NetDeltaTests
+{
+    private static Dictionary<string, (long Down, long Up)> D(params (string Id, long Down, long Up)[] xs) =>
+        xs.ToDictionary(x => x.Id, x => (x.Down, x.Up));
+
+    [Fact]
+    public void NetDelta_SumsInterfacesInBoth() =>
+        Assert.Equal((300L, 30L), MeterMath.NetDelta(D(("a", 100, 10), ("b", 1000, 100)), D(("a", 200, 20), ("b", 1200, 120))));
+
+    [Fact]
+    public void NetDelta_NewInterface_Ignored() =>
+        Assert.Equal((100L, 10L), MeterMath.NetDelta(D(("a", 100, 10)), D(("a", 200, 20), ("vpn", 9_000_000_000, 4_000_000_000))));
+
+    [Fact]
+    public void NetDelta_InterfaceWentBack_CountsZero() =>
+        Assert.Equal((50L, 0L), MeterMath.NetDelta(D(("a", 100, 10), ("b", 5000, 500)), D(("a", 150, 5), ("b", 10, 1))));
+
+    [Fact]
+    public void NetDelta_InterfaceGone_Ignored() =>
+        Assert.Equal((0L, 0L), MeterMath.NetDelta(D(("a", 100, 10)), D()));
+}

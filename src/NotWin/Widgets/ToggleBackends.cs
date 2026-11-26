@@ -148,7 +148,7 @@ public sealed class PrivacyToggle : IToggleBackend
     private const string DefaultRoot = @"Software\Microsoft\Windows\CurrentVersion\CapabilityAccessManager\ConsentStore";
     private readonly string _key;
     private readonly Func<string?> _machine;
-    private readonly RegistryWatch _watch;
+    private readonly RegistryWatch _watch, _watchDesktopApps;
 
     /// <param name="userRoot">The consent store under HKCU (tests use a throwaway key).</param>
     /// <param name="machine">The machine-wide value (default: read from HKLM).</param>
@@ -157,8 +157,11 @@ public sealed class PrivacyToggle : IToggleBackend
         _key = (userRoot ?? DefaultRoot) + @"\" + capability;
         _machine = machine ?? (() => Registry.LocalMachine.OpenSubKey(DefaultRoot + @"\" + capability)?.GetValue("Value") as string);
         SettingsUri = capability == "webcam" ? "ms-settings:privacy-webcam" : "ms-settings:privacy-microphone";
+        // The two switches only: the key's own values and NonPackaged's (not the per-app "last used" subkeys).
         _watch = new RegistryWatch(_key);
         _watch.Changed += () => Changed?.Invoke();
+        _watchDesktopApps = new RegistryWatch(_key + @"\NonPackaged");
+        _watchDesktopApps.Changed += () => Changed?.Invoke();
     }
 
     public string SettingsUri { get; }
@@ -191,5 +194,9 @@ public sealed class PrivacyToggle : IToggleBackend
         catch (Exception) { return null; } // unreadable: treat as Windows' default (allowed)
     }
 
-    public void Dispose() => _watch.Dispose();
+    public void Dispose()
+    {
+        _watch.Dispose();
+        _watchDesktopApps.Dispose();
+    }
 }

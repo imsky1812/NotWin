@@ -69,16 +69,21 @@ public static class SystemNative
 }
 
 /// <summary>
-/// Raises <see cref="Changed"/> (on a thread-pool thread) whenever a value under an HKCU key changes, until disposed:
-/// RegNotifyChangeKeyValue with an event, re-armed after every change. A missing key is simply not watched.
+/// Raises <see cref="Changed"/> (on a thread-pool thread) whenever a value of one HKCU key changes, until disposed:
+/// RegNotifyChangeKeyValue with an event, re-armed after every change. Only the key's own values are watched, not its
+/// subkeys (the mic's consent key gets per-app "last used" writes all the time). A missing key is not watched.
+/// Arming and disposing share a lock, and the callback never lets an exception escape: a pool-thread exception would
+/// end the shell.
 /// </summary>
 public sealed class RegistryWatch : IDisposable
 {
     private const int NotifyLastSet = 0x4;
+    private const int ThreadAgnostic = 0x10000000; // the wait survives the arming pool thread retiring
+    private readonly object _gate = new();
     private readonly RegistryKey? _key;
     private readonly AutoResetEvent _signal = new(false);
     private RegisteredWaitHandle? _wait;
-    private volatile bool _disposed;
+    private bool _disposed;
 
     public RegistryWatch(string userSubKey)
     {
@@ -92,22 +97,38 @@ public sealed class RegistryWatch : IDisposable
 
     private void Arm()
     {
-        if (_disposed || _key is null) return;
-        if (RegNotifyChangeKeyValue(_key.Handle, true, NotifyLastSet, _signal.SafeWaitHandle, true) != 0) return;
-        _wait = ThreadPool.RegisterWaitForSingleObject(_signal, (_, _) =>
+        lock (_gate)
         {
-            if (_disposed) return;
+            if (_disposed || _key is null) return;
+            _wait?.Unregister(null);
+            _wait = null;
+            if (RegNotifyChangeKeyValue(_key.Handle, false, NotifyLastSet | ThreadAgnostic, _signal.SafeWaitHandle, true) != 0) return;
+            _wait = ThreadPool.RegisterWaitForSingleObject(_signal, OnSignal, null, Timeout.Infinite, executeOnlyOnce: true);
+        }
+    }
+
+    private void OnSignal(object? state, bool timedOut)
+    {
+        try
+        {
+            lock (_gate) { if (_disposed) return; }
             Changed?.Invoke();
             Arm();
-        }, null, Timeout.Infinite, executeOnlyOnce: true);
+        }
+        catch (Exception) { } // disposed mid-callback, or a handler failed: never take the process down
     }
 
     public void Dispose()
     {
-        _disposed = true;
-        _wait?.Unregister(null);
-        _key?.Dispose(); // closing the key ends the pending notification
-        _signal.Dispose();
+        lock (_gate)
+        {
+            if (_disposed) return;
+            _disposed = true;
+            _wait?.Unregister(null);
+            _wait = null;
+            _key?.Dispose(); // closing the key ends the pending notification
+            _signal.Dispose();
+        }
     }
 
     [DllImport("advapi32.dll")]

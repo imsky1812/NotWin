@@ -99,7 +99,18 @@ public sealed class ToggleWidget : IDesktopWidget
             };
         }
         var hit = new Grid { Background = Brushes.Transparent, Cursor = Cursors.Hand, Children = { content } };
-        hit.MouseLeftButtonUp += (_, e) => { e.Handled = true; Click(); };
+        // A flip needs a press AND a release on the tile: a stray release (a popup dismissed by pressing outside it, a
+        // press elsewhere released over the tile) must never change a setting.
+        var pressed = false;
+        hit.MouseLeftButtonDown += (_, e) => { e.Handled = true; pressed = true; };
+        hit.MouseLeave += (_, _) => pressed = false;
+        hit.MouseLeftButtonUp += (_, e) =>
+        {
+            e.Handled = true;
+            if (!pressed) return;
+            pressed = false;
+            Click();
+        };
         return hit;
     }
 

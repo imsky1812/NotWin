@@ -22,6 +22,24 @@ public static class MeterMath
     public static double NetRate(long bytesBefore, long bytesAfter, TimeSpan dt) =>
         bytesAfter < bytesBefore || dt <= TimeSpan.Zero ? 0 : (bytesAfter - bytesBefore) / dt.TotalSeconds;
 
+    /// <summary>
+    /// Bytes moved between two readings of per-interface counters (id → cumulative down / up). Only interfaces present
+    /// in both count, so an adapter coming up (bringing its lifetime counters) or going away is not a spike; a counter
+    /// that went back (reset / wrap) counts 0.
+    /// </summary>
+    public static (long Down, long Up) NetDelta(IReadOnlyDictionary<string, (long Down, long Up)> before,
+        IReadOnlyDictionary<string, (long Down, long Up)> after)
+    {
+        long down = 0, up = 0;
+        foreach (var (id, now) in after)
+        {
+            if (!before.TryGetValue(id, out var was)) continue;
+            down += Math.Max(0, now.Down - was.Down);
+            up += Math.Max(0, now.Up - was.Up);
+        }
+        return (down, up);
+    }
+
     /// <summary>"332 KB/s", "1.2 MB/s", "12 MB/s" (1024-based).</summary>
     public static string FormatRate(double bytesPerSec)
     {

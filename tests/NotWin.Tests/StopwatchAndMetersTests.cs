@@ -96,7 +96,7 @@ public sealed class StopwatchAndMetersTests
     }
 
     private static MeterReading R(ulong idle, ulong kernel, ulong user, int ram, long down, long up, double s) =>
-        new((idle, kernel, user), ram, down, up, T0 + TimeSpan.FromSeconds(s));
+        new((idle, kernel, user), ram, new Dictionary<string, (long, long)> { ["eth"] = (down, up) }, T0 + TimeSpan.FromSeconds(s));
 
     [Fact]
     public void Meters_FirstSampleShowsNothingHot() => OnSta(() =>
@@ -122,6 +122,20 @@ public sealed class StopwatchAndMetersTests
         sampler.Sample();
         sampler.Sample();
         Assert.Equal((50, 41, 1e6, 2000.0), last);
+    });
+
+    [Fact]
+    public void Meters_AdapterComingUp_IsNoSpike() => OnSta(() =>
+    {
+        var src = new FakeSource();
+        src.Readings.Enqueue(new((0, 0, 0), 40, new Dictionary<string, (long, long)> { ["wifi"] = (1_000, 100) }, T0));
+        src.Readings.Enqueue(new((0, 0, 0), 40, new Dictionary<string, (long, long)> { ["wifi"] = (3_001_000, 100), ["vpn"] = (9_000_000_000, 5_000_000) }, T0 + TimeSpan.FromSeconds(2)));
+        using var sampler = new MeterSampler(src.Next);
+        double down = -1;
+        sampler.Sampled += (_, _, d, _) => down = d;
+        sampler.Sample();
+        sampler.Sample();
+        Assert.Equal(1.5e6, down);
     });
 
     [Fact]

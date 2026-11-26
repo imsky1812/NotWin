@@ -6,8 +6,11 @@ using NotWin.Native;
 
 namespace NotWin.Widgets;
 
-/// <summary>One reading of the machine: cumulative CPU times, memory load, cumulative bytes down / up, and when.</summary>
-public sealed record MeterReading((ulong Idle, ulong Kernel, ulong User) Cpu, int RamPercent, long NetDown, long NetUp, TimeSpan At);
+/// <summary>
+/// One reading of the machine: cumulative CPU times, memory load, cumulative bytes down / up per network interface
+/// (keyed by its id, never its name), and when.
+/// </summary>
+public sealed record MeterReading((ulong Idle, ulong Kernel, ulong User) Cpu, int RamPercent, IReadOnlyDictionary<string, (long Down, long Up)> Net, TimeSpan At);
 
 /// <summary>
 /// System meters' sampler (Plan 13): every 2 s while started, turns two readings into CPU %, RAM % and bytes per second
@@ -62,8 +65,9 @@ public sealed class MeterSampler : IDisposable
         {
             cpu = MeterMath.CpuPercent(before.Cpu, now.Cpu);
             var dt = now.At - before.At;
-            down = MeterMath.NetRate(before.NetDown, now.NetDown, dt);
-            up = MeterMath.NetRate(before.NetUp, now.NetUp, dt);
+            var (moved, sent) = MeterMath.NetDelta(before.Net, now.Net); // per interface: an adapter coming up is no spike
+            down = MeterMath.NetRate(0, moved, dt);
+            up = MeterMath.NetRate(0, sent, dt);
             _history.Add(cpu);
             if (_history.Count > HistoryLength) _history.RemoveAt(0);
         }
@@ -77,7 +81,7 @@ public sealed class MeterSampler : IDisposable
     public static MeterReading? ReadSystem()
     {
         if (SystemNative.SystemTimes() is not { } cpu || SystemNative.MemoryLoad() is not { } ram) return null;
-        long down = 0, up = 0;
+        var net = new Dictionary<string, (long Down, long Up)>();
         foreach (var n in NetworkInterface.GetAllNetworkInterfaces())
         {
             if (n.OperationalStatus != OperationalStatus.Up
@@ -85,12 +89,11 @@ public sealed class MeterSampler : IDisposable
             try
             {
                 var s = n.GetIPStatistics();
-                down += s.BytesReceived;
-                up += s.BytesSent;
+                net[n.Id] = (s.BytesReceived, s.BytesSent);
             }
             catch (NetworkInformationException) { } // an adapter going away mid-read
         }
-        return new MeterReading(cpu, ram, down, up, TimeSpan.FromTicks(Stopwatch.GetTimestamp() * TimeSpan.TicksPerSecond / Stopwatch.Frequency));
+        return new MeterReading(cpu, ram, net, TimeSpan.FromTicks(Stopwatch.GetTimestamp() * TimeSpan.TicksPerSecond / Stopwatch.Frequency));
     }
 
     public void Dispose() => _timer.Stop();

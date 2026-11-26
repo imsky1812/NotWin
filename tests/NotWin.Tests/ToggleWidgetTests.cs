@@ -93,6 +93,36 @@ public sealed class ToggleWidgetTests
         Assert.Empty(launched);
     });
 
+    // Plan 13 review: a release that didn't start with a press on the tile (a popup dismissed by pressing outside it,
+    // a press elsewhere released over the tile) must never flip a setting.
+    private static void Raise(UIElement e, RoutedEvent ev) =>
+        e.RaiseEvent(new System.Windows.Input.MouseButtonEventArgs(System.Windows.Input.Mouse.PrimaryDevice, 0, System.Windows.Input.MouseButton.Left) { RoutedEvent = ev });
+
+    [Fact]
+    public void ToggleWidget_ReleaseWithoutPress_DoesNotFlip() => OnSta(() =>
+    {
+        var (w, backend, _) = Make("wifi", ToggleState.On);
+        var hit = w.Build(new WidgetSize(1, 1));
+        Raise(hit, UIElement.MouseLeftButtonUpEvent);
+        Assert.Equal(0, backend.Flips);
+        Raise(hit, UIElement.MouseLeftButtonDownEvent);
+        Raise(hit, UIElement.MouseLeftButtonUpEvent);
+        Assert.Equal(1, backend.Flips);
+        Raise(hit, UIElement.MouseLeftButtonUpEvent); // a second release alone does nothing
+        Assert.Equal(1, backend.Flips);
+    });
+
+    [Fact]
+    public void ToggleWidget_PressThenLeave_ReleaseDoesNotFlip() => OnSta(() =>
+    {
+        var (w, backend, _) = Make("mic", ToggleState.On);
+        var hit = w.Build(new WidgetSize(2, 1));
+        Raise(hit, UIElement.MouseLeftButtonDownEvent);
+        hit.RaiseEvent(new System.Windows.Input.MouseEventArgs(System.Windows.Input.Mouse.PrimaryDevice, 0) { RoutedEvent = UIElement.MouseLeaveEvent });
+        Raise(hit, UIElement.MouseLeftButtonUpEvent);
+        Assert.Equal(0, backend.Flips);
+    });
+
     [Fact]
     public void ToggleWidget_Unavailable_OpensSettings() => OnSta(() =>
     {
@@ -137,6 +167,31 @@ public sealed class ToggleWidgetTests
             }
             await toggle.FlipAsync();
             Assert.Equal(ToggleState.On, await toggle.ReadAsync());
+        }
+        finally
+        {
+            Registry.CurrentUser.DeleteSubKeyTree(@"Software\NotWin.Tests\" + root.Split('\\')[2], throwOnMissingSubKey: false);
+        }
+    }
+
+    // Settings' "let desktop apps use the mic" switch lives in NonPackaged: the tile must hear it change.
+    [Fact]
+    public void PrivacyToggle_HearsTheDesktopAppsSwitch()
+    {
+        var root = $@"Software\NotWin.Tests\{Guid.NewGuid():N}\ConsentStore";
+        try
+        {
+            using (var k = Registry.CurrentUser.CreateSubKey(root + @"\microphone"))
+            {
+                k.SetValue("Value", "Allow");
+                using var np = k.CreateSubKey("NonPackaged");
+                np.SetValue("Value", "Allow");
+            }
+            using var toggle = new PrivacyToggle("microphone", root, () => "Allow");
+            using var heard = new ManualResetEventSlim(false);
+            toggle.Changed += () => heard.Set();
+            using (var np = Registry.CurrentUser.OpenSubKey(root + @"\microphone\NonPackaged", writable: true)!) np.SetValue("Value", "Deny");
+            Assert.True(heard.Wait(TimeSpan.FromSeconds(2)));
         }
         finally
         {
