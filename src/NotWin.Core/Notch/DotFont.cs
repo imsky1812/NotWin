@@ -22,6 +22,9 @@ public static class DotFont
         ['°'] = ["010", "101", "010", "000", "000", "000", "000"],
         ['%'] = ["11001", "11010", "00010", "00100", "01000", "01011", "10011"],
         ['-'] = ["00000", "00000", "00000", "11111", "00000", "00000", "00000"], // below-zero temperatures (Plan 4 weather)
+        // Plan 13: "6H20" screen time and "+4" offsets.
+        ['H'] = ["10001", "10001", "10001", "11111", "10001", "10001", "10001"],
+        ['+'] = ["00000", "00100", "00100", "11111", "00100", "00100", "00000"],
         // Weather icons for the desktop weather widget (Plan 5): c, r, m from the mockup's G table; s, w, t, f drawn in
         // the same style. Letters are icons here, never text (spec §5: dots for numbers only).
         ['c'] = ["000000000", "000111000", "011111110", "111111111", "111111111", "011111110", "000000000"],
