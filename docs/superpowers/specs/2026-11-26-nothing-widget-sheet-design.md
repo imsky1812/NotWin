@@ -300,3 +300,15 @@ dot art; a blocked mic / camera is a plain card with a slashed icon.
   folder's popup (`WidgetConfig.Title`, max 24). The old dot pictures and their edit-mode stepping are gone; the face
   redraws when apps or the name change.
 - Notch: the resting clock is DM Serif Display (the bundled OFL serif closest to Nothing's NType 82, which can't ship).
+
+### Ninth follow-up (user, 2026-11-27): quick, smooth motion everywhere; notch tiles
+- One motion helper (Theme/Motion.cs): popups pop in (fade + 0.96→1 scale + 6 px rise, 170 ms ease-out) and leave
+  quicker (110 ms fade); all instant when Windows' animation effects are off. `Motion.Smooth(window)` on every popup:
+  dock menus, ＋ Add, the choice list, Notes / Alarm editors, folder popup and app chooser, photo popup, Settings, the
+  ringing alarm. `Motion.CloseNow` skips the fade where a popup must be gone first (photo ＋ → file picker; Settings
+  rebuilding itself after a theme change).
+- Quick settings and the start menu gained a 110 ms fade-and-drop exit (a fading window counts as closed, so a
+  re-open is instant); their open is 170 ms.
+- Notch: resize 300 → 240 ms; page swipes 280 → 220 ms; tiles fade up in an 18 ms stagger when the dashboard opens;
+  tiles lift (1.02) on hover and dip (0.98) on press; the built page is reused when nothing changed (layout, page,
+  edit mode, theme), so opening the notch no longer rebuilds every tile.

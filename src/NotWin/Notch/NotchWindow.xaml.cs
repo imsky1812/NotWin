@@ -24,7 +24,7 @@ public partial class NotchWindow : Window
     private bool _bigBand;
     private readonly DispatcherTimer _shrink = new() { Interval = TimeSpan.FromMilliseconds(360) };
     private const int WsExTransparent = 0x00000020;
-    private static readonly Duration Resize = new(TimeSpan.FromMilliseconds(300));
+    private static readonly Duration Resize = new(TimeSpan.FromMilliseconds(240)); // quicker (Plan 13 follow-up)
     private static readonly KeySpline Ease = new(0.2, 0.8, 0.2, 1);
     private static readonly TimeSpan FillDelay = TimeSpan.FromMilliseconds(300), FillStep = TimeSpan.FromMilliseconds(70);
     private static readonly Brush Lit = Frozen(0xE8, 0xE8, 0xE8), Red = Frozen(0xD7, 0x19, 0x21), Off = Frozen(0x22, 0x22, 0x22);

@@ -18,7 +18,7 @@ namespace NotWin.Launcher;
 /// </summary>
 public partial class LauncherWindow : Window
 {
-    private static readonly Duration OpenDuration = new(TimeSpan.FromMilliseconds(200));
+    private static readonly Duration OpenDuration = new(NotWin.Theme.Motion.In);
     private readonly LauncherViewModel _vm;
     private bool _hiding;
     private bool _allowClose;
@@ -61,9 +61,15 @@ public partial class LauncherWindow : Window
         };
     }
 
+    /// <summary>True while the quick fade-out runs: the launcher counts as closed.</summary>
+    public bool Hiding => _hiding;
+
+    private int _generation; // a re-open during the fade-out cancels its hide
+
     public void ShowAndFocus()
     {
         _hiding = false;
+        _generation++;
         _openPointer = null;
         LauncherIcons.BeginSession();
         _vm.Reset();
@@ -103,10 +109,26 @@ public partial class LauncherWindow : Window
         Close();
     }
 
-    /// <summary>Hides at once (no exit animation) and drops per-open state.</summary>
+    /// <summary>Closes with a quick fade and drop (110 ms; at once when Windows' animations are off), then drops per-open state.</summary>
     public void HideNow()
     {
         _hiding = true;
+        var generation = ++_generation;
+        if (!IsVisible || NotWin.Theme.Motion.Enabled == false || (NotWin.Theme.Motion.Enabled is null && !SystemParameters.ClientAreaAnimation))
+        {
+            FinishHide();
+            return;
+        }
+        var ease = new KeySpline(0.4, 0, 1, 1);
+        var dur = KeyTime.FromTimeSpan(NotWin.Theme.Motion.Out);
+        var fade = new DoubleAnimationUsingKeyFrames { KeyFrames = { new SplineDoubleKeyFrame(0, dur, ease) } };
+        fade.Completed += (_, _) => { if (generation == _generation && _hiding) FinishHide(); };
+        Root.BeginAnimation(OpacityProperty, fade);
+        PanelShift.BeginAnimation(TranslateTransform.YProperty, new DoubleAnimationUsingKeyFrames { KeyFrames = { new SplineDoubleKeyFrame(6, dur, ease) } });
+    }
+
+    private void FinishHide()
+    {
         Root.BeginAnimation(OpacityProperty, null);
         PanelShift.BeginAnimation(TranslateTransform.YProperty, null);
         Hide();

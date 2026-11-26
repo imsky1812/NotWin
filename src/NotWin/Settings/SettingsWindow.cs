@@ -51,6 +51,7 @@ public sealed class SettingsWindow : Window
         Action<WeatherPlace> saveWeather, Action quit, WidgetOptions? widgets, DockEffects? effects = null,
         GoogleCalendarService? calendar = null, SyncOptions? sync = null)
     {
+        NotWin.Theme.Motion.Smooth(this); // quick pop in, quicker fade out (Plan 13 follow-up)
         _effects = effects;
         _calendar = calendar;
         _settings = settings;
@@ -202,7 +203,7 @@ public sealed class SettingsWindow : Window
     private void OnThemeChanged() => Dispatcher.BeginInvoke(() =>
     {
         if (s_open != this || s_reopen is not { } reopen) return;
-        Close();
+        Motion.CloseNow(this); // at once: a fading window would still count as open and be "activated" instead
         reopen();
     });
 

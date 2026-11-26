@@ -40,7 +40,7 @@ public sealed class LauncherController : IDisposable
         };
     }
 
-    public bool IsOpen => _window?.IsVisible == true;
+    public bool IsOpen => _window?.IsVisible == true && !_window.Hiding; // fading out counts as closed
 
     public void Toggle()
     {
@@ -66,7 +66,7 @@ public sealed class LauncherController : IDisposable
 
     public void Close()
     {
-        if (_window is null || !_window.IsVisible) return;
+        if (_window is null || !IsOpen) return;
         _window.HideNow();
         _trim.Stop();
         _trim.Start();

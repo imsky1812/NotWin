@@ -26,6 +26,7 @@ public sealed class ChoicePicker : Window
 
     private ChoicePicker(IReadOnlyList<(string Id, string Label)> options, string? current, Action<string> pick)
     {
+        NotWin.Theme.Motion.Smooth(this); // quick pop in, quicker fade out (Plan 13 follow-up)
         WindowStyle = WindowStyle.None;
         AllowsTransparency = true;
         Background = Brushes.Transparent;

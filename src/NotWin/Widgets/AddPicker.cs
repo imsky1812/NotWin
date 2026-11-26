@@ -20,6 +20,7 @@ public sealed class AddPicker : Window
 
     private AddPicker(IReadOnlyList<WidgetKind> kinds, Action<WidgetKind> pick)
     {
+        NotWin.Theme.Motion.Smooth(this); // quick pop in, quicker fade out (Plan 13 follow-up)
         WindowStyle = WindowStyle.None;
         AllowsTransparency = true;
         Background = Brushes.Transparent;

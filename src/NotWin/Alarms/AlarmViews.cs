@@ -43,6 +43,7 @@ public sealed class AlarmRingWindow : Window
 {
     public AlarmRingWindow(Alarm alarm, Action snooze, Action stop)
     {
+        NotWin.Theme.Motion.Smooth(this); // quick pop in, quicker fade out (Plan 13 follow-up)
         WindowStyle = WindowStyle.None;
         AllowsTransparency = true;
         Background = Brushes.Transparent;

@@ -4,6 +4,7 @@ using NotWin.Notch.Dashboard;
 
 namespace NotWin.Tests;
 
+[Collection("Motion")]
 public sealed class DashboardViewTests
 {
     private static void OnSta(Action body)
@@ -38,6 +39,39 @@ public sealed class DashboardViewTests
         view.SetOpen(true);
         Assert.IsType<PlaceholderTile>(view.View(TileKind.Timer));
         Assert.True(view.Height > 0);
+    });
+
+    // Plan 13 follow-up (user 2026-11-27: "optimise the notch tiles"): opening the notch again with nothing changed reuses
+    // the built page instead of building every tile again; a change of page, edit mode or layout still rebuilds.
+    [Fact]
+    public void Show_SameLayoutPageAndMode_ReusesThePage() => OnSta(() =>
+    {
+        var view = new DashboardView(k => new PlaceholderTile(k));
+        var placed = 0;
+        view.TilePlaced += (_, _) => placed++;
+        view.Show(DashboardLayout.Default, 0, editing: false);
+        var first = placed;
+        Assert.True(first > 0);
+        view.Show(DashboardLayout.Sanitize(null), 0, editing: false); // an equal layout, a new object (as the controller makes)
+        Assert.Equal(first, placed);
+        view.Show(DashboardLayout.Default, 0, editing: true);
+        Assert.True(placed > first);
+    });
+
+    [Fact]
+    public void Opening_StaggersTheTilesIn() => OnSta(() =>
+    {
+        NotWin.Theme.Motion.Enabled = true;
+        try
+        {
+            var view = new DashboardView(k => new PlaceholderTile(k));
+            var tiles = new List<FrameworkElement>();
+            view.TilePlaced += (el, _) => tiles.Add(el);
+            view.Show(DashboardLayout.Default, 0, editing: false);
+            view.SetOpen(true);
+            Assert.All(tiles, t => Assert.True(t.HasAnimatedProperties));
+        }
+        finally { NotWin.Theme.Motion.Enabled = null; }
     });
 
     [Fact]

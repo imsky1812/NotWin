@@ -269,6 +269,7 @@ public sealed class PhotoManagePopup : Window
 
     private PhotoManagePopup(PhotoStore store, string frameId, Action<string> remove, Action add)
     {
+        NotWin.Theme.Motion.Smooth(this); // quick pop in, quicker fade out (Plan 13 follow-up)
         _store = store;
         _frameId = frameId;
         _remove = remove;
@@ -373,7 +374,12 @@ public sealed class PhotoManagePopup : Window
     /// </summary>
     public void RequestAdd()
     {
-        CloseIfOpen();
+        // Gone at once (no fade): a fading popup would still pull the file picker down with it.
+        if (!_closed)
+        {
+            _closed = true;
+            Dispatcher.BeginInvoke(() => NotWin.Theme.Motion.CloseNow(this));
+        }
         Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Background, () => Guard(_add));
     }
 

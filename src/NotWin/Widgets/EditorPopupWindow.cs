@@ -19,6 +19,7 @@ public class EditorPopupWindow : Window
     /// <param name="themed">Follow the widgets' light / dark theme (the Notes editor, user 2026-11-26); otherwise dark.</param>
     protected EditorPopupWindow(FrameworkElement content, double width, bool themed = false)
     {
+        NotWin.Theme.Motion.Smooth(this); // quick pop in, quicker fade out (Plan 13 follow-up)
         WindowStyle = WindowStyle.None;
         AllowsTransparency = true;
         Background = Brushes.Transparent;
