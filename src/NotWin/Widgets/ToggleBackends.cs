@@ -111,25 +111,31 @@ public sealed class DarkModeToggle : IToggleBackend
         return Task.FromResult(k.GetValue("AppsUseLightTheme") is int light && light == 0 ? ToggleState.On : ToggleState.Off);
     }
 
-    public async Task FlipAsync()
+    public async Task FlipAsync() => await SetAsync(dark: await ReadAsync() != ToggleState.On);
+
+    /// <summary>
+    /// Light or dark (the tile, and Settings › Theme): Windows' theme, the broadcast, then the matching Lucent
+    /// wallpaper. Nothing happens when that theme is already on.
+    /// </summary>
+    public async Task SetAsync(bool dark)
     {
-        var dark = await ReadAsync() == ToggleState.On;
+        if ((await ReadAsync() == ToggleState.On) == dark) return;
         using (var k = Registry.CurrentUser.CreateSubKey(_key))
         {
-            var light = dark ? 1 : 0; // dark on -> off means light
+            var light = dark ? 0 : 1;
             k.SetValue("AppsUseLightTheme", light, RegistryValueKind.DWord);
             k.SetValue("SystemUsesLightTheme", light, RegistryValueKind.DWord);
         }
         if (_broadcast) await Task.Run(() => SystemNative.BroadcastSettingChange("ImmersiveColorSet"));
         if (_wallpaper is { } w)
         {
-            var apply = DarkModeWallpaper.For(!dark, w.DarkPath, w.LightPath, w.Exists);
+            var apply = DarkModeWallpaper.For(dark, w.DarkPath, w.LightPath, w.Exists);
             if (apply is not null)
             {
                 var path = apply;
                 await Task.Run(() => w.Apply(path));
             }
-            Log.Info($"dark mode -> {(!dark ? "on" : "off")}, wallpaper changed={apply is not null}");
+            Log.Info($"dark mode -> {(dark ? "on" : "off")}, wallpaper changed={apply is not null}");
         }
         Changed?.Invoke();
     }

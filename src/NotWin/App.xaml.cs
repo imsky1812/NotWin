@@ -30,6 +30,18 @@ public partial class App : Application
     private readonly Power.KeepAwakeService _awake = new();
     private Widgets.ScreenTimeTracker? _screenTime;
     private Widgets.PhotoTint? _tint;
+
+    // Light / dark switches NotWin's soft blurred Lucent wallpapers too, with a cross-fade (Plan 13 follow-up); used by
+    // the Dark mode tile and Settings › Theme.
+    private static Widgets.DarkModeWallpaperHost DarkWallpaper
+    {
+        get
+        {
+            var walls = Path.Combine(AppContext.BaseDirectory, "Wallpapers");
+            return new Widgets.DarkModeWallpaperHost(path => Native.WallpaperNative.ApplyFaded(path),
+                Path.Combine(walls, "nothing_lucent_dark.png"), Path.Combine(walls, "nothing_lucent_light.png"), File.Exists);
+        }
+    }
     private Forecast.WeatherService? _weather;
     private GoogleCalendar.GoogleCalendarService? _calendar;
     private Notch.Dashboard.SharedNotes? _notes; // the notch tile and the desktop widget share one note (Plan 9)
@@ -339,11 +351,7 @@ public partial class App : Application
             case Core.Widgets.WidgetKind.Clock: return new Widgets.ClockWidget();
             case Core.Widgets.WidgetKind.Toggle:
             {
-                // The Dark mode tile also switches between NotWin's soft blurred Lucent wallpapers, dark and light (Plan 13 follow-up).
-                var walls = Path.Combine(AppContext.BaseDirectory, "Wallpapers");
-                var wallpaper = new Widgets.DarkModeWallpaperHost(path => Native.WallpaperNative.ApplyFaded(path),
-                    Path.Combine(walls, "nothing_lucent_dark.png"), Path.Combine(walls, "nothing_lucent_light.png"), File.Exists);
-                return new Widgets.ToggleWidget(id => Widgets.ToggleBackends.For(id, _awake, wallpaper), uri => Native.ShellLinkNative.Open(uri));
+                return new Widgets.ToggleWidget(id => Widgets.ToggleBackends.For(id, _awake, DarkWallpaper), uri => Native.ShellLinkNative.Open(uri));
             }
             case Core.Widgets.WidgetKind.AnalogClock: return new Widgets.AnalogClockWidget(() => DateTime.Now);
             case Core.Widgets.WidgetKind.WorldClock: return new Widgets.WorldClockWidget(() => DateTime.UtcNow);
@@ -563,9 +571,14 @@ public partial class App : Application
             () => Shutdown(),
             new Settings.SettingsWindow.WidgetOptions(
                 scale => { if (_widgets is null) dock.UpdateSettings(s => s with { WidgetScale = scale }); else _widgets.SetScale(scale); },
-                Path.Combine(AppContext.BaseDirectory, "Wallpapers"),
                 () => _widgets?.BeginEdit(),
-                Path.Combine(DataDir, "wallpapers")),
+                () => !Widgets.WidgetTheme.Light,
+                async dark =>
+                {
+                    // Settings › Theme: the same path as the Dark mode tile (Windows' theme + the Lucent wallpaper).
+                    using var theme = new Widgets.DarkModeToggle(DarkWallpaper);
+                    await theme.SetAsync(dark);
+                }),
             new Settings.SettingsWindow.DockEffects(
                 on => { dock.UpdateSettings(s => s with { WindowPreviews = on }); dock.PreviewsEnabled = on; }),
             _calendar,

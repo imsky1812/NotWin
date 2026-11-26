@@ -77,7 +77,7 @@ try {
     Write-Warning "Native AOT publish of the watchdog failed ($($_.Exception.Message)). Falling back to a non-AOT publish."
     Invoke-Native $dotnet @('publish', (Join-Path $repo 'src/NotWin.Watchdog'), '-c', 'Release', '-p:PublishAot=false', '-o', $outApp)
 }
-# The bundled Nothing wallpapers (spec §5; Lucent light / dark added in Plan 13) and their previews, for the Settings picker.
+# The Lucent wallpapers (light / dark, Plan 13) used by the Dark mode tile, Settings › Theme and the photo tint.
 $wallOut = Join-Path $outApp 'Wallpapers'
 New-Item -ItemType Directory -Force -Path $wallOut | Out-Null
 Copy-Item (Join-Path $repo 'wallpapers/*.png'), (Join-Path $repo 'wallpapers/*_preview.jpg') $wallOut -Force

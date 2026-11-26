@@ -172,6 +172,30 @@ public sealed class ToggleWidgetTests
         }
     }
 
+    // Settings › Theme (user 2026-11-26) sets light or dark directly, through the same path as the tile.
+    [Fact]
+    public async Task DarkModeToggle_SetAsync_SetsTheChosenTheme()
+    {
+        var root = $@"Software\NotWin.Tests\{Guid.NewGuid():N}\Personalize";
+        const string dark = @"C:\w\nothing_lucent_dark.png", light = @"C:\w\nothing_lucent_light.png";
+        try
+        {
+            using (var k = Registry.CurrentUser.CreateSubKey(root)) k.SetValue("AppsUseLightTheme", 1, RegistryValueKind.DWord);
+            var applied = new List<string>();
+            using var toggle = new DarkModeToggle(new DarkModeWallpaperHost(applied.Add, dark, light, _ => true), themeKey: root, broadcast: false);
+            await toggle.SetAsync(dark: true);
+            await toggle.SetAsync(dark: true); // already dark: nothing changes
+            Assert.Equal(ToggleState.On, await toggle.ReadAsync());
+            await toggle.SetAsync(dark: false);
+            Assert.Equal(ToggleState.Off, await toggle.ReadAsync());
+            Assert.Equal([dark, light], applied);
+        }
+        finally
+        {
+            Registry.CurrentUser.DeleteSubKeyTree(@"Software\NotWin.Tests\" + root.Split('\\')[2], throwOnMissingSubKey: false);
+        }
+    }
+
     [Fact]
     public async Task PrivacyToggle_FlipsBothValues()
     {

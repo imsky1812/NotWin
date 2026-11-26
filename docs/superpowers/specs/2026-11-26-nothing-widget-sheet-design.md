@@ -283,3 +283,10 @@ dot art; a blocked mic / camera is a plain card with a slashed icon.
   circles, selected row, placeholder, scrim, best-match card); the settings gear is drawn per theme.
 - The Alarm editor, the app-folder popup and app chooser, and the photo frame's manage popup follow the widgets' theme
   (white cards with ink text in light mode). The ringing-alarm card stays dark, as an alert.
+
+### Seventh follow-up (user, 2026-11-26): Settings › Theme, no more wallpaper picker
+- Settings has a **Theme** row (Light / Dark) that does exactly what the Dark mode tile does (Windows' theme + the
+  matching Lucent wallpaper, cross-faded); the tile and the row share `DarkModeToggle.SetAsync`.
+- The Settings window follows light / dark (DashChrome + Shell.Glass) and rebuilds itself when the theme changes.
+- The **Wallpaper** section is gone, with the "✦ New" maker (`WallpaperMaker`, `WallpaperArt`) and the four old dot
+  wallpapers; only the two Lucent wallpapers ship. Wallpapers the user made earlier stay in their AppData folder.
