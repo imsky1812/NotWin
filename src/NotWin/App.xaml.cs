@@ -248,6 +248,9 @@ public partial class App : Application
             _screenTime.Start();
         }
         catch (Exception e) { Log.Error("screen time failed to start", e); }
+        // Widget cards follow Windows' light / dark app theme (Plan 13 follow-up).
+        try { Widgets.WidgetTheme.FollowWindows(); }
+        catch (Exception e) { Log.Error("widget theme failed to start", e); }
         try { StartWidgets(); }
         catch (Exception e) { Log.Error("desktop widgets failed to start", e); }
 

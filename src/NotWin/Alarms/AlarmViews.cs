@@ -137,7 +137,7 @@ public sealed class AlarmWidget : IDesktopWidget
         var now = DateTime.Now;
         var next = AlarmRules.Next(_alarms.Alarms, now);
         var big = TileChrome.Body(next is { } n ? AlarmLook.Time(n.Alarm) : "--:--", _size.W == 1 ? 30 : 34, FontWeights.SemiBold,
-            next is null ? TileChrome.Dim : null);
+            next is null ? Widgets.WidgetTheme.Dim : Widgets.WidgetTheme.Text);
         FrameworkElement content;
         if (_size.W == 1)
         {
@@ -148,12 +148,12 @@ public sealed class AlarmWidget : IDesktopWidget
         else
         {
             var stack = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
-            stack.Children.Add(TileChrome.Label(_alarms.RingingNow is not null ? "ALARM · TAP TO STOP" : "ALARM",
+            stack.Children.Add(Widgets.WidgetTheme.Label(_alarms.RingingNow is not null ? "ALARM · TAP TO STOP" : "ALARM",
                 _alarms.RingingNow is not null ? TileChrome.Red : null));
             big.Margin = new Thickness(0, 4, 0, 2);
             stack.Children.Add(big);
             var snoozed = _alarms.SnoozedUntil;
-            stack.Children.Add(TileChrome.Label(
+            stack.Children.Add(Widgets.WidgetTheme.Label(
                 snoozed is { } z ? "SNOOZED · " + AlarmRules.Until(z, now)
                 : next is { } x ? $"{AlarmRules.Until(x.At, now)} · {AlarmRules.DaysLabel(x.Alarm.Days)}"
                 : "NO ALARMS · TAP TO ADD"));

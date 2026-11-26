@@ -60,6 +60,7 @@ public sealed class DesktopWidgets : IDisposable
         _reattach.Tick += (_, _) => TryReattach();
         _dpiDebounce.Tick += (_, _) => { _dpiDebounce.Stop(); Rebuild(); };
         SystemEvents.DisplaySettingsChanged += OnDisplayChanged;
+        WidgetTheme.Changed += OnThemeChanged; // Plan 13 follow-up: light / dark cards
     }
 
     public DesktopLayout Layout => _layout;
@@ -481,6 +482,9 @@ public sealed class DesktopWidgets : IDisposable
 
     private void OnDisplayChanged(object? sender, EventArgs e) => Application.Current?.Dispatcher.BeginInvoke(Rebuild);
 
+    // Windows switched between light and dark: every card is built again in the new colours (rare, so a full rebuild).
+    private void OnThemeChanged() => Application.Current?.Dispatcher.BeginInvoke(Rebuild);
+
     private void OnLost()
     {
         if (_disposed) return;
@@ -527,6 +531,7 @@ public sealed class DesktopWidgets : IDisposable
         ClosePicker();
         _backdrop?.Dispose();
         SystemEvents.DisplaySettingsChanged -= OnDisplayChanged;
+        WidgetTheme.Changed -= OnThemeChanged;
         foreach (var slot in _slots.Values) DisposeSlot(slot);
         _slots.Clear();
     }
