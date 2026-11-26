@@ -28,6 +28,7 @@ public partial class App : Application
     private Timing.TimerService? _timer;
     private Clips.ClipboardService? _clips;
     private readonly Power.KeepAwakeService _awake = new();
+    private Widgets.ScreenTimeTracker? _screenTime;
     private Forecast.WeatherService? _weather;
     private GoogleCalendar.GoogleCalendarService? _calendar;
     private Notch.Dashboard.SharedNotes? _notes; // the notch tile and the desktop widget share one note (Plan 9)
@@ -240,6 +241,13 @@ public partial class App : Application
 
         // Desktop widgets (spec §6.5): on the desktop layer, sharing the timer / media / weather services. Guarded: a
         // failure here must never take the dock, launcher or notch down.
+        // Screen time counts from launch, whether or not its widget is on the desktop (Plan 13).
+        try
+        {
+            _screenTime = new Widgets.ScreenTimeTracker(DataDir, () => DateTime.Now, Native.SystemNative.IdleTime);
+            _screenTime.Start();
+        }
+        catch (Exception e) { Log.Error("screen time failed to start", e); }
         try { StartWidgets(); }
         catch (Exception e) { Log.Error("desktop widgets failed to start", e); }
 
@@ -322,6 +330,10 @@ public partial class App : Application
             case Core.Widgets.WidgetKind.Stopwatch:
                 return new Widgets.StopwatchWidget(() => TimeSpan.FromTicks(System.Diagnostics.Stopwatch.GetTimestamp() * TimeSpan.TicksPerSecond / System.Diagnostics.Stopwatch.Frequency));
             case Core.Widgets.WidgetKind.SystemMeters: return new Widgets.SystemMetersWidget(() => new Widgets.MeterSampler(Widgets.MeterSampler.ReadSystem));
+            case Core.Widgets.WidgetKind.ScreenTime: return _screenTime is null ? null : new Widgets.ScreenTimeWidget(_screenTime);
+            case Core.Widgets.WidgetKind.SunCompass:
+                if (_weather is not { } weather) return null;
+                return new Widgets.SunCompassWidget(() => weather.Place, h => weather.Changed += h, h => weather.Changed -= h, () => DateTime.UtcNow);
             case Core.Widgets.WidgetKind.Timer: return _timer is null ? null : new Widgets.TimerWidget(_timer);
             case Core.Widgets.WidgetKind.Calendar: return new Widgets.CalendarWidget(_calendar, () => _widgets?.Editing == true);
             case Core.Widgets.WidgetKind.Agenda: return new Widgets.AgendaWidget(_calendar);
@@ -663,6 +675,7 @@ public partial class App : Application
             _syncWatch?.Dispose();
             try { _alarmSound?.Stop(); } catch { /* exiting */ }
             _widgets?.Dispose();
+            _screenTime?.Dispose(); // saves today's minutes
             _controller?.Dispose();
             _tray?.Dispose();
             _mouse?.Dispose();

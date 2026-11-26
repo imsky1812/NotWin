@@ -74,3 +74,25 @@ public sealed class ScreenTimeLog
     public static string Format(int minutes) =>
         string.Create(CultureInfo.InvariantCulture, $"{minutes / 60}H{minutes % 60:00}");
 }
+
+/// <summary><c>screentime.json</c> in the data folder: { "yyyy-MM-dd": minutes }. Not synced (Plan 13).</summary>
+public static class ScreenTimeStore
+{
+    public const string FileName = "screentime.json";
+
+    /// <summary>The saved days, or null when there is no file or it can't be read.</summary>
+    public static Dictionary<string, int>? Load(string dataDir)
+    {
+        try
+        {
+            var path = Path.Combine(dataDir, FileName);
+            return File.Exists(path) ? System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, int>>(File.ReadAllText(path)) : null;
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException or System.Text.Json.JsonException)
+        {
+            return null;
+        }
+    }
+
+    public static void Save(string dataDir, IReadOnlyDictionary<string, int> days) => JsonFile.WriteAtomic(dataDir, FileName, days);
+}
