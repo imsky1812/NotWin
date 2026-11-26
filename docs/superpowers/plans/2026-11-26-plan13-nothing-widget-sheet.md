@@ -584,3 +584,24 @@ Each widget is an `IDesktopWidget` in `src/NotWin/Widgets`, built in `App.Create
 - [ ] **Step 5: Wrap-up.**
   - Report the results and the `nothing-widgets` branch.
   - Ask before any push or PR.
+
+---
+
+## Follow-up tasks (spec "Follow-up": dark mode wallpaper, widget theme, red toggles)
+
+### Task 12: Wallpaper decision and the saved path (Core)
+- `DarkModeWallpaper.OnFlip(bool turningDark, string? current, string? remembered, string darkPath, Func<string, bool> exists) → (string? Apply, string? Remember)`:
+  - turning dark: apply `darkPath` when it exists; remember `current` (unless `current` already is `darkPath`, then keep `remembered`);
+  - turning light: apply `remembered` only when it exists **and** the wallpaper is still `darkPath` (a wallpaper the user picked meanwhile is kept); remember null.
+- `ShellSettings.WallpaperBeforeDark` (string?), per-PC: `SyncRule.Merge` keeps mine, `SyncRule.Shared` blanks it.
+- Tests: `DarkModeWallpaperTests` (each rule above, missing files), `SyncRule` keeps / blanks the field.
+
+### Task 13: Widget theme brushes (app)
+- `WidgetTheme` (Widgets): mutable `Card`, `Edge`, `Text`, `Dim`, `Unlit` brushes; `Light` flag; `Apply(bool light)` recolours them in place; `FollowWindows()` reads HKCU `AppsUseLightTheme` now and on `UserPreferenceChanged`.
+- `WidgetCard`: `Surface.Dark` uses the theme's card / edge; `Ink(Dark)` / `Dim(Dark)` return the theme brushes. Widget files use `WidgetTheme.Text` / `Dim` / `Label(...)` instead of `TileChrome.Text` / `Dim` / `Label(...)`.
+- Tests: `WidgetThemeTests` — after `Apply(true)` a wrapped Dark card's background is `#E8E8E8` and `Ink(Dark)` is `#101010`; `Apply(false)` restores; red cards unchanged.
+
+### Task 14: Red-on toggles and the dark-mode wallpaper (app)
+- `ToggleWidget.Surface`: On → Red; everything else → Dark (theme card); privacy Off / Blocked slashed.
+- `DarkModeToggle(Func<string?> current, Action<string> apply, Func<string?> remembered, Action<string?> remember, string darkPath)` uses `DarkModeWallpaper.OnFlip` after writing the theme.
+- Tests: surfaces; dark-mode flip applies / restores through fakes (no real wallpaper or theme change in tests — the theme write goes through an injectable key root).
