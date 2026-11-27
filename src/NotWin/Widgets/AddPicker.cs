@@ -106,21 +106,8 @@ public sealed class AddPicker : Window
         _ => kind.ToString(),
     };
 
-    // A small dot icon per kind: the folder and camera drawings; the others share the star until they get their own.
-    private static string KindIcon(WidgetKind kind) => kind switch
-    {
-        WidgetKind.Photo => "camera",
-        WidgetKind.Folder => "folder",
-        WidgetKind.Snake or WidgetKind.TicTacToe => "gamepad",
-        WidgetKind.Media => "note",
-        WidgetKind.Notes => "book",
-        WidgetKind.Weather => "plant",
-        WidgetKind.Clock or WidgetKind.Timer or WidgetKind.Alarm or WidgetKind.AnalogClock or WidgetKind.WorldClock or WidgetKind.StackedClock
-            or WidgetKind.Stopwatch or WidgetKind.ScreenTime => "cup",
-        WidgetKind.Toggle or WidgetKind.SystemMeters => "bolt",
-        WidgetKind.SunCompass => "sun",
-        _ => "star",
-    };
+    // A distinct dot icon per kind (NotWin.Core.Widgets.WidgetIcons; Plan 14).
+    private static string KindIcon(WidgetKind kind) => WidgetIcons.For(kind);
 }
 
 /// <summary>Draws <see cref="DotArt"/> rows as round dots (lit = <see cref="Fill"/>, unlit not drawn).</summary>

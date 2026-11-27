@@ -33,7 +33,7 @@ public sealed class SettingsWindow : Window
     private readonly Border _startToggle = new(), _keepToggle = new(), _previewToggle = new();
     private DockEffects? _effects;
     private readonly GoogleCalendarService? _calendar;
-    private readonly StackPanel _calendarHost = new() { Margin = new Thickness(0, 0, 0, 18) };
+    private readonly StackPanel _calendarHost = new();
     private readonly TextBox _clientId = SettingsFields.Text();
     private readonly PasswordBox _clientSecret = SettingsFields.Secret();
 
@@ -73,19 +73,15 @@ public sealed class SettingsWindow : Window
         Foreground = DashChrome.Text;
 
         var stack = new StackPanel();
-        var head = new DockPanel { Margin = new Thickness(0, 0, 0, 18) };
+        var head = new DockPanel { Margin = new Thickness(2, 0, 0, 18) };
         DockPanel.SetDock(head, System.Windows.Controls.Dock.Top);
-        var close = new TextBlock { Text = "✕", FontSize = 13, Foreground = DashChrome.Dim, Cursor = Cursors.Hand, Background = Brushes.Transparent, VerticalAlignment = VerticalAlignment.Center };
-        close.MouseLeftButtonUp += (_, _) => Close();
-        DockPanel.SetDock(close, System.Windows.Controls.Dock.Right);
-        head.Children.Add(close);
-        head.Children.Add(DashChrome.Body("Settings", 20, FontWeights.SemiBold));
+        head.Children.Add(CloseChip());
+        head.Children.Add(TitleRow());
 
         // Weather city (spec §6.5: a city the user types in Settings).
-        stack.Children.Add(Section("Weather"));
         _city = new TextBox
         {
-            Background = Brushes.Transparent, Foreground = DashChrome.Text, CaretBrush = DashChrome.Text, // the rounded Border paints #222
+            Background = Brushes.Transparent, Foreground = DashChrome.Text, CaretBrush = DashChrome.Text, // the rounded Border paints the field
             BorderThickness = new Thickness(0), FontFamily = DashChrome.Font, FontSize = 13, Padding = new Thickness(10, 8, 10, 8),
             Text = settings().Weather?.Name ?? "",
         };
@@ -97,20 +93,18 @@ public sealed class SettingsWindow : Window
         DockPanel.SetDock(set, System.Windows.Controls.Dock.Right);
         cityRow.Children.Add(set);
         cityRow.Children.Add(new Border { CornerRadius = new CornerRadius(12), Background = DashChrome.Chip, Child = _city, ClipToBounds = true });
-        stack.Children.Add(cityRow);
         _cityStatus = DashChrome.Label(PlaceText(settings().Weather) ?? "Type a city and press Enter");
-        _cityStatus.Margin = new Thickness(2, 8, 0, 18);
-        stack.Children.Add(_cityStatus);
+        _cityStatus.Margin = new Thickness(2, 10, 0, 0);
+        stack.Children.Add(Card("WEATHER", cityRow, _cityStatus));
 
         // Google Calendar (Plan 6): the guided setup, sign-in and status.
         if (calendar is not null)
         {
-            stack.Children.Add(Section("Google Calendar"));
-            stack.Children.Add(_calendarHost);
             _clientId.Text = calendar.SavedClientId ?? "";
             PaintCalendar();
             calendar.Changed += PaintCalendar;
             Closed += (_, _) => calendar.Changed -= PaintCalendar;
+            stack.Children.Add(Card("GOOGLE CALENDAR", _calendarHost));
         }
 
         if (widgets is not null) AddWidgetSections(stack, widgets);
@@ -118,9 +112,7 @@ public sealed class SettingsWindow : Window
         // Sync (Plan 9): settings, notes and alarms kept in a folder you pick, for your other PCs.
         if (sync is not null)
         {
-            stack.Children.Add(Section("Sync"));
-            var host = new StackPanel { Margin = new Thickness(0, 0, 0, 18) };
-            stack.Children.Add(host);
+            var host = new StackPanel();
             void PaintSync()
             {
                 host.Children.Clear();
@@ -151,18 +143,26 @@ public sealed class SettingsWindow : Window
                 host.Children.Add(status);
             }
             PaintSync();
+            stack.Children.Add(Card("SYNC", host));
         }
 
-        stack.Children.Add(Section("Shell"));
-        stack.Children.Add(ToggleRow("Start with Windows", _startToggle, () => _settings().StartWithWindows, _setStart));
-        stack.Children.Add(ToggleRow("Keep dock visible", _keepToggle, () => _settings().KeepDockVisible, _setKeep));
+        var shell = new StackPanel();
+        shell.Children.Add(ToggleRow("Start with Windows", _startToggle, () => _settings().StartWithWindows, _setStart));
+        shell.Children.Add(ToggleRow("Keep dock visible", _keepToggle, () => _settings().KeepDockVisible, _setKeep));
         if (_effects is { } fx)
-        {
-            stack.Children.Add(ToggleRow("Window previews in the dock", _previewToggle, () => _settings().WindowPreviews, fx.SetPreviews));
-        }
+            shell.Children.Add(ToggleRow("Window previews in the dock", _previewToggle, () => _settings().WindowPreviews, fx.SetPreviews));
+        if (shell.Children.Count > 0) ((DockPanel)shell.Children[^1]).Margin = new Thickness(0); // the card pads the bottom
+        stack.Children.Add(Card("SHELL", shell));
 
         var quitText = DashChrome.Body("Quit NotWin", 13, FontWeights.SemiBold, DashChrome.Red);
-        var quitRow = new Border { Background = Brushes.Transparent, Cursor = Cursors.Hand, Padding = new Thickness(0, 14, 0, 0), Child = quitText };
+        quitText.HorizontalAlignment = HorizontalAlignment.Center;
+        var quitRow = new Border
+        {
+            Background = Brushes.Transparent, BorderBrush = DashChrome.FrozenArgb(0x55, 0xE0, 0x1F, 0x25), BorderThickness = new Thickness(1.5),
+            CornerRadius = new CornerRadius(16), Cursor = Cursors.Hand, Padding = new Thickness(0, 12, 0, 12), Margin = new Thickness(0, 4, 0, 0), Child = quitText,
+        };
+        quitRow.MouseEnter += (_, _) => quitRow.Background = DashChrome.FrozenArgb(0x1F, 0xE0, 0x1F, 0x25);
+        quitRow.MouseLeave += (_, _) => quitRow.Background = Brushes.Transparent;
         quitRow.MouseLeftButtonUp += (_, _) => { Close(); quit(); };
         stack.Children.Add(quitRow);
 
@@ -170,7 +170,7 @@ public sealed class SettingsWindow : Window
         {
             Background = (Brush)Application.Current.FindResource("Shell.Glass"),
             BorderBrush = (Brush)Application.Current.FindResource("Shell.Line"),
-            BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(28), Padding = new Thickness(24),
+            BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(32), Padding = new Thickness(20),
             // The header (with ✕) stays put; everything below scrolls once the window reaches the screen's height
             // (user report 2026-11-20: many wallpapers pushed the window and its ✕ above the screen).
             Child = new DockPanel
@@ -235,64 +235,45 @@ public sealed class SettingsWindow : Window
     // removed (user 2026-11-26): the Lucent wallpaper now follows the theme and the photo frame.
     private void AddWidgetSections(StackPanel stack, WidgetOptions w)
     {
-        stack.Children.Add(Section("Widgets"));
-        var sizes = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 10) };
+        var sizes = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 12) };
         void PaintSizes()
         {
             sizes.Children.Clear();
             foreach (var (key, label) in new[] { ("S", "Small"), ("M", "Medium"), ("L", "Large") })
             {
-                var on = (_settings().WidgetScale ?? "M") == key;
-                var pill = new Border
-                {
-                    Background = on ? DashChrome.Text : DashChrome.Chip, CornerRadius = new CornerRadius(12),
-                    Padding = new Thickness(14, 6, 14, 6), Margin = new Thickness(0, 0, 6, 0), Cursor = Cursors.Hand,
-                    Child = new TextBlock { Text = label, FontFamily = DashChrome.Font, FontSize = 12, FontWeight = FontWeights.Medium, Foreground = on ? DashChrome.Dark : DashChrome.Text },
-                };
                 var k = key;
-                pill.MouseLeftButtonUp += (_, _) => { w.SetScale(k); PaintSizes(); };
-                sizes.Children.Add(pill);
+                sizes.Children.Add(Choice(label, (_settings().WidgetScale ?? "M") == key, () => { w.SetScale(k); PaintSizes(); }));
             }
         }
         PaintSizes();
-        stack.Children.Add(sizes);
-        var edit = new DockPanel { Margin = new Thickness(0, 0, 0, 18), Background = Brushes.Transparent, Cursor = Cursors.Hand };
+        var edit = new DockPanel { Background = Brushes.Transparent, Cursor = Cursors.Hand };
         var editArrow = DashChrome.Label("›");
         editArrow.FontSize = 14;
         DockPanel.SetDock(editArrow, System.Windows.Controls.Dock.Right);
         edit.Children.Add(editArrow);
         edit.Children.Add(DashChrome.Body("Edit widgets", 13, FontWeights.Normal));
         edit.MouseLeftButtonUp += (_, _) => { Close(); w.EditWidgets(); };
-        stack.Children.Add(edit);
+        stack.Children.Add(Card("WIDGETS", sizes, edit));
 
         // Theme (user 2026-11-26): light or dark, the same as the Dark mode tile (Windows' theme and the Lucent wallpaper).
         if (w.SetDark is { } setDark && w.IsDark is { } isDark)
         {
-            stack.Children.Add(Section("Theme"));
-            var themes = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 18) };
+            var themes = new StackPanel { Orientation = Orientation.Horizontal };
             void PaintThemes()
             {
                 themes.Children.Clear();
                 foreach (var (dark, label) in new[] { (false, "Light"), (true, "Dark") })
                 {
-                    var on = isDark() == dark;
-                    var pill = new Border
-                    {
-                        Background = on ? DashChrome.Text : DashChrome.Chip, CornerRadius = new CornerRadius(12),
-                        Padding = new Thickness(16, 6, 16, 6), Margin = new Thickness(0, 0, 8, 0), Cursor = Cursors.Hand,
-                        Child = new TextBlock { Text = label, FontFamily = DashChrome.Font, FontSize = 12, FontWeight = FontWeights.Medium, Foreground = on ? DashChrome.Dark : DashChrome.Text },
-                    };
                     var want = dark;
-                    pill.MouseLeftButtonUp += async (_, _) =>
+                    themes.Children.Add(Choice(label, isDark() == dark, async () =>
                     {
                         try { await setDark(want); }
                         catch (Exception e) { Log.Error("changing the theme failed", e); }
-                    };
-                    themes.Children.Add(pill);
+                    }));
                 }
             }
             PaintThemes();
-            stack.Children.Add(themes);
+            stack.Children.Add(Card("THEME", themes));
         }
     }
 
@@ -386,12 +367,63 @@ public sealed class SettingsWindow : Window
         _cityStatus.Text = PlaceText(place)!.ToUpperInvariant();
     }
 
-    private static TextBlock Section(string text)
+    // A section is its own rounded card (Plan 14, user 2026-11-27: a Nothing restyle): a mono label over its controls.
+    private static Border Card(string title, params UIElement[] body)
+    {
+        var inner = new StackPanel();
+        inner.Children.Add(CardLabel(title));
+        foreach (var e in body) inner.Children.Add(e);
+        return new Border
+        {
+            Background = DashChrome.TileBrush, BorderBrush = DashChrome.Edge, BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(20), Padding = new Thickness(16, 12, 16, 14), Margin = new Thickness(0, 0, 0, 12), Child = inner,
+        };
+    }
+
+    private static TextBlock CardLabel(string text)
     {
         var t = DashChrome.Label(text);
-        t.FontSize = 11;
-        t.Margin = new Thickness(2, 0, 0, 8);
+        t.FontFamily = DashChrome.Mono;
+        t.FontSize = 10;
+        t.Margin = new Thickness(0, 0, 0, 12);
         return t;
+    }
+
+    // The header: a red dot and "SETTINGS" in the mono face, with a round ✕ chip (the notch's language).
+    private static UIElement TitleRow()
+    {
+        var row = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
+        row.Children.Add(new Border { Width = 7, Height = 7, CornerRadius = new CornerRadius(4), Background = DashChrome.Red, Margin = new Thickness(0, 0, 10, 0), VerticalAlignment = VerticalAlignment.Center });
+        row.Children.Add(new TextBlock { Text = "SETTINGS", FontFamily = DashChrome.Mono, FontSize = 15, FontWeight = FontWeights.SemiBold, Foreground = DashChrome.Text, VerticalAlignment = VerticalAlignment.Center });
+        return row;
+    }
+
+    private Border CloseChip()
+    {
+        var chip = new Border
+        {
+            Width = 30, Height = 30, CornerRadius = new CornerRadius(15), Background = DashChrome.Chip, Cursor = Cursors.Hand,
+            VerticalAlignment = VerticalAlignment.Center,
+            Child = new TextBlock { Text = "✕", FontSize = 12, Foreground = DashChrome.Text, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center },
+        };
+        chip.MouseEnter += (_, _) => chip.Background = DashChrome.ChipHover;
+        chip.MouseLeave += (_, _) => chip.Background = DashChrome.Chip;
+        chip.MouseLeftButtonUp += (_, _) => Close();
+        DockPanel.SetDock(chip, System.Windows.Controls.Dock.Right);
+        return chip;
+    }
+
+    // A pill in a choice group (widget size, theme): filled when chosen.
+    private static Border Choice(string label, bool on, Action pick)
+    {
+        var pill = new Border
+        {
+            Background = on ? DashChrome.Text : DashChrome.Chip, CornerRadius = new CornerRadius(12),
+            Padding = new Thickness(16, 6, 16, 6), Margin = new Thickness(0, 0, 8, 0), Cursor = Cursors.Hand,
+            Child = new TextBlock { Text = label, FontFamily = DashChrome.Font, FontSize = 12, FontWeight = FontWeights.Medium, Foreground = on ? DashChrome.Dark : DashChrome.Text },
+        };
+        pill.MouseLeftButtonUp += (_, _) => pick();
+        return pill;
     }
 
     private static Border Pill(string text) => new()

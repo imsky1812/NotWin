@@ -331,3 +331,15 @@ dot art; a blocked mic / camera is a plain card with a slashed icon.
 - Music 2×2: the seek dots spread edge to edge across the tile at any display scale (DotBar.Spread); still 20 steps.
 - Timer 2×2: finer grid dots (0.5 of the pitch, desktop widget unchanged at 0.64); − and + are round 30 px chips.
 - Notes: unchanged.
+
+### Plan 14 (user 2026-11-27): distinct Add icons, add-a-program, Settings restyle
+
+- **＋ Add icons:** every widget kind has its own dot glyph (NotWin.Core.Widgets.WidgetIcons + new DotArt glyphs:
+  digits, clock, globe, stack, timer, stopwatch, hourglass, alarm, switch, bars, cloud, calendar, battery). Before,
+  Clock / World clock / Timer / Stopwatch / Alarm / Screen time all shared the cup.
+- **Add a program from your PC:** a game on another drive with no Start Menu entry (D:\Games\…\NeedForSpeedPayback.exe)
+  was invisible to search and to app folders. The folder chooser now has "Add a program from your PC…" (a file picker
+  for an exe or shortcut). It is saved in programs.json and merged into the app index, so it launches, resolves inside a
+  folder, and is found in search. Core: CustomApps / CustomAppsStore.
+- **Settings restyle:** each section is its own rounded card with a mono label; the header is a red dot + "SETTINGS" in
+  the mono face with a round ✕ chip; Quit is a red-outlined full-width button.

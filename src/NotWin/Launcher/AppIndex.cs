@@ -20,16 +20,44 @@ public sealed class AppIndex
         IReadOnlyList<UserAssistEntry> Recent, DateTime BuiltUtc);
 
     private readonly LaunchUsageStore _usage;
+    private readonly CustomAppsStore _custom;
     private readonly object _gate = new();
     private volatile Snapshot _snap = new([], SettingsPages.All, [], DateTime.MinValue);
+    private volatile IReadOnlyList<LaunchItem> _customApps = [];
     private Task? _refreshing;
 
-    public AppIndex(string dataDir) => _usage = new LaunchUsageStore(dataDir);
+    public AppIndex(string dataDir)
+    {
+        _usage = new LaunchUsageStore(dataDir);
+        _custom = new CustomAppsStore(dataDir);
+        _customApps = [.. _custom.Load().Select(CustomApps.ToItem)];
+    }
 
-    public IReadOnlyList<LaunchItem> Apps => _snap.Apps;
+    /// <summary>Enumerated apps and the user's own added programs, deduped by id.</summary>
+    public IReadOnlyList<LaunchItem> Apps => Merge(_snap.Apps, _customApps);
 
     /// <summary>Apps then settings: everything the ranker searches synchronously.</summary>
-    public IReadOnlyList<LaunchItem> All => _snap.All;
+    public IReadOnlyList<LaunchItem> All => [.. Apps, .. SettingsPages.All];
+
+    private static IReadOnlyList<LaunchItem> Merge(IReadOnlyList<LaunchItem> apps, IReadOnlyList<LaunchItem> extra)
+    {
+        if (extra.Count == 0) return apps;
+        var seen = new HashSet<string>(apps.Select(a => a.Id), StringComparer.OrdinalIgnoreCase);
+        return [.. apps, .. extra.Where(e => seen.Add(e.Id))];
+    }
+
+    /// <summary>
+    /// Adds a program the user picked from their PC (Plan 14): a full path to an exe or shortcut. It becomes a
+    /// launchable app at once (search, the folder chooser). Returns the new item, or null for a blank path.
+    /// </summary>
+    public LaunchItem? AddCustomApp(string path)
+    {
+        var list = CustomApps.Add(_custom.Load(), path);
+        _custom.Save(list);
+        _customApps = [.. list.Select(CustomApps.ToItem)];
+        Log.Info($"custom program added (now {_customApps.Count})"); // never the path
+        return _customApps.FirstOrDefault(a => string.Equals(a.Id, path.Trim(), StringComparison.OrdinalIgnoreCase));
+    }
 
     /// <summary>Rebuilds the index in the background when it is older than <paramref name="maxAge"/> (or empty).</summary>
     public Task RefreshIfStaleAsync(TimeSpan maxAge)
@@ -65,7 +93,7 @@ public sealed class AppIndex
     public LaunchItem? FindApp(string idOrExePath)
     {
         if (string.IsNullOrWhiteSpace(idOrExePath)) return null;
-        var apps = _snap.Apps;
+        var apps = Apps; // enumerated + the user's added programs
         var exact = apps.FirstOrDefault(a => string.Equals(a.Id, idOrExePath, StringComparison.OrdinalIgnoreCase));
         if (exact is not null) return exact;
         var file = Path.GetFileName(idOrExePath);
