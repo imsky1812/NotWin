@@ -1,54 +1,141 @@
-# NotWin
+<p align="center">
+  <a href="https://github.com/imsky1812/NotWin/releases/latest"><img alt="NotWin: a Nothing-style shell for Windows 11" src="docs/readme/banner.png" width="100%"></a>
+</p>
 
-A personal Windows 11 shell layer styled after Nothing OS. Phase 1 replaces the Windows taskbar with a
-floating dock: start and search buttons, pinned and running apps, and a tray with Wi-Fi, volume, battery
-and the clock. It hides until the mouse touches the bottom edge, or (Keep dock visible) stays up on the desktop and over normal windows and slides down only for maximized and full-screen apps.
-Later phases add the launcher, quick settings and notifications, the notch, and desktop widgets
-(see `docs/superpowers/specs/2026-11-17-nothing-shell-design.md`).
+<p align="center">
+  <a href="https://github.com/imsky1812/NotWin/releases/latest"><img src="https://img.shields.io/github/v/release/imsky1812/NotWin?style=flat&color=d71921" alt="Latest release"></a>
+  <a href="https://github.com/imsky1812/NotWin/releases"><img src="https://img.shields.io/github/downloads/imsky1812/NotWin/total?style=flat" alt="Downloads"></a>
+  <a href="https://github.com/imsky1812/NotWin/commits/main"><img src="https://img.shields.io/github/last-commit/imsky1812/NotWin?style=flat" alt="Last commit"></a>
+  <img src="https://img.shields.io/badge/Windows-11%20(64--bit)-black?style=flat" alt="Windows 11, 64-bit">
+  <img src="https://img.shields.io/badge/.NET-10-black?style=flat" alt=".NET 10">
+</p>
 
-Formerly called Nothing Shell (renamed 2026-11-21).
+<p align="center"><b>Your Windows 11 desktop, the Nothing way.</b></p>
 
-## Install on your PC (one click)
+<p align="center">
+  <a href="https://github.com/imsky1812/NotWin/releases/latest/download/NotWin-Setup.exe">Download</a> |
+  <a href="https://github.com/imsky1812/NotWin/releases">Releases</a> |
+  <a href="#add-your-google-calendar">Calendar guide</a> |
+  <a href="#build-from-source">Build from source</a>
+</p>
 
-You need Windows 11 (64-bit). Nothing else: .NET is built in.
+# NotWin: a Nothing-style shell for Windows 11
+
+NotWin replaces the Windows taskbar and dresses up the desktop in the style of Nothing OS: dot-matrix numbers,
+monochrome with one red accent, round tiles and soft frosted cards. You get a floating **dock**, a **launcher**,
+**quick settings** with your notifications, a **notch** at the top of the screen that opens into a dashboard, and
+**desktop widgets**, all in light or dark. Everything runs on your PC, and quitting NotWin always gives the
+Windows taskbar back.
+
+![The notch dashboard: weather, clipboard, notes and timer tiles](docs/readme/notch.png)
+
+## Quickstart
 
 **[⬇ Download NotWin-Setup.exe](https://github.com/imsky1812/NotWin/releases/latest/download/NotWin-Setup.exe)**
-(about 95 MB, version 1.0.0). All versions are on the [Releases](https://github.com/imsky1812/NotWin/releases) page.
+(about 115 MB). It needs Windows 11, 64-bit, and nothing else: .NET is built in.
 
-1. Download **`NotWin-Setup.exe`** with the link above, or build it yourself (see [Build the setup](#build-the-setup)).
-2. Double-click it. Windows SmartScreen may say *"Windows protected your PC"*, because the file is not signed by a
-   known publisher: click **More info**, then **Run anyway**.
-3. Click **Yes** on the admin prompt, then **OK** on *"Install NotWin?"*.
-4. Your taskbar is replaced by the NotWin dock after a few seconds, and *"NotWin is installed and running"*
-   appears. NotWin now starts with Windows.
+1. Double-click **NotWin-Setup.exe**. SmartScreen may say *"Windows protected your PC"*, because the file isn't
+   signed by a known publisher. Click **More info**, then **Run anyway**.
+2. Click **Yes** on the admin prompt, then **OK** on *"Install NotWin?"*.
+3. A few seconds later the dock replaces your taskbar and *"NotWin is installed and running"* appears. NotWin now
+   starts with Windows.
 
-Right-click the dock's start button and choose **Settings…**. To show your calendar, see
-[Add your Google Calendar](#add-your-google-calendar).
+Push the mouse to the bottom edge for the dock, tap **Win** for the launcher, rest the mouse on the notch for the
+dashboard, and right-click any widget for **Edit widgets**. Settings is in the start button's right-click menu.
 
-**What setup does.** The dock needs Windows' `uiAccess` to stay above every window, and Windows only allows that
-for a signed program in Program Files. So setup:
+**Updating:** run a newer `NotWin-Setup.exe` the same way. Your widgets, notes and settings are kept.
+**Uninstalling:** go to **Settings > Apps > Installed apps > NotWin > Uninstall**. Your taskbar comes back.
 
-- unpacks NotWin into an admin-only folder;
-- makes a certificate just for your PC and signs NotWin with it. The certificate's private key only ever lives in
-  setup's memory, so once setup closes nothing else can ever be signed with it;
-- trusts that certificate on your PC;
-- installs into `C:\Program Files\NotWin`;
-- registers a small package so NotWin can read notifications;
-- adds NotWin to **Settings > Apps**;
-- starts NotWin as you, not as admin.
+## Widgets
 
-Setup also writes a short log to `%TEMP%\NotWin-Setup.log`.
+Every widget follows the theme. Toggles turn red when they're on. Round widgets sit in circles, the rest in
+rounded cards that snap to a dot grid.
 
-**Update:** run a newer `NotWin-Setup.exe` the same way. Your settings are kept.
+| | |
+|---|---|
+| ![Dark: analogue clock, sun compass, Wi-Fi and Bluetooth toggles, world clock, stopwatch, system meters, dark mode toggle and stacked clock](docs/readme/widgets-dark.png) | ![The same widgets in the light theme](docs/readme/widgets-light.png) |
+| **Dark**, on the Lucent wallpaper | **Light**, the same widgets |
 
-**Uninstall:** go to **Settings > Apps > Installed apps > NotWin > Uninstall**. Your Windows taskbar comes back, and
-the certificate, package and start-with-Windows entry are removed. Your settings stay in `%AppData%\NotWin`; delete
-that folder too if you want nothing left.
+The full list:
+
+| Widget | What it shows |
+|---|---|
+| **Clock** · **Analogue clock** · **Stacked clock** | The time in dots, with hands (light or dark face), or hours over minutes |
+| **World clock** | Another time zone, with its offset from yours |
+| **Toggles** | Wi-Fi, Bluetooth, Dark mode, Keep awake, Mic access, Camera access: one tap each |
+| **Stopwatch** · **Timer** · **Alarm** | A dot ring that fills; a dot grid that goes out (the same timer as the notch); alarms with snooze |
+| **Weather** · **Sun compass** | Now and the next days; sunrise, sunset and where the sun is |
+| **Calendar** · **Up next** | Your month with event dots, and your coming meetings and trips (Google Calendar, read-only) |
+| **Screen time** · **System meters** | How long the PC was in use today and this week; CPU, memory and network as dot bars |
+| **Media** · **Battery** | The playing song with seekable dots; the laptop and Bluetooth devices |
+| **Photo frame** · **App folder** · **Notes** | A slideshow (square or circle); a peek at a folder's apps; the notch's note |
+| **Snake** · **Tic-tac-toe** | Snake speeds up as it grows and keeps your best score; tic-tac-toe against Nothing |
+
+## What's in it
+
+| Part | What it does |
+|---|---|
+| **Dock** | Start and search, pinned and running apps, tray (Wi-Fi, volume, battery, clock). Hides until the mouse touches the bottom edge, or stays up. Rest on an app for live window previews. |
+| **Launcher** | Tap **Win**. Search apps, settings and files on this PC (no web), **Most used**, **All apps**, power. |
+| **Quick settings** | **Win+A** or **Win+N**. Wi-Fi, Bluetooth, volume and output device, brightness, and notifications grouped by app. |
+| **Notch** | A black pill at the top: the time in a serif font, battery, the playing song, new notifications, a running timer, charging. |
+| **Notch dashboard** | Rest the mouse on the notch. Two pages of tiles: Timer, Media, Clipboard, Notes, Shelf, Keep awake, Weather, and tools (Grab text, Color, Snip, Phone, Draw, Settings). **Edit** resizes, removes and adds tiles. |
+| **Desktop widgets** | Under your windows, still there after Win+D. Drag, resize and add them in edit mode. |
+| **Theme** | **Settings › Theme** or the Dark mode toggle switch Windows' own light / dark mode, and the dock, notch, popups, Settings and every widget follow it. |
+| **Lucent wallpaper** | Blurred light and dark wallpapers that take their colours from your photo frame and change with its slideshow. |
+| **Sync** | Point Settings › Sync at a folder (OneDrive, say) to share settings, pins, widget layout, notes and alarms between PCs. |
+
+## How it works
+
+### The dock sits above every window
+
+To float above other windows, elevated ones included, the dock needs Windows' `uiAccess`. Windows only grants
+that to a signed program in Program Files. So setup makes a certificate just for your PC and signs NotWin with it.
+The certificate's private key only ever lives in setup's memory, so once setup closes nothing else can be signed
+with it. Setup then installs into `C:\Program Files\NotWin` and starts NotWin as you, not as admin.
+
+### The taskbar always comes back
+
+A small watchdog runs next to NotWin. If NotWin quits, crashes or is killed, the watchdog restores the taskbar and
+its auto-hide setting. A Release build won't hide the taskbar at all unless the watchdog is running.
+
+### Light, dark and Lucent
+
+One theme switch drives everything: the dock, notch, notch tiles, quick settings, launcher, previews, popups,
+Settings and every widget. The Lucent wallpaper is drawn on your PC from the colours of your photo frame's current
+photo, so the desktop shifts with the slideshow, and every wallpaper change cross-fades.
+
+### Quick, never slow
+
+Popups arrive with a short fade-and-scale (170 ms) and leave faster (110 ms). Notch tiles fade in one after another
+and lift slightly under the mouse. The notch reuses its tiles instead of rebuilding them each time it opens. Turn
+off animation effects in Windows (Settings › Accessibility › Visual effects) and everything is instant.
+
+### Private by design
+
+Nothing leaves your PC except the weather (your city, to Open-Meteo) and, if you connect it, Google Calendar
+(read-only, through a sign-in you own). NotWin's log never records note or clipboard text, song titles,
+notification text, network or device names, or window titles.
+
+## Keys and gestures
+
+| Do this | To |
+|---|---|
+| Mouse to the bottom edge | Show the dock |
+| **Win** | Open the launcher (type to search, ↑ ↓, **Enter**, **Esc**) |
+| **Win+A** · **Win+N** · click the tray | Open quick settings and notifications |
+| Rest on the notch | Open the dashboard. The mouse wheel or the dots switch pages, **Esc** closes it |
+| Rest on a dock app | See live previews of its windows. Red ✕ closes one |
+| Right-click a widget | **Edit widgets**: drag, change size, ✕ to remove, **＋ Add** for more |
+| Right-click the start button | **Settings…**, keep the dock visible, start with Windows, quit |
 
 ## Add your Google Calendar
 
 NotWin reads your calendar (read-only) through a Google sign-in that **you** own, so no one else's app ever sees
 your events. You set it up once, in about five minutes.
+
+<details>
+<summary><b>Step by step</b></summary>
 
 1. Open [Google Cloud Console](https://console.cloud.google.com/) and sign in with the Google account whose calendar
    you want. Create a project (top bar > project picker > **New project**, any name, e.g. `NotWin`).
@@ -69,224 +156,119 @@ your events. You set it up once, in about five minutes.
 Keep the client secret to yourself: paste it only into NotWin's Settings. It is stored encrypted for your Windows
 account, never in a shared or synced file. **Disconnect** in the same place signs NotWin out.
 
-**If something goes wrong:**
-
 | What you see | What to do |
 |---|---|
 | *Error 403: access_denied* | The app is still in *Testing* and your account is not a test user. Publish it (step 4) or add yourself under **Audience > Test users**. |
 | Signed out after a week | Same cause: publish the app (step 4), then **Connect** again. |
 | **OFFLINE** in Settings | No internet. The last events stay visible, and NotWin refreshes on its own every 15 minutes. |
 
-## Install for development (from source)
+</details>
 
-You need the .NET SDK 10 (`net10.0-windows10.0.22621.0`) and PowerShell 7 (`pwsh`). Developed on Windows 11
-26300, tested at 1920×1080, 125%.
+## Build from source
 
-The dock needs `uiAccess` so it can sit above other windows, including elevated ones. Windows only allows
-that for a signed exe under Program Files, so installing needs admin once.
-
-Two steps. Building and signing run **without** admin rights; only the copy into Program Files is elevated, so no
-build tool ever runs as admin.
+You need the .NET 10 SDK and PowerShell 7 (`pwsh`). Building never runs as admin; only the copy into Program Files
+does.
 
 ```powershell
-# 1. from a normal PowerShell 7 (NOT as administrator)
-D:\NothingLauncher\build\build.ps1
+dotnet build NotWin.sln
+dotnet test NotWin.sln
 ```
 
 ```powershell
-# 2. then from an elevated PowerShell 7 (Run as administrator)
-D:\NothingLauncher\build\install.ps1
+# install your build: first from a normal PowerShell 7 (NOT as administrator)
+.\build\build.ps1
 ```
-
-`build.ps1` creates a self-signed code-signing cert `CN=NotWin Dev` (non-exportable) the first time, then
-publishes the app, the watchdog and the drag helper into `out\app`, signs them and packs the sparse package.
-`install.ps1` trusts that certificate on this PC (straight from the certificate store), copies `out\app` into an
-admin-only staging folder, refuses to go on unless every exe and dll there is validly signed by that certificate,
-stops any running copy, copies the files to `C:\Program Files\NotWin`, then starts the shell once as you (not as
-admin).
-
-The shell then adds itself to `HKCU\...\Run`, so it starts at sign-in. Only the installed copy writes
-that entry.
-
-`install.ps1` also registers a small **sparse package** named `NotWin`, which points at
-`C:\Program Files\NotWin`. This gives the shell a package identity, which Windows requires before an app can
-read notifications. It never appears in Start. If the registration fails, the shell still works, just without
-notifications. `uninstall.ps1` removes it. Use `build.ps1 -NoTimestamp` to skip the signing timestamp when offline.
-
-## Using it
-
-- Push the mouse to the bottom edge to show the dock. It hides again shortly after you leave it.
-  It stays hidden while a full-screen app (video, game) is in front.
-- **Launcher (start menu):** tap **Win** alone, or click the dock's start or search button. Type to search
-  apps, settings and files on this PC (no web results), ranked apps → settings → files. Use ↑/↓ to move,
-  **Enter** to open and **Esc** to close. A click outside the panel or another Win tap also closes it.
-  With nothing typed it shows **Most used** (your launches from NotWin; at first, the apps Windows
-  saw you use most recently), **All apps ›** (A–Z) and the power button (Sleep / Restart / Shut down, which
-  act immediately).
-- **Quick settings + notifications panel:** **Win+A**, **Win+N** or a click on the dock's tray opens it at the bottom
-  right. It has:
-  - **Wi-Fi tile:** tap to toggle the radio; **›** lists networks (saved and open networks join directly, secured
-    new ones open Windows' Wi-Fi settings).
-  - **Bluetooth tile:** tap to toggle the radio; **›** lists paired devices (buds and headphones connect or
-    disconnect; other devices open Windows' Bluetooth settings).
-  - **Volume slider** and an **output chip** that switches the playback device.
-  - **Brightness slider** (built-in display).
-  - **Notifications** grouped by app: click to open the app, ✕ dismisses, **Clear all**.
-
-  Esc or a click outside closes it.
-- **Notch:** a black pill at the top centre shows:
-  - the time (dot matrix) and battery;
-  - the playing song (art and an equalizer);
-  - new notifications for about 3.6 s;
-  - "Opening ‹app›…" after a launch;
-  - a running timer (small dot grid and countdown);
-  - a short charging card when you plug in or unplug.
-
-  It hides while a full-screen app is in front.
-- **Notch dashboard:** rest the mouse on the notch to open it; it closes when the mouse leaves. Two pages (dots
-  bottom right, or the mouse wheel):
-  - page 1: **Timer** (dots go out as time passes; − / play / +; "Time is up" in the notch and the panel),
-    **Media** (art, progress, previous / play / next), **Clipboard** (recent text and images you copied, screenshots
-    included; click to copy one again; ⤢ for the whole list) and **Notes** (one note, saved as you type);
-  - page 2: **Shelf** (drop files to keep them handy, drag them out to use), **Keep awake**, **Weather**, and the
-    tools **Grab text** (copies the text in a screen region), **Color** (copies a pixel's hex), **Snip** (copies a
-    region and saves a PNG to `Pictures\Screenshots`), **Phone** (Phone Link), **Draw** (draw on the screen with a pen; Done copies
-    it and saves a PNG to `Pictures\Screenshots`) and
-    **Settings**.
-
-  ✎ **Edit** (bottom left) resizes tiles with their size chip, removes them with ✕ and brings them back with
-  **＋ Add**; **Done** saves the layout. Esc closes the dashboard.
-- **Desktop widgets:** on the desktop, under your windows (still there after Win+D): **Clock** (dot matrix, drawn
-  straight on the wallpaper, dark or light to stay legible), **Snake**, **Timer** (the same timer as the notch),
-  **Calendar** (dates, plus your Google Calendar once connected), **Weather**, **Media** and **Battery** (the laptop
-  and connected Bluetooth devices; dots or the wheel switch devices).
-  - **Google Calendar:** Settings > Google Calendar walks you through making your own Google Cloud OAuth client
-    (Desktop app, Calendar API, consent screen published so you stay signed in), then **Connect** signs you in once in
-    your browser (read-only). The month gets a dot under days with events from every calendar switched on in Google
-    Calendar; the 2×1 widget shows the next event. Events refresh every 15 minutes and are kept (encrypted for your
-    Windows account) for when you are offline. **Disconnect** signs out and deletes them.
-  - **Up next:** a widget (＋ Add > Up next) with only your own plans from Google Calendar: meetings, things you
-    added, and trips or bookings Gmail put in your calendar; no holidays or birthdays. 2×2 lists the next four, 2×1
-    shows the next one large, 4×2 the next six. "IN 25 MIN" / "NOW" in red when it is soon; click an event to open it
-    in Google Calendar.
-  - **Tic-tac-toe:** you are X (red dots) against Nothing (O). Click a square; at the end a click starts a new game,
-    and who opens alternates. The score is kept.
-  - **Notes:** the notch's note on the desktop; click it to edit in a small window next to it (Esc closes). Both show
-    the same text.
-  - **Alarm:** the next alarm and when it rings; click to add or change alarms (time, days, on/off). A ring plays
-    Windows' alarm sound for up to a minute, shows in the notch and the panel, and puts Snooze 5 min / Stop at the top
-    of the screen; clicking the ringing widget stops it. Alarms ring only while the PC is awake and NotWin runs.
-  - **Folder pictures:** sixteen dot pictures now (rocket, heart, moon, sun, code, book, bolt, ghost added).
-- **Sync:** Settings > Sync > Choose folder… (e.g. a OneDrive folder) keeps your settings, pins, widget layout, notes
-  and alarms in `<folder>\NotWin sync`; another PC with NotWin and the same folder picks them up (at
-  start and while running). When both PCs changed something, the newer copy wins. The Google sign-in, the calendar
-  cache, photo-frame photos, start-with-Windows and the wallpaper stay on each PC.
-  - **Snake:** click the board to play; arrows or WASD steer, Space pauses / restarts. While you play, those keys go
-    only to the snake; clicking anywhere else, switching windows or Esc pauses it and gives the keys back. The best
-    score is saved.
-  - **Edit mode:** right-click any widget > **Edit widgets** (or Settings > Widgets > Edit widgets). Drag widgets
-    (they snap to the dot grid; a spot that overlaps shows red and is refused), click a size chip to change size,
-    then **Done** or Esc. Full screen also ends it. The layout is saved.
-  - **Add and remove:** in edit mode every widget has a **✕** (remove) and the top pill has **＋ Add**, which lists
-    the widgets you can add. Photo frames and app folders can be added as many times as you like; the others once.
-  - **Photo frame:** click an empty frame to pick photos (copies are kept in `%AppData%\NotWin\frames`, up to
-    24 per frame); they change every minute. Click a frame with photos to remove or add some. In edit mode the
-    ■ / ● chip switches square and circle.
-  - **App folder:** shows a dot picture (click it in edit mode to change it). Click the folder to open its apps;
-    **＋** adds apps from a searchable list, right-click an icon > *Remove from folder*.
-- **Settings:** right-click the open notch, the Settings tile, or "Settings…" in the start button's right-click
-  menu: weather city, widget size (**S / M / L**, applied live), **Edit widgets**, a **wallpaper** picker (four
-  Nothing-style wallpapers, plus **✦ New**, which draws a fresh random one at your screen size and applies it; the last 12
-  you made stay in the list; one is only applied when you click it), start with Windows, keep the dock visible, and
-  Quit.
-- **Windows' own notification pop-ups:** NotWin never changes your notification settings. A one-time tip in
-  the panel offers to open Windows' settings so you can turn on *Do not disturb*, or turn off banners for chatty apps.
-- Quit from a script: `& 'C:\Program Files\NotWin\NotWin.exe' --quit` (the same clean exit as the menu).
-- Right-click the start button (left-most) for **Keep taskbar visible**, **Start with Windows** and
-  **Quit NotWin**. Quitting always gives the Windows taskbar back.
-- Right-click an app for pin/unpin and its windows.
-- **Window previews:** rest the mouse on a running app in the dock to see a live preview of each of its windows; click
-  one to switch to it, the red ✕ to close it. It can be switched off in Settings > Shell.
-
-If Fenn (another taskbar app) is running, NotWin asks before taking over.
-
-## Uninstall (development install)
-
-Installed with **setup**? Use **Settings > Apps** instead (see above). For a `build.ps1` / `install.ps1` install:
 
 ```powershell
-# elevated PowerShell 7
-D:\NothingLauncher\build\uninstall.ps1
+# then from an elevated PowerShell 7 (Run as administrator)
+.\build\install.ps1
 ```
-
-This stops the shell and the watchdog, restores the Windows taskbar, removes the Run entry, and deletes
-`C:\Program Files\NotWin`. The dev cert and your data folder are left in place.
-
-## Build the setup
 
 ```powershell
-# from a normal PowerShell 7 (NOT as administrator)
-D:\NothingLauncher\build\make-setup.ps1
+# or make the one-file installer, out\NotWin-Setup.exe (normal PowerShell 7)
+.\build\make-setup.ps1
 ```
 
-This makes `out\NotWin-Setup.exe`, a single file with:
+`build.ps1` makes a non-exportable code-signing certificate (`CN=NotWin Dev`) the first time, publishes NotWin, the
+watchdog and the drag helper into `out\app`, and signs them. `install.ps1` trusts that certificate, refuses to go on
+unless every file is validly signed by it, copies the files to `C:\Program Files\NotWin`, registers a small package
+(Windows needs it before an app can read notifications) and starts NotWin as you. `uninstall.ps1` (elevated) undoes
+it and gives the taskbar back.
 
-- NotWin, its watchdog and drag helper, self-contained for 64-bit Windows, so no .NET is needed on the PC;
-- the unsigned notification package;
-- the installer itself (`src\NotWin.Setup`), which signs everything on each PC.
+`dotnet run --project src\NotWin` runs a Debug build without `uiAccess`. Quit the installed copy first: only one
+copy runs at a time.
 
-Nothing is signed on the build PC. The same file without its payload is the uninstaller that setup leaves in Program
-Files.
+## Architecture
 
-## Data folder: `%AppData%\NotWin`
+```
+  NotWin.exe (WPF, runs as you, uiAccess)
+     │
+     ├── Dock ─────────── appbar at the bottom · tray · window previews
+     ├── Launcher ─────── app / settings / file search
+     ├── Quick settings ─ radios · audio · brightness · notifications (needs the package identity)
+     ├── Notch ────────── pill states · dashboard tiles
+     ├── Desktop widgets ─ cards on the desktop, under your windows
+     └── Theme ────────── light / dark · Lucent wallpaper from the photo frame · motion
+     │
+  NotWin.Watchdog.exe ─── restores the taskbar if the shell is gone
+  NotWin.DragHelper.exe ─ drags shelf files out to other apps
+```
+
+```
+src/NotWin/           the WPF app: Dock, Launcher, Panel, Notch, Widgets, Settings, Theme
+src/NotWin.Core/      pure logic (layouts, rules, sun maths, meters, sync, settings); unit-tested
+src/NotWin.Native/    Win32 interop (CsWin32): taskbar, appbar, hooks, icons, wallpaper
+src/NotWin.Watchdog/  restores the taskbar if the shell dies
+src/NotWin.DragHelper/ drag-out for the shelf
+src/NotWin.Setup/     the one-file installer: signs NotWin on each PC, installs, uninstalls
+tests/                NotWin.Core.Tests and NotWin.Tests (xUnit), about 970 tests
+build/                build.ps1 · install.ps1 · uninstall.ps1 · make-setup.ps1
+wallpapers/           the Lucent light and dark wallpapers
+docs/superpowers/     specs and plans for each part
+```
+
+## Your data: `%AppData%\NotWin`
 
 | File | What it is |
 |---|---|
-| `settings.json` | Pinned apps, keep-visible, start-with-Windows, the dashboard layout, the timer length, the weather city |
-| `clipboard.json` | The notch's clipboard history: the last 50 copies, up to 20 of them images (copies password managers mark private are skipped) |
-| `clips\` | The history's images as PNG files (deleted when they leave the history) |
-| `notes.txt` | The notch's note |
-| `shelf.json` | Paths of the files on the shelf (references, not copies) |
-| `weather.json` | The last weather report, shown while offline |
-| `launcher-usage.json` | How often and when you launched each item from the launcher (for Most used; max 500 entries) |
-| `log.txt` | Startup, taskbar hide/restore, appbar and full-screen events |
-| `taskbar-restore.json` | Present only while the shell runs: the taskbar's original auto-hide setting |
-| `migrated-from-nothingshell.txt` | Written once when NotWin copied your data over from `%AppData%\NothingShell` (counts only) |
+| `settings.json` | Pins, notch dashboard layout, widget layout, weather city, timer length |
+| `notes.txt` · `alarms.json` | The note shared by the notch and the Notes widget; your alarms |
+| `clipboard.json` · `clips\` | The last 50 copies, up to 20 of them images (copies password managers mark private are skipped) |
+| `frames\` | Copies of your photo frame photos |
+| `shelf.json` | The files on the shelf (paths, not copies) |
+| `screentime.json` | Minutes the PC was in use per day, for the Screen time widget |
+| `weather.json` · `calendar.dat` | The last weather report; your calendar events, encrypted for your Windows account |
+| `launcher-usage.json` | What you open from the launcher, for **Most used** |
+| `log.txt` | Startup and shell events, never personal content |
 
-**Coming from Nothing Shell:** the first NotWin start copies `%AppData%\NothingShell` into `%AppData%\NotWin` when
-the new folder has no data yet (never overwriting; the old folder stays as a backup), so Google Calendar, widgets,
-notes and pins carry over. `install.ps1` removes the old `C:\Program Files\NothingShell`, its package and its
-start-with-Windows entry.
-
-If the shell is killed, the watchdog (`NotWin.Watchdog.exe`) restores the Windows taskbar from
-`taskbar-restore.json`. If the taskbar is ever left hidden, run this to restore it by hand:
+Uninstalling leaves this folder in place. Delete it too if you want nothing left. If the taskbar is ever left
+hidden, run:
 
 ```powershell
 & 'C:\Program Files\NotWin\NotWin.Watchdog.exe' --restore-now --state "$env:APPDATA\NotWin"
 ```
 
-Ending the shell with Task Manager's "End process tree" also ends the watchdog, so the taskbar can stay hidden until
-the next start; use the `--restore-now` command above.
+## FAQ
 
-## Development
+**Does it change my Windows settings?** Only when you ask it to, with a toggle or the theme switch. NotWin never
+changes your notification, Wi-Fi, volume or power settings on its own. It hides the taskbar while it runs and gives
+it back when it quits.
 
-```powershell
-dotnet build NotWin.sln
-dotnet test tests\NotWin.Core.Tests
-dotnet run --project src\NotWin        # Debug, no uiAccess
-```
+**Why does SmartScreen warn me?** The installer isn't signed by a known publisher. Setup signs NotWin with a
+certificate made only for your PC; see [The dock sits above every window](#the-dock-sits-above-every-window).
 
-- Only one copy runs at a time (`Local\NotWin.Instance`). Quit the installed copy from the start
-  button menu before running a dev build.
-- A Debug build runs without uiAccess, so z-order over elevated windows and messages from Explorer
-  behave differently there. Test those on the installed copy.
-- A Release build refuses to hide the taskbar unless the watchdog is running next to it.
-- Hands-on checks: `build\verify\plan1-handson.ps1` (elevated; use `-Only <sections>` and `-Reinstall`).
+**Does it work on Windows 10?** No, only Windows 11, 64-bit.
 
-| Project | Role |
-|---|---|
-| `src/NotWin` | WPF app: dock, tray, popups, startup |
-| `src/NotWin.Core` | Pure logic (settings, reveal state machine, rules); unit-tested |
-| `src/NotWin.Native` | Win32 interop (CsWin32): taskbar, appbar, hooks, icons |
-| `src/NotWin.Watchdog` | Restores the taskbar if the shell dies |
-| `spikes/` | Phase 0 feasibility spikes (results in `docs/superpowers/spikes/`) |
+**Can I keep my settings on two PCs?** Yes: **Settings › Sync** with a shared folder such as OneDrive. The Google
+sign-in, photo-frame photos and start-with-Windows stay on each PC.
+
+**How do I go back to the normal taskbar?** Right-click the start button and choose **Quit NotWin**, or uninstall
+it. The taskbar always comes back.
+
+## Status and license
+
+NotWin is a personal project, built with care for one desktop and shared as-is. There is no open-source license yet,
+so the code is not licensed for reuse. The bundled fonts (Geist, Geist Mono, Space Grotesk, Space Mono, DM Serif
+Display) are under the SIL Open Font License, and their licence files ship next to the app.
+
+NotWin is an independent project, not affiliated with or endorsed by Nothing Technology Limited.
