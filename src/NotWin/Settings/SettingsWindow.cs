@@ -22,6 +22,7 @@ namespace NotWin.Settings;
 /// </summary>
 public sealed class SettingsWindow : Window
 {
+    private const double ColW = 320, CardGap = 16;
     private static SettingsWindow? s_open;
     private static Action? s_reopen;
     private readonly Func<ShellSettings> _settings;
@@ -60,7 +61,7 @@ public sealed class SettingsWindow : Window
         _weather = weather;
         _saveWeather = saveWeather;
         Title = "NotWin Settings";
-        Width = 420;
+        Width = 2 * ColW + CardGap + 2 * 20; // two columns plus the card gap and the border padding
         SizeToContent = SizeToContent.Height;
         WindowStyle = WindowStyle.None;
         AllowsTransparency = true;
@@ -72,7 +73,7 @@ public sealed class SettingsWindow : Window
         FontFamily = DashChrome.Font;
         Foreground = DashChrome.Text;
 
-        var stack = new StackPanel();
+        var cards = new List<Border>();
         var head = new DockPanel { Margin = new Thickness(2, 0, 0, 18) };
         DockPanel.SetDock(head, System.Windows.Controls.Dock.Top);
         head.Children.Add(CloseChip());
@@ -95,7 +96,7 @@ public sealed class SettingsWindow : Window
         cityRow.Children.Add(new Border { CornerRadius = new CornerRadius(12), Background = DashChrome.Chip, Child = _city, ClipToBounds = true });
         _cityStatus = DashChrome.Label(PlaceText(settings().Weather) ?? "Type a city and press Enter");
         _cityStatus.Margin = new Thickness(2, 10, 0, 0);
-        stack.Children.Add(Card("WEATHER", cityRow, _cityStatus));
+        cards.Add(Card("WEATHER", cityRow, _cityStatus));
 
         // Google Calendar (Plan 6): the guided setup, sign-in and status.
         if (calendar is not null)
@@ -104,10 +105,10 @@ public sealed class SettingsWindow : Window
             PaintCalendar();
             calendar.Changed += PaintCalendar;
             Closed += (_, _) => calendar.Changed -= PaintCalendar;
-            stack.Children.Add(Card("GOOGLE CALENDAR", _calendarHost));
+            cards.Add(Card("GOOGLE CALENDAR", _calendarHost));
         }
 
-        if (widgets is not null) AddWidgetSections(stack, widgets);
+        if (widgets is not null) AddWidgetSections(cards, widgets);
 
         // Sync (Plan 9): settings, notes and alarms kept in a folder you pick, for your other PCs.
         if (sync is not null)
@@ -143,7 +144,7 @@ public sealed class SettingsWindow : Window
                 host.Children.Add(status);
             }
             PaintSync();
-            stack.Children.Add(Card("SYNC", host));
+            cards.Add(Card("SYNC", host));
         }
 
         var shell = new StackPanel();
@@ -152,7 +153,7 @@ public sealed class SettingsWindow : Window
         if (_effects is { } fx)
             shell.Children.Add(ToggleRow("Window previews in the dock", _previewToggle, () => _settings().WindowPreviews, fx.SetPreviews));
         if (shell.Children.Count > 0) ((DockPanel)shell.Children[^1]).Margin = new Thickness(0); // the card pads the bottom
-        stack.Children.Add(Card("SHELL", shell));
+        cards.Add(Card("SHELL", shell));
 
         var quitText = DashChrome.Body("Quit NotWin", 13, FontWeights.SemiBold, DashChrome.Red);
         quitText.HorizontalAlignment = HorizontalAlignment.Center;
@@ -164,24 +165,29 @@ public sealed class SettingsWindow : Window
         quitRow.MouseEnter += (_, _) => quitRow.Background = DashChrome.FrozenArgb(0x1F, 0xE0, 0x1F, 0x25);
         quitRow.MouseLeave += (_, _) => quitRow.Background = Brushes.Transparent;
         quitRow.MouseLeftButtonUp += (_, _) => { Close(); quit(); };
-        stack.Children.Add(quitRow);
+        DockPanel.SetDock(quitRow, System.Windows.Controls.Dock.Bottom);
+        quitRow.Margin = new Thickness(0, CardGap, 0, 0);
+
+        // Two columns (user 2026-11-27: the single tall column ran behind the dock). Each card goes to the shorter
+        // column so far, so the window is about half as tall and much more square.
+        var columns = BuildColumns(cards);
 
         Content = new Border
         {
             Background = (Brush)Application.Current.FindResource("Shell.Glass"),
             BorderBrush = (Brush)Application.Current.FindResource("Shell.Line"),
             BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(32), Padding = new Thickness(20),
-            // The header (with ✕) stays put; everything below scrolls once the window reaches the screen's height
-            // (user report 2026-11-20: many wallpapers pushed the window and its ✕ above the screen).
+            // The header (with ✕) and Quit stay put; the cards scroll only if they ever outgrow the screen.
             Child = new DockPanel
             {
                 LastChildFill = true,
                 Children =
                 {
                     head,
+                    quitRow,
                     new ScrollViewer
                     {
-                        Content = stack, VerticalScrollBarVisibility = ScrollBarVisibility.Hidden,
+                        Content = columns, VerticalScrollBarVisibility = ScrollBarVisibility.Hidden,
                         HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled, PanningMode = PanningMode.VerticalOnly,
                     },
                 },
@@ -207,12 +213,28 @@ public sealed class SettingsWindow : Window
         reopen();
     });
 
-    // Never taller than the screen's work area, and kept inside it (re-centred when the content changes size).
+    // Never taller than the work area, kept inside it, and clear of the floating dock (user 2026-11-27: Quit was hidden).
     private void Fit()
     {
-        var (top, maxHeight) = SettingsLayout.Fit(ActualHeight, SystemParameters.WorkArea);
+        var (top, maxHeight) = SettingsLayout.Fit(ActualHeight, SystemParameters.WorkArea, Dock.DockAppBar.ReservedDip);
         if (Math.Abs(MaxHeight - maxHeight) > 0.5) MaxHeight = maxHeight;
         if (Math.Abs(Top - top) > 0.5) Top = top;
+    }
+
+    // Deals the section cards into two balanced columns (so the window is shorter and more square).
+    private static UIElement BuildColumns(List<Border> cards)
+    {
+        foreach (var c in cards)
+        {
+            c.Width = ColW;
+            c.Margin = new Thickness(0, 0, 0, CardGap);
+            c.Measure(new Size(ColW, double.PositiveInfinity));
+        }
+        var assign = SettingsLayout.Balance([.. cards.Select(c => c.DesiredSize.Height)], 2);
+        var left = new StackPanel { Width = ColW, VerticalAlignment = VerticalAlignment.Top };
+        var right = new StackPanel { Width = ColW, Margin = new Thickness(CardGap, 0, 0, 0), VerticalAlignment = VerticalAlignment.Top };
+        for (var i = 0; i < cards.Count; i++) (assign[i] == 0 ? left : right).Children.Add(cards[i]);
+        return new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Center, Children = { left, right } };
     }
 
     /// <summary>Shows the settings window, or brings the open one to the front.</summary>
@@ -233,7 +255,7 @@ public sealed class SettingsWindow : Window
 
     // Widgets: size S / M / L (applies live) and "Edit widgets"; Theme: light / dark (Plan 13). The Wallpaper section was
     // removed (user 2026-11-26): the Lucent wallpaper now follows the theme and the photo frame.
-    private void AddWidgetSections(StackPanel stack, WidgetOptions w)
+    private void AddWidgetSections(List<Border> cards, WidgetOptions w)
     {
         var sizes = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 12) };
         void PaintSizes()
@@ -253,7 +275,7 @@ public sealed class SettingsWindow : Window
         edit.Children.Add(editArrow);
         edit.Children.Add(DashChrome.Body("Edit widgets", 13, FontWeights.Normal));
         edit.MouseLeftButtonUp += (_, _) => { Close(); w.EditWidgets(); };
-        stack.Children.Add(Card("WIDGETS", sizes, edit));
+        cards.Add(Card("WIDGETS", sizes, edit));
 
         // Theme (user 2026-11-26): light or dark, the same as the Dark mode tile (Windows' theme and the Lucent wallpaper).
         if (w.SetDark is { } setDark && w.IsDark is { } isDark)
@@ -273,7 +295,7 @@ public sealed class SettingsWindow : Window
                 }
             }
             PaintThemes();
-            stack.Children.Add(Card("THEME", themes));
+            cards.Add(Card("THEME", themes));
         }
     }
 
@@ -447,17 +469,34 @@ public sealed class SettingsWindow : Window
     }
 }
 
-/// <summary>Where the settings window sits: never taller than the work area minus a margin, kept inside it.</summary>
+/// <summary>Where the settings window sits: never taller than the work area minus a margin, kept inside it and above the dock.</summary>
 public static class SettingsLayout
 {
     public const double Margin = 24;
 
-    public static (double Top, double MaxHeight) Fit(double actualHeight, Rect workArea)
+    /// <param name="bottomReserve">Space to leave free at the bottom for the floating dock (user 2026-11-27: Quit was hidden behind it).</param>
+    public static (double Top, double MaxHeight) Fit(double actualHeight, Rect workArea, double bottomReserve = 0)
     {
-        var maxHeight = Math.Max(200, workArea.Height - 2 * Margin);
-        var height = Math.Min(actualHeight, maxHeight);
-        var top = workArea.Top + (workArea.Height - height) / 2;
-        return (Math.Max(workArea.Top + Margin, top), maxHeight);
+        var available = Math.Max(200, workArea.Height - 2 * Margin - bottomReserve);
+        var height = Math.Min(actualHeight, available);
+        var top = workArea.Top + Margin + (available - height) / 2; // centred in the band above the dock
+        return (Math.Max(workArea.Top + Margin, top), available);
+    }
+
+    /// <summary>Deals cards into <paramref name="columns"/> columns, each card going to the shortest column so far (balanced masonry).</summary>
+    public static IReadOnlyList<int> Balance(IReadOnlyList<double> heights, int columns = 2)
+    {
+        var totals = new double[Math.Max(1, columns)];
+        var result = new int[heights.Count];
+        for (var i = 0; i < heights.Count; i++)
+        {
+            var c = 0;
+            for (var j = 1; j < totals.Length; j++)
+                if (totals[j] < totals[c]) c = j;
+            result[i] = c;
+            totals[c] += heights[i];
+        }
+        return result;
     }
 }
 
