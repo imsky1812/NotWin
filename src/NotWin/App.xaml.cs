@@ -131,6 +131,7 @@ public partial class App : Application
 
         var uiAccess = TokenInfo.GetUiAccess() ? 1 : 0;
         Log.Info($"startup uiAccess={uiAccess} pid={Environment.ProcessId}");
+        if (RelaunchForUiAccess(uiAccess == 1, e.Args)) return;
         var hasIdentity = PackageIdentity.HasIdentity(out var packageName);
         Log.Info($"package identity={hasIdentity} name={packageName ?? "(none)"}");
 
@@ -656,6 +657,35 @@ public partial class App : Application
             return;
         }
         Dispatcher.BeginInvoke(() => Shutdown());
+    }
+
+    // The installed copy came up without uiAccess (user 2026-11-27: twice after a reboot, from the start-with-Windows
+    // entry; the dock then cannot stay on top and NotWin looks closed). Relaunch through Explorer, the route a manual
+    // start takes, after a short wait; give up after two tries and carry on as before. Nothing is touched yet.
+    private bool RelaunchForUiAccess(bool uiAccess, string[] args)
+    {
+        var exe = Environment.ProcessPath;
+        var installDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "NotWin");
+        var installed = !string.IsNullOrEmpty(exe) && StartupPolicy.ShouldWriteRunValue(exe, installDir);
+        var attempt = NotWin.Core.Shell.UiAccessRetry.Attempt(args);
+        if (!NotWin.Core.Shell.UiAccessRetry.ShouldRelaunch(uiAccess, installed, attempt))
+        {
+            if (!uiAccess && installed) Log.Info($"still without uiAccess after {attempt} relaunches: carrying on");
+            return false;
+        }
+        var wait = NotWin.Core.Shell.UiAccessRetry.Delay(attempt);
+        Log.Info($"started without uiAccess: relaunching through Explorer in {wait.TotalSeconds:F0} s (try {attempt + 1})");
+        Thread.Sleep(wait);
+        var next = string.Join(' ', NotWin.Core.Shell.UiAccessRetry.Next(Environment.ProcessId, attempt));
+        if (!UnelevatedShell.Open(exe!, next, Path.GetDirectoryName(exe), (m, ex) => Log.Error("uiAccess relaunch: " + m, ex)))
+        {
+            Log.Info("uiAccess relaunch failed: carrying on without it");
+            return false;
+        }
+        _secondInstance = true; // nothing to tear down yet
+        SingleInstance.Release();
+        Shutdown(0);
+        return true;
     }
 
     private static void WaitForExit(int pid)

@@ -90,5 +90,9 @@ try {
     $out.Write($footer, 0, 16)
 } finally { $out.Dispose() }
 
+# The work folder holds a NotWin.Setup.exe without the app inside; double-clicked by mistake it can only say "damaged"
+# (user 2026-11-27). Only out\NotWin-Setup.exe is the installer, so the rest goes.
+Remove-Item $work -Recurse -Force
+
 $mb = [math]::Round((Get-Item $output).Length / 1MB, 1)
 Write-Host "Built $output ($mb MB). Double-click it on any Windows 11 PC to install NotWin."
