@@ -12,6 +12,7 @@ namespace NotWin;
 public partial class App : Application
 {
     private TaskbarController? _taskbar;
+    private SessionWatcher? _session;
     private DockWindow? _dock;
     private DockReveal? _reveal;
     private MouseEdgeHook? _mouse;
@@ -77,6 +78,8 @@ public partial class App : Application
             Shutdown(QuitCommand.Run());
             return;
         }
+        // A shell restarted after a cancelled shutdown waits for the old one to finish exiting first.
+        if (NotWin.Core.Shell.RestartArgs.WaitFor(e.Args) is int previous) WaitForExit(previous);
         // 1. Single instance: a second copy exits silently, before any UI.
         if (!SingleInstance.TryAcquire())
         {
@@ -118,7 +121,13 @@ public partial class App : Application
             finally { Log.Error("dispatcher unhandled exception", args.Exception); }
             // Not marked handled: the crash continues.
         };
-        SessionEnding += (_, _) => RestoreShell();
+        // Session end (user 2026-11-27): give the taskbar back when Windows asks to end the session, and come back if
+        // that shutdown or sign-out is then cancelled (before, NotWin stayed running with the Windows taskbar back).
+        _session = new SessionWatcher();
+        _session.GiveBack += RestoreShell;
+        _session.Resume += RestartShell;
+        try { _session.Start(); }
+        catch (Exception ex) { Log.Error("session watcher failed to start", ex); SessionEnding += (_, _) => RestoreShell(); }
 
         var uiAccess = TokenInfo.GetUiAccess() ? 1 : 0;
         Log.Info($"startup uiAccess={uiAccess} pid={Environment.ProcessId}");
@@ -626,6 +635,40 @@ public partial class App : Application
         catch (Exception ex) { Log.Error("applying start-with-windows failed", ex); }
     }
 
+    // A fresh copy of the shell takes over (through Explorer's launch path, so it gets uiAccess like a normal start)
+    // once this one has exited. Simpler and safer than rebuilding the taskbar, appbar and watchdog in place.
+    private void RestartShell()
+    {
+        var exe = Environment.ProcessPath;
+        if (string.IsNullOrEmpty(exe)) { Log.Error("restart: no process path", null); return; }
+        try
+        {
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(exe)
+            {
+                UseShellExecute = true,
+                Arguments = string.Join(' ', NotWin.Core.Shell.RestartArgs.For(Environment.ProcessId)),
+            });
+            Log.Info("restart: new shell started, this one exits");
+        }
+        catch (Exception ex)
+        {
+            Log.Error("restart failed; quit and start NotWin again", ex);
+            return;
+        }
+        Dispatcher.BeginInvoke(() => Shutdown());
+    }
+
+    private static void WaitForExit(int pid)
+    {
+        try
+        {
+            using var old = System.Diagnostics.Process.GetProcessById(pid);
+            if (!old.WaitForExit(TimeSpan.FromSeconds(20))) Log.Info($"restart: previous shell {pid} still running after 20 s");
+        }
+        catch (ArgumentException) { } // already gone
+        catch (Exception ex) { Log.Error("restart: waiting for the previous shell failed", ex); }
+    }
+
     private void RestoreShell()
     {
         try { _appBar?.Dispose(); }
@@ -724,6 +767,7 @@ public partial class App : Application
         }
         catch (Exception ex) { Log.Error("dock shutdown failed", ex); }
         _taskbar?.Dispose();
+        _session?.Dispose();
         Log.Info("exit");
         SingleInstance.Release();
         base.OnExit(e);
