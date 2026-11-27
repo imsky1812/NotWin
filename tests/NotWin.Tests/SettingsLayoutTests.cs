@@ -32,4 +32,22 @@ public sealed class SettingsLayoutTests
         Assert.True(top >= work.Top);
         Assert.True(top + maxHeight <= work.Bottom);
     }
+
+    // User 2026-11-27 (screenshot): the Quit button was hidden behind the floating dock. The window keeps clear of it.
+    [Fact]
+    public void BottomReserve_KeepsTheWholeWindowAboveTheDock()
+    {
+        const double dock = 84;
+        var (top, maxHeight) = SettingsLayout.Fit(actualHeight: 5000, Work, bottomReserve: dock);
+        Assert.True(top + maxHeight <= Work.Bottom - dock + 0.001);
+        Assert.Equal(816 - 2 * SettingsLayout.Margin - dock, maxHeight);
+    }
+
+    // The cards are dealt into two columns of roughly equal height (a shorter, more square window).
+    [Fact]
+    public void Balance_FillsTheShorterColumn()
+    {
+        Assert.Equal([0, 1, 0, 1], SettingsLayout.Balance([10, 10, 10, 10]));
+        Assert.Equal([0, 1, 1], SettingsLayout.Balance([30, 10, 10])); // the tall one alone, the two short ones beside it
+    }
 }

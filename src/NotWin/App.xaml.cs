@@ -397,7 +397,8 @@ public partial class App : Application
             case Core.Widgets.WidgetKind.Folder:
                 if (_index is not { } index) return null;
                 _folderIcons ??= new Dock.AppIconCache();
-                return new Widgets.FolderWidget(p.Id, p.Config, () => index.Apps, index.FindApp, _folderIcons, save);
+                return new Widgets.FolderWidget(p.Id, p.Config, () => index.Apps, index.FindApp, _folderIcons, save,
+                    browse: () => BrowseForProgram(index));
             default: return null;
         }
     }
@@ -703,6 +704,19 @@ public partial class App : Application
     {
         try { _appBar?.Dispose(); }
         finally { _taskbar?.Dispose(); }
+    }
+
+    // "Add a program from your PC…" (Plan 14, user 2026-11-27: a game on D: that the launcher couldn't see). Picks an
+    // exe or shortcut, remembers it (so search and folders find it from now on), and returns it to drop into the folder.
+    private static Core.Launcher.LaunchItem? BrowseForProgram(Launcher.AppIndex index)
+    {
+        var dialog = new Microsoft.Win32.OpenFileDialog
+        {
+            Title = "Add a program",
+            Filter = "Programs (*.exe;*.lnk)|*.exe;*.lnk|All files (*.*)|*.*",
+            CheckFileExists = true,
+        };
+        return dialog.ShowDialog() == true ? index.AddCustomApp(dialog.FileName) : null;
     }
 
     private (ShellSettings Settings, bool LoadedOk) StartDock()

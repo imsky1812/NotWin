@@ -26,19 +26,22 @@ public sealed class FolderWidget : IDesktopWidget
     private readonly Func<string, LaunchItem?> _find;
     private readonly AppIconCache _icons;
     private readonly Action<WidgetConfig> _save;
+    private readonly Func<LaunchItem?>? _browse;
     private WidgetConfig _config;
     private RectI _screen;
     private FolderPopup? _popup;
     private AppChooser? _chooser;
 
+    /// <param name="browse">Shows a file picker to add a program from the PC, returning it (Plan 14); null hides the option.</param>
     public FolderWidget(string id, WidgetConfig? config, Func<IReadOnlyList<LaunchItem>> apps, Func<string, LaunchItem?> find,
-        AppIconCache icons, Action<WidgetConfig> save)
+        AppIconCache icons, Action<WidgetConfig> save, Func<LaunchItem?>? browse = null)
     {
         _id = id;
         _apps = apps;
         _find = find;
         _icons = icons;
         _save = save;
+        _browse = browse;
         _config = config ?? new WidgetConfig();
     }
 
@@ -182,7 +185,7 @@ public sealed class FolderWidget : IDesktopWidget
             _config = _config with { Apps = FolderApps.Add(AppIds, item.Id) };
             _save(_config);
             CardChanged?.Invoke();
-        });
+        }, _browse);
     }
 
     /// <summary>The popup's rows: app tiles (Tag = the <see cref="LaunchItem"/>) then the ＋ tile (Tag = "add"), 8 per row.</summary>
@@ -335,14 +338,16 @@ public sealed class AppChooser : WidgetPopupWindow
     private readonly IReadOnlyList<LaunchItem> _apps;
     private readonly AppIconCache _icons;
     private readonly Action<LaunchItem> _pick;
+    private readonly Func<LaunchItem?>? _browse;
     private readonly StackPanel _list = new();
     private readonly TextBox _search;
 
-    private AppChooser(IReadOnlyList<LaunchItem> apps, AppIconCache icons, Action<LaunchItem> pick)
+    private AppChooser(IReadOnlyList<LaunchItem> apps, AppIconCache icons, Action<LaunchItem> pick, Func<LaunchItem?>? browse)
     {
         _apps = apps;
         _icons = icons;
         _pick = pick;
+        _browse = browse;
         _search = new TextBox
         {
             FontFamily = TileChrome.Font, FontSize = 14, Foreground = WidgetTheme.Text, CaretBrush = WidgetTheme.Text,
@@ -369,17 +374,51 @@ public sealed class AppChooser : WidgetPopupWindow
         return e;
     }
 
-    public static AppChooser Show(IReadOnlyList<LaunchItem> apps, AppIconCache icons, RectI widget, Action<LaunchItem> pick)
+    public static AppChooser Show(IReadOnlyList<LaunchItem> apps, AppIconCache icons, RectI widget, Action<LaunchItem> pick, Func<LaunchItem?>? browse = null)
     {
-        var chooser = new AppChooser(apps, icons, pick);
+        var chooser = new AppChooser(apps, icons, pick, browse);
         chooser.ShowNear(widget);
         chooser._search.Focus();
         return chooser;
     }
 
+    // "Add a program from your PC…" (Plan 14): picks an exe or shortcut the launcher doesn't index (a game on another
+    // drive), stores it, and drops it straight into the folder.
+    private Border BrowseRow()
+    {
+        var row = new Border
+        {
+            Padding = new Thickness(8, 6, 8, 6), CornerRadius = new CornerRadius(10), Background = Brushes.Transparent, Cursor = Cursors.Hand,
+            Margin = new Thickness(0, 0, 0, 2),
+            Child = new StackPanel
+            {
+                Orientation = Orientation.Horizontal,
+                Children =
+                {
+                    new Border
+                    {
+                        Width = 24, Height = 24, CornerRadius = new CornerRadius(7), Margin = new Thickness(0, 0, 10, 0),
+                        BorderBrush = WidgetTheme.Dash, BorderThickness = new Thickness(1.5),
+                        Child = new TextBlock { Text = "＋", FontSize = 14, Foreground = WidgetTheme.Text, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center },
+                    },
+                    new TextBlock { Text = "Add a program from your PC…", FontFamily = TileChrome.Font, FontSize = 14, Foreground = WidgetTheme.Text, VerticalAlignment = VerticalAlignment.Center },
+                },
+            },
+        };
+        row.MouseEnter += (_, _) => row.Background = WidgetTheme.Hover;
+        row.MouseLeave += (_, _) => row.Background = Brushes.Transparent;
+        row.MouseLeftButtonUp += (_, e) =>
+        {
+            e.Handled = true;
+            FolderWidget.Guard(() => { if (_browse!() is { } item) { _pick(item); Fill(); } });
+        };
+        return row;
+    }
+
     private void Fill()
     {
         _list.Children.Clear();
+        if (_browse is not null) _list.Children.Add(BrowseRow());
         foreach (var app in Matches(_apps, _search.Text))
         {
             ImageSource? icon = null;
