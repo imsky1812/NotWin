@@ -156,7 +156,7 @@ public sealed class MediaTile : ITileView
         {
             Count = 20, Dot = 4, Gap = 3, On = DashChrome.Text, Off = DashChrome.Chip, Accent = DashChrome.Red,
             Lit = has ? MediaProgress.Dots(now, m.Duration, 20) : 0, VerticalAlignment = VerticalAlignment.Bottom,
-            HorizontalAlignment = HorizontalAlignment.Left,
+            HorizontalAlignment = HorizontalAlignment.Stretch, Spread = true, // edge to edge (user 2026-11-27: polish)
         };
         // Draggable like the desktop widget's (Plan 10): jump anywhere in the song.
         var seekable = has ? SeekBar.Wrap(bar, 20, m.Duration, _media.SeekAsync, on => { _seeking = on; if (!on) Fill(); }) : bar;

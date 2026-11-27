@@ -323,3 +323,11 @@ dot art; a blocked mic / camera is a plain card with a slashed icon.
 - Tool tiles (1×1): the icon sits in a round chip, like the 2×1 tile.
 - Keep awake (1×1): red with a white icon while on, like the desktop toggles.
 - Shelf: the empty-state hint wraps inside the drop area instead of being cut off.
+
+### Eleventh follow-up (user, 2026-11-27): polish the music / clipboard / notes / timer page
+
+- Clipboard: an image row shows its thumbnail and pixel size ("970 × 546"); the "IMAGE ·" prefix is gone because the
+  thumbnail already says so, and the size used to be cut off.
+- Music 2×2: the seek dots spread edge to edge across the tile at any display scale (DotBar.Spread); still 20 steps.
+- Timer 2×2: finer grid dots (0.5 of the pitch, desktop widget unchanged at 0.64); − and + are round 30 px chips.
+- Notes: unchanged.

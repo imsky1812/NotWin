@@ -93,18 +93,25 @@ public sealed class ClipboardTile : ITileView
         FrameworkElement line;
         if (item.IsImage)
         {
+            // Thumbnail and pixel size; the thumbnail already says "image", so the size gets the room
+            // (user 2026-11-27: "IMAGE · 970 ×" was cut off).
             var thumb = _clips.Thumbnail(item.ImageId!);
-            var row1 = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
+            var row1 = new Grid { VerticalAlignment = VerticalAlignment.Center };
+            row1.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            row1.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star), MinWidth = 0 });
             row1.Children.Add(new Border
             {
-                Width = 30, Height = 18, CornerRadius = new CornerRadius(4), Margin = new Thickness(0, 0, 8, 0),
-                Background = thumb is null ? DashChrome.Chip : new ImageBrush(thumb) { Stretch = Stretch.UniformToFill },
+                Width = 28, Height = 20, CornerRadius = new CornerRadius(5), Margin = new Thickness(0, 0, 8, 0),
+                Background = thumb is null ? (first ? DashChrome.ChipHover : DashChrome.Chip) : new ImageBrush(thumb) { Stretch = Stretch.UniformToFill },
             });
-            row1.Children.Add(new TextBlock
+            var size = new TextBlock
             {
-                Text = $"IMAGE · {item.Width} × {item.Height}", FontFamily = DashChrome.Mono, FontSize = 11,
+                Text = $"{item.Width} × {item.Height}", FontFamily = DashChrome.Mono, FontSize = 11,
                 Foreground = first ? DashChrome.Text : Muted, VerticalAlignment = VerticalAlignment.Center,
-            });
+                TextTrimming = TextTrimming.CharacterEllipsis,
+            };
+            Grid.SetColumn(size, 1);
+            row1.Children.Add(size);
             line = row1;
         }
         else

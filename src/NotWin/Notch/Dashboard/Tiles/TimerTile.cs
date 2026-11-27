@@ -63,7 +63,7 @@ public sealed class TimerTile : ITileView
                 var header = DashChrome.Header("timer", "Timer", _label);
                 DockPanel.SetDock(header, System.Windows.Controls.Dock.Top);
                 panel.Children.Add(header);
-                var controls = new DockPanel { Margin = new Thickness(6, 0, 6, 0) };
+                var controls = new DockPanel { Margin = new Thickness(4, 6, 4, 0) };
                 DockPanel.SetDock(controls, System.Windows.Controls.Dock.Bottom);
                 var minus = Step("−", _timer.Minus);
                 DockPanel.SetDock(minus, System.Windows.Controls.Dock.Left);
@@ -75,7 +75,7 @@ public sealed class TimerTile : ITileView
                 controls.Children.Add(plus);
                 controls.Children.Add(_play);
                 panel.Children.Add(controls);
-                _grid = new GridTimerView(92, 10) { Lit = DashChrome.Text, Gone = DashChrome.Chip, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
+                _grid = new GridTimerView(92, 10) { Lit = DashChrome.Text, Gone = DashChrome.Chip, DotRatio = 0.5, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
                 panel.Children.Add(_grid);
                 tile = DashChrome.Tile(panel);
                 break;
@@ -93,16 +93,24 @@ public sealed class TimerTile : ITileView
         return holder;
     }
 
-    private static TextBlock Step(string glyph, Action act)
+    // The minus and plus as round chips the size of the play button (user 2026-11-27: polish; they were bare glyphs).
+    private static Border Step(string glyph, Action act)
     {
-        var t = new TextBlock
+        var chip = new Border
         {
-            Text = glyph, FontFamily = DashChrome.Font, FontSize = 18, Foreground = DashChrome.Muted,
-            Width = 24, TextAlignment = TextAlignment.Center, VerticalAlignment = VerticalAlignment.Center,
-            Background = System.Windows.Media.Brushes.Transparent, Cursor = Cursors.Hand,
+            Width = 30, Height = 30, CornerRadius = new CornerRadius(15), Background = DashChrome.Chip, Cursor = Cursors.Hand,
+            VerticalAlignment = VerticalAlignment.Center,
+            Child = new TextBlock
+            {
+                Text = glyph, FontFamily = DashChrome.Font, FontSize = 16, Foreground = DashChrome.Text,
+                HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center,
+                Margin = new Thickness(0, -2, 0, 0),
+            },
         };
-        t.MouseLeftButtonUp += (_, e) => { e.Handled = true; act(); };
-        return t;
+        chip.MouseEnter += (_, _) => chip.Background = DashChrome.ChipHover;
+        chip.MouseLeave += (_, _) => chip.Background = DashChrome.Chip;
+        chip.MouseLeftButtonUp += (_, e) => { e.Handled = true; act(); };
+        return chip;
     }
 
     private void OnChanged()
