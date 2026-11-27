@@ -7,7 +7,7 @@ using NotWin.Power;
 namespace NotWin.Notch.Dashboard.Tiles;
 
 /// <summary>
-/// Keep awake tile (mockup <c>NR.awake</c>): 1×1 on-state fill #F2F2F2 with a dark cup and "AWAKE", else a white cup
+/// Keep awake tile (mockup <c>NR.awake</c>): 1×1 on-state red (Plan 13) with a white cup and "AWAKE", else a white cup
 /// and "SLEEP OK"; 2×1 cup, "Keep awake" + ON/OFF and a toggle. A click anywhere on the tile toggles.
 /// </summary>
 public sealed class KeepAwakeTile : ITileView
@@ -41,13 +41,15 @@ public sealed class KeepAwakeTile : ITileView
         if (_size == TileSize.One)
         {
             var stack = new StackPanel { HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
-            var icon = DashChrome.Icon("cup", 20, on ? DashChrome.Dark : DashChrome.Text);
+            // On is red, like the desktop toggle tiles (user 2026-11-26: "when a toggle is on mark it red").
+            var white = DashChrome.Frozen(0xFF, 0xFF, 0xFF);
+            var icon = DashChrome.Icon("cup", 20, on ? white : DashChrome.Text);
             icon.Margin = new Thickness(0, 0, 0, 6);
             stack.Children.Add(icon);
-            var label = DashChrome.Label(on ? "Awake" : "Sleep ok", on ? DashChrome.Dark : null);
+            var label = DashChrome.Label(on ? "Awake" : "Sleep ok", on ? white : null);
             label.HorizontalAlignment = HorizontalAlignment.Center;
             stack.Children.Add(label);
-            _tile.Child = DashChrome.Tile(stack, center: true, background: on ? DashChrome.Text : null);
+            _tile.Child = DashChrome.Tile(stack, center: true, background: on ? DashChrome.Red : null);
             return;
         }
         var row = new DockPanel { VerticalAlignment = VerticalAlignment.Center };

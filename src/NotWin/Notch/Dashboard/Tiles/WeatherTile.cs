@@ -89,35 +89,58 @@ public sealed class WeatherTile : ITileView
         return stack;
     }
 
-    private static FrameworkElement Wide(WeatherPlace p, WeatherReport r, bool stale)
+    // Two rows (user 2026-11-27: the temperature overlapped the city, then the city was cut to "GHA…"):
+    // icon and city on top (the city shortened with "…" only when it is really long, an "Updated" time on the right when
+    // stale), the dot temperature below with the high and low stacked beside it.
+    internal static FrameworkElement Wide(WeatherPlace p, WeatherReport r, bool stale)
     {
-        var row = new DockPanel { VerticalAlignment = VerticalAlignment.Center };
-        var icon = DashChrome.Icon(IconFor(r.Kind), 20);
-        icon.Margin = new Thickness(0, 0, 8, 0);
-        DockPanel.SetDock(icon, System.Windows.Controls.Dock.Left);
-        row.Children.Add(icon);
-        var right = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
+        var grid = new Grid { VerticalAlignment = VerticalAlignment.Center };
+        grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+
+        var top = new Grid { Margin = new Thickness(0, 0, 0, 6) };
+        top.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        top.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star), MinWidth = 0 });
+        top.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        var icon = DashChrome.Icon(IconFor(r.Kind), 16);
+        icon.Margin = new Thickness(0, 0, 6, 0);
+        icon.VerticalAlignment = VerticalAlignment.Center;
+        top.Children.Add(icon);
         var city = DashChrome.Label(p.Name);
-        city.HorizontalAlignment = HorizontalAlignment.Right;
-        right.Children.Add(city);
-        var range = DashChrome.Body($"↑{Deg(r.High)} ↓{Deg(r.Low)}", 11, FontWeights.Normal, DashChrome.Muted);
-        range.Margin = new Thickness(0, 3, 0, 0);
-        range.HorizontalAlignment = HorizontalAlignment.Right;
-        right.Children.Add(range);
+        city.TextTrimming = TextTrimming.CharacterEllipsis;
+        city.VerticalAlignment = VerticalAlignment.Center;
+        Grid.SetColumn(city, 1);
+        top.Children.Add(city);
         if (stale)
         {
             var upd = DashChrome.Label(Updated(r));
-            upd.HorizontalAlignment = HorizontalAlignment.Right;
-            right.Children.Add(upd);
+            upd.Margin = new Thickness(6, 0, 0, 0);
+            upd.VerticalAlignment = VerticalAlignment.Center;
+            Grid.SetColumn(upd, 2);
+            top.Children.Add(upd);
         }
-        DockPanel.SetDock(right, System.Windows.Controls.Dock.Right);
-        row.Children.Add(right);
-        // Dot 3 / gap 1.1 (not the mockup's 4 / 1.4): "-12°" must fit beside the city column in a 178 DIP tile.
-        row.Children.Add(new DotMatrix { Text = Deg(r.Temp), Dot = 3, Gap = 1.1, Fill = DashChrome.Text, VerticalAlignment = VerticalAlignment.Center });
-        return row;
+        grid.Children.Add(top);
+
+        var bottom = new Grid();
+        Grid.SetRow(bottom, 1);
+        bottom.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        bottom.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star), MinWidth = 0 });
+        var temp = new DotMatrix { Text = Deg(r.Temp), Dot = 3, Gap = 1.1, Fill = DashChrome.Text, VerticalAlignment = VerticalAlignment.Bottom };
+        bottom.Children.Add(temp);
+        var range = new StackPanel { HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Bottom, Margin = new Thickness(8, 0, 0, 0) };
+        foreach (var line in new[] { $"↑{Deg(r.High)}", $"↓{Deg(r.Low)}" })
+        {
+            var t = DashChrome.Body(line, 11, FontWeights.Normal, DashChrome.Muted);
+            t.HorizontalAlignment = HorizontalAlignment.Right;
+            range.Children.Add(t);
+        }
+        Grid.SetColumn(range, 1);
+        bottom.Children.Add(range);
+        grid.Children.Add(bottom);
+        return grid;
     }
 
-    private static FrameworkElement Big(WeatherPlace p, WeatherReport r, bool stale)
+    internal static FrameworkElement Big(WeatherPlace p, WeatherReport r, bool stale)
     {
         var panel = new DockPanel();
         var top = Wide(p, r, stale);

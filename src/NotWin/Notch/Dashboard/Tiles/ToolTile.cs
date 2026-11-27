@@ -33,10 +33,13 @@ public sealed class ToolTile(TileKind kind, Action<TileKind> run) : ITileView
         }
         else
         {
+            // The icon in a soft round chip, like the wide tile's (Plan 13 follow-up: a calmer, more even dashboard).
             var stack = new StackPanel();
-            var ic = DashChrome.Icon(icon, 20);
-            ic.Margin = new Thickness(0, 0, 0, 6);
-            stack.Children.Add(ic);
+            stack.Children.Add(new Border
+            {
+                Width = 36, Height = 36, CornerRadius = new CornerRadius(18), Background = DashChrome.Chip,
+                HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 0, 0, 6), Child = DashChrome.Icon(icon, 18),
+            });
             var label = DashChrome.Label(title);
             label.HorizontalAlignment = HorizontalAlignment.Center;
             stack.Children.Add(label);

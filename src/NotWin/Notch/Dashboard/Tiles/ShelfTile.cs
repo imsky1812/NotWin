@@ -86,13 +86,17 @@ public sealed class ShelfTile : ITileView, IFileDropTarget
     // Mockup .drop: dashed #3A3A3A, radius 14, "Drop files here" / "DRAG OUT TO USE".
     private static FrameworkElement DropArea()
     {
-        var text = new StackPanel { HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
+        var text = new StackPanel { HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(10, 0, 10, 0) };
         var line = DashChrome.Body("Drop files here", 12, FontWeights.Normal, DashChrome.Muted);
         line.HorizontalAlignment = HorizontalAlignment.Center;
         text.Children.Add(line);
         var hint = DashChrome.Label("Click to copy · drag out");
         hint.Margin = new Thickness(0, 4, 0, 0);
         hint.HorizontalAlignment = HorizontalAlignment.Center;
+        // Wraps inside the dashed box instead of running past it (user 2026-11-27).
+        hint.TextTrimming = TextTrimming.None;
+        hint.TextWrapping = TextWrapping.Wrap;
+        hint.TextAlignment = TextAlignment.Center;
         text.Children.Add(hint);
         var dashes = new Rectangle
         {

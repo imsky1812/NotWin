@@ -312,3 +312,14 @@ dot art; a blocked mic / camera is a plain card with a slashed icon.
 - Notch: resize 300 → 240 ms; page swipes 280 → 220 ms; tiles fade up in an 18 ms stagger when the dashboard opens;
   tiles lift (1.02) on hover and dip (0.98) on press; the built page is reused when nothing changed (layout, page,
   edit mode, theme), so opening the notch no longer rebuilds every tile.
+
+### Tenth follow-up (user, 2026-11-27): better notch tiles, weather overlap
+
+"Make the tiles better in the notch, the weather tile temp degree is overlapping."
+
+- Weather 2×1 / 2×2: two rows. Icon and city on top (shortened with "…" only when really long; "Updated HH:mm" on the
+  right when stale), the dot temperature below with the high and low stacked beside it. The dot minus is 3 dots wide,
+  not 5, so "-12°" fits. Tests: the temperature never overlaps the city; a usual city and the high / low show in full.
+- Tool tiles (1×1): the icon sits in a round chip, like the 2×1 tile.
+- Keep awake (1×1): red with a white icon while on, like the desktop toggles.
+- Shelf: the empty-state hint wraps inside the drop area instead of being cut off.
