@@ -27,7 +27,12 @@ try
     var payload = Payload.Find(self);
     if (payload is null)
     {
-        if (!quiet) Ui.Error("This setup file is damaged. Download NotWin-Setup.exe again.");
+        // Logged too (user 2026-11-27: this message left no trace). A cut-short download, or a build file without the
+        // app inside (out\setup\bin\NotWin.Setup.exe, the uninstaller) run by mistake.
+        Log($"no app inside {Path.GetFileName(self)} ({new FileInfo(self).Length / (1024 * 1024)} MB)");
+        if (!quiet) Ui.Error("This file doesn't have NotWin inside it, so it can't install.\n\n" +
+                             "Download NotWin-Setup.exe again from github.com/imsky1812/NotWin/releases (about 115 MB) " +
+                             "and run that file. A smaller file means the download was cut short.");
         return 2;
     }
     if (!quiet && !Ui.Ask("Install NotWin?\n\nNotWin replaces the Windows taskbar with a Nothing-style dock, launcher, notch and desktop widgets. " +
