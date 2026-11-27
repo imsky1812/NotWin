@@ -10,6 +10,9 @@ public static class WidgetChoices
 
     public static IReadOnlyList<string> Faces { get; } = ["light", "dark"];
 
+    /// <summary>Tic-tac-toe opponents: the shell, or a second player on the same PC (user 2026-11-27).</summary>
+    public static IReadOnlyList<string> GameModes { get; } = ["ai", "two"];
+
     /// <summary>One Windows zone per common offset, UTC−10 to UTC+13 (half and three-quarter hours included).</summary>
     public static IReadOnlyList<string> Zones { get; } =
     [
@@ -21,7 +24,7 @@ public static class WidgetChoices
     ];
 
     /// <summary>True for the kinds whose config carries a choice.</summary>
-    public static bool HasChoice(WidgetKind kind) => kind is WidgetKind.Toggle or WidgetKind.WorldClock or WidgetKind.AnalogClock;
+    public static bool HasChoice(WidgetKind kind) => kind is WidgetKind.Toggle or WidgetKind.WorldClock or WidgetKind.AnalogClock or WidgetKind.TicTacToe;
 
     /// <summary>The ids a kind can choose from (empty for kinds without a choice).</summary>
     public static IReadOnlyList<string> Options(WidgetKind kind) => kind switch
@@ -29,6 +32,7 @@ public static class WidgetChoices
         WidgetKind.Toggle => Toggles,
         WidgetKind.WorldClock => Zones,
         WidgetKind.AnalogClock => Faces,
+        WidgetKind.TicTacToe => GameModes,
         _ => [],
     };
 
@@ -41,6 +45,7 @@ public static class WidgetChoices
         WidgetKind.Toggle => FirstUnused(onDesktop),
         WidgetKind.WorldClock => "UTC",
         WidgetKind.AnalogClock => "light",
+        WidgetKind.TicTacToe => "ai",
         _ => null,
     };
 
