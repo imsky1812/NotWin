@@ -21,7 +21,8 @@ namespace NotWin.Widgets;
 /// </summary>
 public sealed class CalendarWidget : IDesktopWidget
 {
-    private static readonly Brush Muted = TileChrome.Frozen(0x44, 0x44, 0x44), YearBrush = TileChrome.Frozen(0x66, 0x66, 0x66);
+    private static readonly Brush YearBrush = TileChrome.Frozen(0x66, 0x66, 0x66);
+    private static Brush Muted => WidgetTheme.Unlit; // days outside the month (Plan 13 follow-up: follows the theme)
     private const string Hint = "CONNECT GOOGLE CALENDAR IN SETTINGS";
     private readonly DispatcherTimer _midnight = new();
     private readonly GoogleCalendarService? _calendar;
@@ -93,7 +94,7 @@ public sealed class CalendarWidget : IDesktopWidget
     }
 
     private static TextBlock SerifText(string text, double size, Brush? brush = null) =>
-        new() { Text = text, FontFamily = Serif, FontSize = size, Foreground = brush ?? TileChrome.Text };
+        new() { Text = text, FontFamily = Serif, FontSize = size, Foreground = brush ?? WidgetTheme.Text };
 
     private static FrameworkElement One(DateTime now)
     {
@@ -125,8 +126,8 @@ public sealed class CalendarWidget : IDesktopWidget
         if (next is not null)
         {
             // The next event (Plan 6): when, the title (two lines at most), then the month and year.
-            right.Children.Add(TileChrome.Label(CalendarFeed.WhenLabel(next, DateTimeOffset.Now, TimeZoneInfo.Local), TileChrome.Red));
-            var title = TileChrome.Body(next.Title, 13, FontWeights.SemiBold);
+            right.Children.Add(WidgetTheme.Label(CalendarFeed.WhenLabel(next, DateTimeOffset.Now, TimeZoneInfo.Local), TileChrome.Red));
+            var title = WidgetTheme.Body(next.Title, 13, FontWeights.SemiBold);
             title.TextWrapping = TextWrapping.Wrap;
             title.TextTrimming = TextTrimming.CharacterEllipsis;
             title.LineHeight = 16;
@@ -134,19 +135,19 @@ public sealed class CalendarWidget : IDesktopWidget
             title.MaxHeight = 48; // three lines
             title.Margin = new Thickness(0, 5, 0, 0);
             right.Children.Add(title);
-            var monthYear = TileChrome.Label(now.ToString("MMMM yyyy", CultureInfo.InvariantCulture));
+            var monthYear = WidgetTheme.Label(now.ToString("MMMM yyyy", CultureInfo.InvariantCulture));
             monthYear.Margin = new Thickness(0, 6, 0, 0);
             right.Children.Add(monthYear);
         }
         else
         {
-            var none = TileChrome.Label(hint ? Hint : "No events");
+            var none = WidgetTheme.Label(hint ? Hint : "No events");
             none.TextWrapping = TextWrapping.Wrap;
             right.Children.Add(none);
-            var month = TileChrome.Body(now.ToString("MMMM", CultureInfo.InvariantCulture), 18, FontWeights.SemiBold);
+            var month = WidgetTheme.Body(now.ToString("MMMM", CultureInfo.InvariantCulture), 18, FontWeights.SemiBold);
             month.Margin = new Thickness(0, 6, 0, 0);
             right.Children.Add(month);
-            var year = TileChrome.Label(now.Year.ToString(CultureInfo.InvariantCulture));
+            var year = WidgetTheme.Label(now.Year.ToString(CultureInfo.InvariantCulture));
             year.Margin = new Thickness(0, 4, 0, 0);
             right.Children.Add(year);
         }
@@ -170,7 +171,7 @@ public sealed class CalendarWidget : IDesktopWidget
     private static FrameworkElement Month(DateTime now, IReadOnlySet<DateOnly> busy, bool hint)
     {
         var panel = new DockPanel();
-        var head = new TextBlock { FontFamily = Serif, FontSize = 20, Foreground = TileChrome.Text };
+        var head = new TextBlock { FontFamily = Serif, FontSize = 20, Foreground = WidgetTheme.Text };
         head.Inlines.Add(new System.Windows.Documents.Run(now.ToString("MMMM", CultureInfo.InvariantCulture) + " "));
         head.Inlines.Add(new System.Windows.Documents.Run(now.Year.ToString(CultureInfo.InvariantCulture)) { Foreground = YearBrush });
         DockPanel.SetDock(head, System.Windows.Controls.Dock.Top);
@@ -178,7 +179,7 @@ public sealed class CalendarWidget : IDesktopWidget
         var grid = new UniformGrid { Columns = 7, Margin = new Thickness(0, 10, 0, 0) };
         foreach (var d in new[] { "S", "M", "T", "W", "T", "F", "S" })
         {
-            var l = TileChrome.Label(d);
+            var l = WidgetTheme.Label(d);
             l.HorizontalAlignment = HorizontalAlignment.Center;
             l.Height = 18;
             grid.Children.Add(l);
@@ -192,7 +193,7 @@ public sealed class CalendarWidget : IDesktopWidget
             var text = new TextBlock
             {
                 Text = c.Day.ToString(CultureInfo.InvariantCulture), FontFamily = TileChrome.Font, FontSize = 12,
-                Foreground = c.IsToday ? Brushes.White : c.InMonth ? TileChrome.Text : Muted,
+                Foreground = c.IsToday ? Brushes.White : c.InMonth ? WidgetTheme.Text : Muted,
                 HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center,
             };
             var cell = new Grid { Height = 30 };
@@ -203,7 +204,7 @@ public sealed class CalendarWidget : IDesktopWidget
                 // A day with events (Plan 6): a small dot under the number, white on today's red circle.
                 cell.Children.Add(new Ellipse
                 {
-                    Width = 4, Height = 4, Fill = c.IsToday ? Brushes.White : c.InMonth ? TileChrome.Text : Muted,
+                    Width = 4, Height = 4, Fill = c.IsToday ? Brushes.White : c.InMonth ? WidgetTheme.Text : Muted,
                     HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Bottom,
                     Margin = new Thickness(0, 0, 0, 3),
                 });
@@ -213,7 +214,7 @@ public sealed class CalendarWidget : IDesktopWidget
         panel.Children.Add(grid);
         if (!hint) return panel;
         // Not signed in, edit mode only (spec §6.5): where to connect, over the bottom of the month.
-        var note = TileChrome.Label(Hint);
+        var note = WidgetTheme.Label(Hint);
         var tag = new Border
         {
             Background = TileChrome.FrozenArgb(0xE6, 0x1A, 0x1A, 0x1A), CornerRadius = new CornerRadius(8),

@@ -25,7 +25,7 @@ namespace NotWin.Widgets;
 /// </summary>
 public sealed class PhotoFrameWidget : IDesktopWidget
 {
-    private static readonly Brush DashBrush = TileChrome.FrozenArgb(0x66, 0xE8, 0xE8, 0xE8);
+    private static Brush DashBrush => WidgetTheme.Dash;
     private readonly string _id;
     private readonly PhotoStore _store;
     private readonly Action<WidgetConfig> _save;
@@ -65,10 +65,10 @@ public sealed class PhotoFrameWidget : IDesktopWidget
         _host.MouseLeftButtonUp += (_, e) => { e.Handled = true; PhotoManagePopup.Guard(OnClick); };
         Fill();
         if (!Circle) return _host;
-        // The normal card's black, edge and 16 px padding, but round (frame sizes are always square).
+        // The normal card (the theme's colour, edge and 16 px padding), but round (frame sizes are always square).
         return new Border
         {
-            Background = WidgetCard.CardBrush, BorderBrush = WidgetCard.EdgeBrush, BorderThickness = new Thickness(1.5),
+            Background = WidgetTheme.Card, BorderBrush = WidgetTheme.Edge, BorderThickness = new Thickness(1.5),
             CornerRadius = new CornerRadius(size.PxW / 2.0), Padding = new Thickness(16), Child = _host,
         };
     }
@@ -128,16 +128,21 @@ public sealed class PhotoFrameWidget : IDesktopWidget
         Shape outline = Circle
             ? new Ellipse { Stroke = DashBrush, StrokeThickness = 1.5, StrokeDashArray = [4, 4] }
             : new Rectangle { Stroke = DashBrush, StrokeThickness = 1.5, StrokeDashArray = [4, 4], RadiusX = 14, RadiusY = 14 };
-        var label = TileChrome.Label("Add photos");
+        var label = WidgetTheme.Label("Add photos");
         label.HorizontalAlignment = HorizontalAlignment.Center;
         label.Margin = new Thickness(0, 10, 0, 0);
         var center = new StackPanel
         {
             HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center,
-            Children = { new DotArtView { Rows = DotArt.Rows("camera"), Dot = 5, Gap = 2, HorizontalAlignment = HorizontalAlignment.Center }, label },
+            Children = { new DotArtView { Rows = DotArt.Rows("camera"), Dot = 5, Gap = 2, Fill = WidgetTheme.Text, HorizontalAlignment = HorizontalAlignment.Center }, label },
         };
         return new Grid { Children = { outline, center } };
     }
+
+    /// <summary>
+    /// The frame now shows this photo (its full path): the Lucent wallpaper takes its colours from it (Plan 13 follow-up).
+    /// </summary>
+    public event Action<string>? PhotoShown;
 
     private ImageSource? Load(string name)
     {
@@ -153,6 +158,7 @@ public sealed class PhotoFrameWidget : IDesktopWidget
             image.DecodePixelWidth = _decodeWidth;
             image.EndInit();
             image.Freeze();
+            PhotoShown?.Invoke(path);
             return image;
         }
         catch (Exception e)
@@ -258,11 +264,12 @@ public sealed class PhotoManagePopup : Window
     private readonly Action<string> _remove;
     private readonly Action _add;
     private readonly WrapPanel _grid = new() { MaxWidth = 4 * 84 };
-    private readonly TextBlock _note = TileChrome.Label("");
+    private readonly TextBlock _note = WidgetTheme.Label("");
     private bool _closed;
 
     private PhotoManagePopup(PhotoStore store, string frameId, Action<string> remove, Action add)
     {
+        NotWin.Theme.Motion.Smooth(this); // quick pop in, quicker fade out (Plan 13 follow-up)
         _store = store;
         _frameId = frameId;
         _remove = remove;
@@ -277,7 +284,7 @@ public sealed class PhotoManagePopup : Window
         _note.Margin = new Thickness(6, 8, 0, 0);
         Content = new Border
         {
-            Background = WidgetCard.CardBrush, BorderBrush = WidgetCard.EdgeBrush, BorderThickness = new Thickness(1.5),
+            Background = WidgetTheme.Popup, BorderBrush = WidgetTheme.Edge, BorderThickness = new Thickness(1.5),
             CornerRadius = new CornerRadius(20), Padding = new Thickness(10),
             Child = new StackPanel { Children = { _grid, _note } },
         };
@@ -340,10 +347,10 @@ public sealed class PhotoManagePopup : Window
         };
         var close = new Border
         {
-            Width = 22, Height = 22, CornerRadius = new CornerRadius(11), Background = TileChrome.Frozen(0x2A, 0x2A, 0x2A),
+            Width = 22, Height = 22, CornerRadius = new CornerRadius(11), Background = WidgetTheme.Popup,
             HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(0, 3, 3, 0),
             Cursor = Cursors.Hand,
-            Child = new TextBlock { Text = "✕", FontSize = 11, Foreground = TileChrome.Text, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center },
+            Child = new TextBlock { Text = "✕", FontSize = 11, Foreground = WidgetTheme.Text, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center },
         };
         close.MouseLeftButtonUp += (_, e) => { e.Handled = true; Guard(() => _remove(name)); };
         return new Grid { Margin = new Thickness(6), Children = { image, close } };
@@ -354,8 +361,8 @@ public sealed class PhotoManagePopup : Window
         var tile = new Border
         {
             Width = 72, Height = 72, CornerRadius = new CornerRadius(10), Margin = new Thickness(6), Cursor = Cursors.Hand,
-            BorderBrush = TileChrome.FrozenArgb(0x66, 0xE8, 0xE8, 0xE8), BorderThickness = new Thickness(1.5), Background = Brushes.Transparent,
-            Child = new TextBlock { Text = "＋", FontSize = 26, Foreground = TileChrome.Text, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center },
+            BorderBrush = WidgetTheme.Dash, BorderThickness = new Thickness(1.5), Background = Brushes.Transparent,
+            Child = new TextBlock { Text = "＋", FontSize = 26, Foreground = WidgetTheme.Text, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center },
         };
         tile.MouseLeftButtonUp += (_, e) => { e.Handled = true; RequestAdd(); };
         return tile;
@@ -367,7 +374,12 @@ public sealed class PhotoManagePopup : Window
     /// </summary>
     public void RequestAdd()
     {
-        CloseIfOpen();
+        // Gone at once (no fade): a fading popup would still pull the file picker down with it.
+        if (!_closed)
+        {
+            _closed = true;
+            Dispatcher.BeginInvoke(() => NotWin.Theme.Motion.CloseNow(this));
+        }
         Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Background, () => Guard(_add));
     }
 

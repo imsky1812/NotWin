@@ -21,16 +21,16 @@ public sealed class PanelSlider : Border
     {
         Height = 28;
         CornerRadius = new CornerRadius(14);
-        Background = new SolidColorBrush(Color.FromRgb(0x26, 0x26, 0x26));
+        SetResourceReference(BackgroundProperty, "Shell.Tile"); // follows light / dark (user 2026-11-26)
         ClipToBounds = true;
         Cursor = Cursors.Hand;
         _fill = new Border
         {
             HorizontalAlignment = HorizontalAlignment.Left,
             CornerRadius = new CornerRadius(14),
-            Background = new SolidColorBrush(Color.FromRgb(0xE8, 0xE8, 0xE8)),
             IsHitTestVisible = false,
         };
+        _fill.SetResourceReference(BackgroundProperty, "Shell.Fill");
         Child = _fill;
         SizeChanged += (_, _) => Redraw();
         MouseLeftButtonDown += (_, e) => { _dragging = CaptureMouse(); FromMouse(e); e.Handled = true; };

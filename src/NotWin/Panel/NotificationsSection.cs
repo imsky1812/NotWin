@@ -7,6 +7,8 @@ using NotWin.Core.Panel;
 using NotWin.Dock;
 using NotWin.Notifications;
 
+using NotWin.Theme;
+
 namespace NotWin.Panel;
 
 /// <summary>
@@ -77,15 +79,15 @@ public sealed class NotificationsSection
         foreach (var g in groups) _host.Children.Add(Card(g));
     }
 
-    // Mockup .nc: #0F FFFFFF, radius 18, padding 12/14; 32 px icon circle; app + count SemiBold 13; text 12 #BBB; ✕ top right.
+    // Mockup .nc: Shell.Card, radius 18, padding 12/14; 32 px icon circle; app + count SemiBold 13; text 12 Shell.Soft; ✕ top right.
     private Border Card(NotificationGroup g)
     {
         var icon = new Border
         {
-            Width = 32, Height = 32, CornerRadius = new CornerRadius(16), Background = new SolidColorBrush(Color.FromRgb(0x26, 0x26, 0x26)),
+            Width = 32, Height = 32, CornerRadius = new CornerRadius(16),
             VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(0, 0, 12, 0),
             Child = new Image { Width = 20, Height = 20, Source = string.IsNullOrEmpty(g.AppId) ? null : _icons.Get(g.AppId, 40) },
-        };
+        }.Themed(Border.BackgroundProperty, "Shell.Tile");
         var title = new TextBlock
         {
             Text = g.Count > 1 ? $"{g.AppName}  ·  {g.Count}" : g.AppName, FontSize = 13, FontWeight = FontWeights.SemiBold,
@@ -93,9 +95,9 @@ public sealed class NotificationsSection
         };
         var body = new TextBlock
         {
-            Text = g.LatestText, FontSize = 12, Foreground = new SolidColorBrush(Color.FromRgb(0xBB, 0xBB, 0xBB)),
+            Text = g.LatestText, FontSize = 12,
             TextWrapping = TextWrapping.Wrap, MaxHeight = 34, TextTrimming = TextTrimming.CharacterEllipsis, Margin = new Thickness(0, 2, 0, 0),
-        };
+        }.Themed(TextBlock.ForegroundProperty, "Shell.Soft");
         var text = new StackPanel { Children = { title, body } };
         var row = new DockPanel();
         row.Children.Add(icon);
@@ -103,17 +105,17 @@ public sealed class NotificationsSection
 
         var close = new TextBlock
         {
-            Text = "✕", FontSize = 12, Foreground = new SolidColorBrush(Color.FromRgb(0x77, 0x77, 0x77)), Cursor = Cursors.Hand,
+            Text = "✕", FontSize = 12, Cursor = Cursors.Hand,
             HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Top, ToolTip = "Dismiss",
-        };
+        }.Themed(TextBlock.ForegroundProperty, "Shell.Faint");
         close.MouseLeftButtonUp += (_, e) => { e.Handled = true; _service.Remove(g.Ids); };
 
         var card = new Border
         {
-            Background = new SolidColorBrush(Color.FromArgb(0x0F, 0xFF, 0xFF, 0xFF)), CornerRadius = new CornerRadius(18),
+            CornerRadius = new CornerRadius(18),
             Padding = new Thickness(14, 12, 14, 12), Margin = new Thickness(0, 0, 0, 8), Cursor = Cursors.Hand,
             Child = new Grid { Children = { row, close } },
-        };
+        }.Themed(Border.BackgroundProperty, "Shell.Card");
         card.MouseLeftButtonUp += (_, _) =>
         {
             _service.OpenApp(g.AppId);
@@ -127,8 +129,8 @@ public sealed class NotificationsSection
         var text = new TextBlock
         {
             Text = "New notifications appear in the notch. To stop Windows' pop-ups too, turn on Do not disturb, or turn off banners for chatty apps.",
-            TextWrapping = TextWrapping.Wrap, FontSize = 12, Foreground = new SolidColorBrush(Color.FromRgb(0xCC, 0xCC, 0xCC)),
-        };
+            TextWrapping = TextWrapping.Wrap, FontSize = 12,
+        }.Themed(TextBlock.ForegroundProperty, "Shell.Soft");
         var open = Button("Open settings", () => TilesSection.OpenSettings("ms-settings:notifications"));
         var gotIt = Button("Got it", () =>
         {
@@ -138,7 +140,7 @@ public sealed class NotificationsSection
         gotIt.Margin = new Thickness(8, 0, 0, 0);
         return new Border
         {
-            Background = new SolidColorBrush(Color.FromArgb(0x0F, 0xFF, 0xFF, 0xFF)), CornerRadius = new CornerRadius(18),
+            CornerRadius = new CornerRadius(18),
             Padding = new Thickness(14, 12, 14, 12), Margin = new Thickness(0, 0, 0, 8),
             Child = new StackPanel
             {
@@ -148,30 +150,30 @@ public sealed class NotificationsSection
                     new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 10, 0, 0), Children = { open, gotIt } },
                 },
             },
-        };
+        }.Themed(Border.BackgroundProperty, "Shell.Card");
     }
 
     private static Border Button(string text, Action onClick)
     {
         var b = new Border
         {
-            Background = new SolidColorBrush(Color.FromRgb(0x26, 0x26, 0x26)), CornerRadius = new CornerRadius(12),
+            CornerRadius = new CornerRadius(12),
             Padding = new Thickness(10, 6, 10, 6), Cursor = Cursors.Hand,
             Child = new TextBlock { Text = text.ToUpperInvariant(), FontFamily = (FontFamily)Application.Current.FindResource("Font.Mono"), FontSize = 11, FontWeight = FontWeights.Medium },
-        };
+        }.Themed(Border.BackgroundProperty, "Shell.Tile");
         b.MouseLeftButtonUp += (_, _) => onClick();
         return b;
     }
 
-    private static TextBlock Label(string text) => new()
+    private static TextBlock Label(string text) => new TextBlock
     {
         Text = text, FontFamily = (FontFamily)Application.Current.FindResource("Font.Mono"), FontSize = 11,
-        FontWeight = FontWeights.Medium, Foreground = (Brush)Application.Current.FindResource("Brush.Dim"), VerticalAlignment = VerticalAlignment.Center,
-    };
+        FontWeight = FontWeights.Medium, VerticalAlignment = VerticalAlignment.Center,
+    }.Themed(TextBlock.ForegroundProperty, "Shell.Dim");
 
-    private static TextBlock Dim(string text) => new()
+    private static TextBlock Dim(string text) => new TextBlock
     {
-        Text = text, FontSize = 12, TextWrapping = TextWrapping.Wrap, Foreground = (Brush)Application.Current.FindResource("Brush.Dim"),
+        Text = text, FontSize = 12, TextWrapping = TextWrapping.Wrap,
         Margin = new Thickness(2, 0, 0, 4),
-    };
+    }.Themed(TextBlock.ForegroundProperty, "Shell.Dim");
 }

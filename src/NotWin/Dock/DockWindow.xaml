@@ -14,12 +14,12 @@
         UseLayoutRounding="True"
         TextOptions.TextFormattingMode="Display"
         FontFamily="{StaticResource Font.Grotesk}"
-        Foreground="{StaticResource Brush.Text}">
+        Foreground="{DynamicResource Dock.Text}">
 
     <Window.Resources>
         <!-- Monochrome 24x24 line glyphs, drawn at 16 px (Viewbox). -->
         <Style x:Key="Glyph" TargetType="Path">
-            <Setter Property="Stroke" Value="{StaticResource Brush.Text}" />
+            <Setter Property="Stroke" Value="{DynamicResource Dock.Text}" />
             <Setter Property="StrokeThickness" Value="1.9" />
             <Setter Property="StrokeLineJoin" Value="Round" />
             <Setter Property="StrokeStartLineCap" Value="Round" />
@@ -73,7 +73,7 @@
             </Style.Triggers>
         </Style>
         <Style x:Key="BatteryFill" TargetType="Rectangle">
-            <Setter Property="Fill" Value="{StaticResource Brush.Text}" />
+            <Setter Property="Fill" Value="{DynamicResource Dock.Text}" />
             <Style.Triggers>
                 <DataTrigger Binding="{Binding Tray.BatteryLow}" Value="True">
                     <Setter Property="Fill" Value="{StaticResource Brush.Red}" />
@@ -103,7 +103,7 @@
             <Setter Property="Background" Value="Transparent" />
             <Style.Triggers>
                 <Trigger Property="IsMouseOver" Value="True">
-                    <Setter Property="Background" Value="{StaticResource Brush.Hover}" />
+                    <Setter Property="Background" Value="{DynamicResource Dock.Hover}" />
                 </Trigger>
             </Style.Triggers>
         </Style>
@@ -111,7 +111,7 @@
             <Setter Property="Background" Value="Transparent" />
             <Style.Triggers>
                 <Trigger Property="IsMouseOver" Value="True">
-                    <Setter Property="Background" Value="{StaticResource Brush.Hover}" />
+                    <Setter Property="Background" Value="{DynamicResource Dock.Hover}" />
                 </Trigger>
             </Style.Triggers>
         </Style>
@@ -124,8 +124,8 @@
                 Height="60"
                 VerticalAlignment="Top"
                 CornerRadius="{StaticResource Radius.Dock}"
-                Background="#FF000000"
-                BorderBrush="{StaticResource Brush.Line}"
+                Background="{DynamicResource Dock.Bg}"
+                BorderBrush="{DynamicResource Dock.Line}"
                 BorderThickness="1"
                 Padding="10,0"
                 Opacity="0">
@@ -138,14 +138,14 @@
             <Border x:Name="StartButton" Style="{StaticResource Slot}" ToolTip="Start" MouseRightButtonUp="OnStartRightUp"
                     MouseLeftButtonUp="OnStartLeftUp">
                 <Canvas Width="16" Height="16" HorizontalAlignment="Center" VerticalAlignment="Center">
-                    <Ellipse Canvas.Left="0" Canvas.Top="0" Width="4" Height="4" Fill="{StaticResource Brush.Text}" />
-                    <Ellipse Canvas.Left="6" Canvas.Top="0" Width="4" Height="4" Fill="{StaticResource Brush.Text}" />
-                    <Ellipse Canvas.Left="12" Canvas.Top="0" Width="4" Height="4" Fill="{StaticResource Brush.Text}" />
-                    <Ellipse Canvas.Left="0" Canvas.Top="6" Width="4" Height="4" Fill="{StaticResource Brush.Text}" />
-                    <Ellipse Canvas.Left="6" Canvas.Top="6" Width="4" Height="4" Fill="{StaticResource Brush.Text}" />
-                    <Ellipse Canvas.Left="12" Canvas.Top="6" Width="4" Height="4" Fill="{StaticResource Brush.Text}" />
-                    <Ellipse Canvas.Left="0" Canvas.Top="12" Width="4" Height="4" Fill="{StaticResource Brush.Text}" />
-                    <Ellipse Canvas.Left="6" Canvas.Top="12" Width="4" Height="4" Fill="{StaticResource Brush.Text}" />
+                    <Ellipse Canvas.Left="0" Canvas.Top="0" Width="4" Height="4" Fill="{DynamicResource Dock.Text}" />
+                    <Ellipse Canvas.Left="6" Canvas.Top="0" Width="4" Height="4" Fill="{DynamicResource Dock.Text}" />
+                    <Ellipse Canvas.Left="12" Canvas.Top="0" Width="4" Height="4" Fill="{DynamicResource Dock.Text}" />
+                    <Ellipse Canvas.Left="0" Canvas.Top="6" Width="4" Height="4" Fill="{DynamicResource Dock.Text}" />
+                    <Ellipse Canvas.Left="6" Canvas.Top="6" Width="4" Height="4" Fill="{DynamicResource Dock.Text}" />
+                    <Ellipse Canvas.Left="12" Canvas.Top="6" Width="4" Height="4" Fill="{DynamicResource Dock.Text}" />
+                    <Ellipse Canvas.Left="0" Canvas.Top="12" Width="4" Height="4" Fill="{DynamicResource Dock.Text}" />
+                    <Ellipse Canvas.Left="6" Canvas.Top="12" Width="4" Height="4" Fill="{DynamicResource Dock.Text}" />
                     <Ellipse Canvas.Left="12" Canvas.Top="12" Width="4" Height="4" Fill="{StaticResource Brush.Red}" />
                 </Canvas>
             </Border>
@@ -156,7 +156,7 @@
                     </Canvas>
                 </Viewbox>
             </Border>
-            <Rectangle Width="1" Height="26" Margin="6,0" Fill="{StaticResource Brush.Line}" VerticalAlignment="Center" />
+            <Rectangle Width="1" Height="26" Margin="6,0" Fill="{DynamicResource Dock.Line}" VerticalAlignment="Center" />
 
             <ItemsControl x:Name="ItemsHost" ItemsSource="{Binding Items}" VerticalAlignment="Center"
                           HorizontalAlignment="Center" Focusable="False">
@@ -175,19 +175,19 @@
                             <Grid>
                                 <Image Source="{Binding Icon}" Width="22" Height="22"
                                        RenderOptions.BitmapScalingMode="HighQuality" />
-                                <Ellipse x:Name="Dot" Width="4" Height="4" Fill="{StaticResource Brush.RunDot}" Visibility="Collapsed"
+                                <Ellipse x:Name="Dot" Width="4" Height="4" Fill="{DynamicResource Dock.RunDot}" Visibility="Collapsed"
                                          VerticalAlignment="Bottom" HorizontalAlignment="Center" Margin="0,0,0,2" />
                             </Grid>
                         </Border>
                         <DataTemplate.Triggers>
                             <Trigger SourceName="Slot" Property="IsMouseOver" Value="True">
-                                <Setter TargetName="Slot" Property="Background" Value="{StaticResource Brush.Hover}" />
+                                <Setter TargetName="Slot" Property="Background" Value="{DynamicResource Dock.Hover}" />
                             </Trigger>
                             <DataTrigger Binding="{Binding Running}" Value="True">
                                 <Setter TargetName="Dot" Property="Visibility" Value="Visible" />
                             </DataTrigger>
                             <DataTrigger Binding="{Binding Focused}" Value="True">
-                                <Setter TargetName="Slot" Property="Background" Value="{StaticResource Brush.Active}" />
+                                <Setter TargetName="Slot" Property="Background" Value="{DynamicResource Dock.Active}" />
                                 <Setter TargetName="Dot" Property="Fill" Value="{StaticResource Brush.Red}" />
                             </DataTrigger>
                         </DataTemplate.Triggers>
@@ -195,7 +195,7 @@
                 </ItemsControl.ItemTemplate>
             </ItemsControl>
 
-            <Rectangle Width="1" Height="26" Margin="6,0" Fill="{StaticResource Brush.Line}" VerticalAlignment="Center" />
+            <Rectangle Width="1" Height="26" Margin="6,0" Fill="{DynamicResource Dock.Line}" VerticalAlignment="Center" />
 
             <!-- Tray: one 44 px hover area (mockup .tray): chevron, Wi-Fi, volume, battery, time; 10 px gaps. Fixed width. -->
             <Border x:Name="TrayHost" Width="162" Height="44" CornerRadius="14" Style="{StaticResource TrayHost}"
@@ -231,13 +231,13 @@
                     <Canvas Width="16" Height="9" Margin="0,0,10,0" VerticalAlignment="Center"
                             Style="{StaticResource BatteryBox}">
                         <Rectangle Canvas.Left="0.5" Canvas.Top="0.5" Width="13" Height="8" RadiusX="2" RadiusY="2"
-                                   Stroke="{StaticResource Brush.Text}" StrokeThickness="1" />
+                                   Stroke="{DynamicResource Dock.Text}" StrokeThickness="1" />
                         <Rectangle Canvas.Left="14.5" Canvas.Top="2.5" Width="1.5" Height="4" RadiusX="0.5" RadiusY="0.5"
-                                   Fill="{StaticResource Brush.Text}" />
+                                   Fill="{DynamicResource Dock.Text}" />
                         <Rectangle Canvas.Left="2" Canvas.Top="2" Height="5" RadiusX="1" RadiusY="1"
                                    Width="{Binding Tray.BatteryFillWidth}" Style="{StaticResource BatteryFill}" />
                         <Path Style="{StaticResource BatteryBolt}" Data="M8,1 L4.5,5 H7 L6,8 L9.5,4 H7 Z"
-                              Fill="{StaticResource Brush.Ink}" Stroke="{StaticResource Brush.Text}" StrokeThickness="0.6" StrokeLineJoin="Round" />
+                              Fill="{DynamicResource Dock.Ink}" Stroke="{DynamicResource Dock.Text}" StrokeThickness="0.6" StrokeLineJoin="Round" />
                     </Canvas>
 
                     <!-- Time 12 px Geist Mono Medium, day 10 px dim underneath, right aligned (mockup .tm, line-height 1.15). -->
@@ -245,7 +245,7 @@
                         <TextBlock Text="{Binding Tray.Time}" FontFamily="{StaticResource Font.Mono}" FontWeight="Medium" FontSize="12"
                                    LineStackingStrategy="BlockLineHeight" LineHeight="14" TextAlignment="Right" />
                         <TextBlock Text="{Binding Tray.Day}" FontFamily="{StaticResource Font.Mono}" FontSize="11"
-                                   Foreground="{StaticResource Brush.Dim}" LineStackingStrategy="BlockLineHeight"
+                                   Foreground="{DynamicResource Dock.Dim}" LineStackingStrategy="BlockLineHeight"
                                    LineHeight="12" TextAlignment="Right" />
                     </StackPanel>
                 </StackPanel>

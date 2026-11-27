@@ -30,9 +30,15 @@ public partial class QuickPanelWindow : Window
         SizeChanged += (_, _) => PlaceBottomRight();
     }
 
+    /// <summary>True while the quick fade-out runs: the panel counts as closed.</summary>
+    public bool Hiding => _hiding;
+
+    private int _generation; // a re-open during the fade-out cancels its hide
+
     public void ShowAndFocus()
     {
         _hiding = false;
+        _generation++;
         Opacity = 0;
         PanelShift.Y = 8;
         Show();
@@ -40,15 +46,32 @@ public partial class QuickPanelWindow : Window
         ForegroundNative.Activate(new WindowInteropHelper(this).Handle);
         Activate();
         var ease = new KeySpline(0.2, 0.8, 0.2, 1);
-        var dur = KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(200));
+        var dur = KeyTime.FromTimeSpan(NotWin.Theme.Motion.In);
         BeginAnimation(OpacityProperty, new DoubleAnimationUsingKeyFrames { KeyFrames = { new SplineDoubleKeyFrame(1, dur, ease) } });
         PanelShift.BeginAnimation(TranslateTransform.YProperty,
             new DoubleAnimationUsingKeyFrames { KeyFrames = { new SplineDoubleKeyFrame(0, dur, ease) } });
     }
 
+    /// <summary>Closes with a quick fade and drop (110 ms; at once when Windows' animations are off).</summary>
     public void HideNow()
     {
         _hiding = true;
+        var generation = ++_generation;
+        if (!IsVisible || NotWin.Theme.Motion.Enabled == false || (NotWin.Theme.Motion.Enabled is null && !SystemParameters.ClientAreaAnimation))
+        {
+            FinishHide();
+            return;
+        }
+        var ease = new KeySpline(0.4, 0, 1, 1);
+        var dur = KeyTime.FromTimeSpan(NotWin.Theme.Motion.Out);
+        var fade = new DoubleAnimationUsingKeyFrames { KeyFrames = { new SplineDoubleKeyFrame(0, dur, ease) } };
+        fade.Completed += (_, _) => { if (generation == _generation && _hiding) FinishHide(); };
+        BeginAnimation(OpacityProperty, fade);
+        PanelShift.BeginAnimation(TranslateTransform.YProperty, new DoubleAnimationUsingKeyFrames { KeyFrames = { new SplineDoubleKeyFrame(6, dur, ease) } });
+    }
+
+    private void FinishHide()
+    {
         BeginAnimation(OpacityProperty, null);
         PanelShift.BeginAnimation(TranslateTransform.YProperty, null);
         Hide();

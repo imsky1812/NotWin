@@ -163,7 +163,9 @@ public sealed class WidgetLayoutTests
         Assert.True(WidgetRules.IsRepeatable(Photo));
         Assert.True(WidgetRules.IsRepeatable(Folder));
         Assert.False(WidgetRules.IsRepeatable(Clock));
-        Assert.Equal([Photo, Folder, Clock, Snake, WidgetKind.TicTacToe, WidgetKind.Timer, Calendar, WidgetKind.Agenda, WidgetKind.Notes, WidgetKind.Alarm, Weather, Media, Battery], WidgetRules.PickerOrder);
+        Assert.Equal([Photo, Folder, WidgetKind.Toggle, Clock, WidgetKind.AnalogClock, WidgetKind.StackedClock, WidgetKind.WorldClock, Snake,
+            WidgetKind.TicTacToe, WidgetKind.Timer, WidgetKind.Stopwatch, Calendar, WidgetKind.Agenda, WidgetKind.Notes, WidgetKind.Alarm, Weather,
+            Media, Battery, WidgetKind.ScreenTime, WidgetKind.SystemMeters, WidgetKind.SunCompass], WidgetRules.PickerOrder);
     }
 
     [Fact]
@@ -198,9 +200,11 @@ public sealed class WidgetLayoutTests
     public void Addable_HidesPresentOneOffs_AlwaysOffersPhotoAndFolder()
     {
         var l = DesktopLayout.Sanitize(null, 1600, 900, Ids());
-        Assert.Equal([Photo, Folder, WidgetKind.TicTacToe, WidgetKind.Agenda, WidgetKind.Notes, WidgetKind.Alarm], l.Addable());
+        Assert.Equal([Photo, Folder, WidgetKind.Toggle, WidgetKind.AnalogClock, WidgetKind.StackedClock, WidgetKind.WorldClock, WidgetKind.TicTacToe,
+            WidgetKind.Stopwatch, WidgetKind.Agenda, WidgetKind.Notes, WidgetKind.Alarm, WidgetKind.ScreenTime, WidgetKind.SystemMeters, WidgetKind.SunCompass], l.Addable());
         var snake = l.Widgets.Single(p => p.Kind == Snake).Id;
-        Assert.Equal([Photo, Folder, Snake, WidgetKind.TicTacToe, WidgetKind.Agenda, WidgetKind.Notes, WidgetKind.Alarm], l.Remove(snake).Addable());
+        Assert.Equal([Photo, Folder, WidgetKind.Toggle, WidgetKind.AnalogClock, WidgetKind.StackedClock, WidgetKind.WorldClock, Snake, WidgetKind.TicTacToe,
+            WidgetKind.Stopwatch, WidgetKind.Agenda, WidgetKind.Notes, WidgetKind.Alarm, WidgetKind.ScreenTime, WidgetKind.SystemMeters, WidgetKind.SunCompass], l.Remove(snake).Addable());
     }
 
     [Fact]

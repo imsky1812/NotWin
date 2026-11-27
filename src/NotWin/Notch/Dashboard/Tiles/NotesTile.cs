@@ -16,7 +16,7 @@ namespace NotWin.Notch.Dashboard.Tiles;
 /// </summary>
 public sealed class NotesTile : ITileView
 {
-    private static readonly Brush PlaceholderBrush = TileChrome.Frozen(0x66, 0x66, 0x66);
+    private static Brush PlaceholderBrush => DashChrome.Dim;
     private readonly SharedNotes _notes;
     private readonly Func<IDashboardHost> _host;
     private readonly DispatcherTimer _save;
@@ -41,37 +41,37 @@ public sealed class NotesTile : ITileView
         if (size == TileSize.One)
         {
             var stack = new StackPanel { HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
-            var icon = TileChrome.Icon("notes", 20);
+            var icon = DashChrome.Icon("notes", 20);
             icon.Margin = new Thickness(0, 0, 0, 6);
             stack.Children.Add(icon);
-            var label = TileChrome.Label("Notes");
+            var label = DashChrome.Label("Notes");
             label.HorizontalAlignment = HorizontalAlignment.Center;
             stack.Children.Add(label);
-            var tile = TileChrome.Tile(stack, center: true);
+            var tile = DashChrome.Tile(stack, center: true);
             tile.Cursor = Cursors.Hand;
             tile.MouseLeftButtonUp += (_, e) => { e.Handled = true; OpenEditor(); };
             return tile;
         }
         var panel = new DockPanel();
-        var header = TileChrome.Header("notes", "Notes");
+        var header = DashChrome.Header("notes", "Notes");
         DockPanel.SetDock(header, System.Windows.Controls.Dock.Top);
         panel.Children.Add(header);
         panel.Children.Add(Editor(multiLine: size == TileSize.Big));
-        return TileChrome.Tile(panel);
+        return DashChrome.Tile(panel);
     }
 
     private void OpenEditor()
     {
         var root = new DockPanel();
         var back = new StackPanel { Orientation = Orientation.Horizontal, Background = Brushes.Transparent, Cursor = Cursors.Hand, Margin = new Thickness(4, 0, 4, 8) };
-        back.Children.Add(TileChrome.Body("‹  Notes", 13, FontWeights.SemiBold));
+        back.Children.Add(DashChrome.Body("‹  Notes", 13, FontWeights.SemiBold));
         back.MouseLeftButtonUp += (_, e) => { e.Handled = true; _host().CloseOverlay(); };
         DockPanel.SetDock(back, System.Windows.Controls.Dock.Top);
         root.Children.Add(back);
         var editor = Editor(multiLine: true);
         root.Children.Add(new Border
         {
-            Background = TileChrome.TileBrush, CornerRadius = new CornerRadius(22), Padding = new Thickness(14, 6, 14, 10), Child = editor,
+            Background = DashChrome.TileBrush, CornerRadius = new CornerRadius(22), Padding = new Thickness(14, 6, 14, 10), Child = editor,
         });
         _host().ShowOverlay(root);
     }
@@ -84,10 +84,10 @@ public sealed class NotesTile : ITileView
             Text = _text,
             Background = Brushes.Transparent,
             BorderThickness = new Thickness(0),
-            Foreground = TileChrome.Text,
-            CaretBrush = TileChrome.Text,
-            SelectionBrush = TileChrome.Frozen(0x55, 0x55, 0x55),
-            FontFamily = TileChrome.Font,
+            Foreground = DashChrome.Text,
+            CaretBrush = DashChrome.Text,
+            SelectionBrush = DashChrome.Frozen(0x55, 0x55, 0x55),
+            FontFamily = DashChrome.Font,
             FontSize = 13,
             Padding = new Thickness(0),
             Margin = new Thickness(0, 8, 0, 0),
@@ -101,7 +101,7 @@ public sealed class NotesTile : ITileView
         };
         var placeholder = new TextBlock
         {
-            Text = "Write something", FontFamily = TileChrome.Font, FontSize = 13, Foreground = PlaceholderBrush,
+            Text = "Write something", FontFamily = DashChrome.Font, FontSize = 13, Foreground = PlaceholderBrush,
             Margin = new Thickness(2, 8, 0, 0), IsHitTestVisible = false,
             Visibility = _text.Length == 0 ? Visibility.Visible : Visibility.Collapsed,
         };

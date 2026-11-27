@@ -30,6 +30,39 @@
     <SolidColorBrush x:Key="Brush.Placeholder" Color="#FF666666" po:Freeze="True" />
     <SolidColorBrush x:Key="Brush.SoftText" Color="#FFCCCCCC" po:Freeze="True" />
     <SolidColorBrush x:Key="Brush.Icon" Color="#FFAAAAAA" po:Freeze="True" />
+    <!-- The dock's colours (Plan 13 follow-up): dark defaults here; Theme/ShellTheme.cs swaps them for Windows' light mode. -->
+    <SolidColorBrush x:Key="Dock.Bg" Color="#E6000000" po:Freeze="True" />
+    <SolidColorBrush x:Key="Dock.Line" Color="#1AFFFFFF" po:Freeze="True" />
+    <SolidColorBrush x:Key="Dock.Text" Color="#FFE8E8E8" po:Freeze="True" />
+    <SolidColorBrush x:Key="Dock.Dim" Color="#FF999999" po:Freeze="True" />
+    <SolidColorBrush x:Key="Dock.Hover" Color="#14FFFFFF" po:Freeze="True" />
+    <SolidColorBrush x:Key="Dock.Active" Color="#1FFFFFFF" po:Freeze="True" />
+    <SolidColorBrush x:Key="Dock.RunDot" Color="#FFBBBBBB" po:Freeze="True" />
+    <SolidColorBrush x:Key="Dock.Ink" Color="#FF101010" po:Freeze="True" />
+    <!-- Notch, quick settings, window previews (Plan 13 follow-up): dark defaults; ShellTheme swaps them for light mode. -->
+    <SolidColorBrush x:Key="Shell.Glass" Color="#FF141414" po:Freeze="True" />
+    <SolidColorBrush x:Key="Shell.Pill" Color="#FF000000" po:Freeze="True" />
+    <SolidColorBrush x:Key="Shell.PillEdge" Color="#14FFFFFF" po:Freeze="True" />
+    <SolidColorBrush x:Key="Shell.Text" Color="#FFE8E8E8" po:Freeze="True" />
+    <SolidColorBrush x:Key="Shell.Dim" Color="#FF999999" po:Freeze="True" />
+    <SolidColorBrush x:Key="Shell.Soft" Color="#FFCCCCCC" po:Freeze="True" />
+    <SolidColorBrush x:Key="Shell.Faint" Color="#FF777777" po:Freeze="True" />
+    <SolidColorBrush x:Key="Shell.Line" Color="#1AFFFFFF" po:Freeze="True" />
+    <SolidColorBrush x:Key="Shell.Tile" Color="#FF262626" po:Freeze="True" />
+    <SolidColorBrush x:Key="Shell.Card" Color="#0FFFFFFF" po:Freeze="True" />
+    <SolidColorBrush x:Key="Shell.Hover" Color="#0FFFFFFF" po:Freeze="True" />
+    <SolidColorBrush x:Key="Shell.OnBg" Color="#FFE8E8E8" po:Freeze="True" />
+    <SolidColorBrush x:Key="Shell.OnText" Color="#FF111111" po:Freeze="True" />
+    <SolidColorBrush x:Key="Shell.OnDim" Color="#FF555555" po:Freeze="True" />
+    <SolidColorBrush x:Key="Shell.Fill" Color="#FFE8E8E8" po:Freeze="True" />
+    <SolidColorBrush x:Key="Shell.Ink" Color="#FF000000" po:Freeze="True" />
+    <SolidColorBrush x:Key="Shell.Field" Color="#0FFFFFFF" po:Freeze="True" />
+    <SolidColorBrush x:Key="Shell.Circle" Color="#FF262626" po:Freeze="True" />
+    <SolidColorBrush x:Key="Shell.Icon" Color="#FFAAAAAA" po:Freeze="True" />
+    <SolidColorBrush x:Key="Shell.Placeholder" Color="#FF666666" po:Freeze="True" />
+    <SolidColorBrush x:Key="Shell.RowSel" Color="#17FFFFFF" po:Freeze="True" />
+    <SolidColorBrush x:Key="Shell.Scrim" Color="#73000000" po:Freeze="True" />
+    <SolidColorBrush x:Key="Shell.BestCard" Color="#12FFFFFF" po:Freeze="True" />
 
     <!-- Corner radii (DIP). -->
     <CornerRadius x:Key="Radius.Dock">30</CornerRadius>

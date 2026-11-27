@@ -28,6 +28,20 @@ public partial class App : Application
     private Timing.TimerService? _timer;
     private Clips.ClipboardService? _clips;
     private readonly Power.KeepAwakeService _awake = new();
+    private Widgets.ScreenTimeTracker? _screenTime;
+    private Widgets.PhotoTint? _tint;
+
+    // Light / dark switches NotWin's soft blurred Lucent wallpapers too, with a cross-fade (Plan 13 follow-up); used by
+    // the Dark mode tile and Settings › Theme.
+    private static Widgets.DarkModeWallpaperHost DarkWallpaper
+    {
+        get
+        {
+            var walls = Path.Combine(AppContext.BaseDirectory, "Wallpapers");
+            return new Widgets.DarkModeWallpaperHost(path => Native.WallpaperNative.ApplyFaded(path),
+                Path.Combine(walls, "nothing_lucent_dark.png"), Path.Combine(walls, "nothing_lucent_light.png"), File.Exists);
+        }
+    }
     private Forecast.WeatherService? _weather;
     private GoogleCalendar.GoogleCalendarService? _calendar;
     private Notch.Dashboard.SharedNotes? _notes; // the notch tile and the desktop widget share one note (Plan 9)
@@ -240,6 +254,27 @@ public partial class App : Application
 
         // Desktop widgets (spec §6.5): on the desktop layer, sharing the timer / media / weather services. Guarded: a
         // failure here must never take the dock, launcher or notch down.
+        // Screen time counts from launch, whether or not its widget is on the desktop (Plan 13).
+        try
+        {
+            _screenTime = new Widgets.ScreenTimeTracker(DataDir, () => DateTime.Now, Native.SystemNative.IdleTime);
+            _screenTime.Start();
+        }
+        catch (Exception e) { Log.Error("screen time failed to start", e); }
+        // Widget cards follow Windows' light / dark app theme (Plan 13 follow-up).
+        try
+        {
+            // The dock follows too (user 2026-11-26: "everything should softly blend").
+            Widgets.WidgetTheme.Changed += () => Theme.ShellTheme.Apply(Resources, Widgets.WidgetTheme.Light);
+            Widgets.WidgetTheme.FollowWindows();
+            Theme.ShellTheme.Apply(Resources, Widgets.WidgetTheme.Light);
+            // The Lucent wallpaper takes its colours from the photo frame and re-tints when the theme flips (only while a
+            // NotWin Lucent wallpaper is showing; a wallpaper the user picked is never replaced).
+            _tint = new Widgets.PhotoTint(Path.Combine(DataDir, "lucent"), Native.WallpaperNative.CurrentSource,
+                path => Task.Run(() => Native.WallpaperNative.ApplyFaded(path)), () => Widgets.WidgetTheme.Light); // cross-fade
+            Widgets.WidgetTheme.Changed += _tint.Schedule;
+        }
+        catch (Exception e) { Log.Error("widget theme failed to start", e); }
         try { StartWidgets(); }
         catch (Exception e) { Log.Error("desktop widgets failed to start", e); }
 
@@ -314,6 +349,20 @@ public partial class App : Application
         switch (p.Kind)
         {
             case Core.Widgets.WidgetKind.Clock: return new Widgets.ClockWidget();
+            case Core.Widgets.WidgetKind.Toggle:
+            {
+                return new Widgets.ToggleWidget(id => Widgets.ToggleBackends.For(id, _awake, DarkWallpaper), uri => Native.ShellLinkNative.Open(uri));
+            }
+            case Core.Widgets.WidgetKind.AnalogClock: return new Widgets.AnalogClockWidget(() => DateTime.Now);
+            case Core.Widgets.WidgetKind.WorldClock: return new Widgets.WorldClockWidget(() => DateTime.UtcNow);
+            case Core.Widgets.WidgetKind.StackedClock: return new Widgets.StackedClockWidget(() => DateTime.Now);
+            case Core.Widgets.WidgetKind.Stopwatch:
+                return new Widgets.StopwatchWidget(() => TimeSpan.FromTicks(System.Diagnostics.Stopwatch.GetTimestamp() * TimeSpan.TicksPerSecond / System.Diagnostics.Stopwatch.Frequency));
+            case Core.Widgets.WidgetKind.SystemMeters: return new Widgets.SystemMetersWidget(() => new Widgets.MeterSampler(Widgets.MeterSampler.ReadSystem));
+            case Core.Widgets.WidgetKind.ScreenTime: return _screenTime is null ? null : new Widgets.ScreenTimeWidget(_screenTime);
+            case Core.Widgets.WidgetKind.SunCompass:
+                if (_weather is not { } weather) return null;
+                return new Widgets.SunCompassWidget(() => weather.Place, h => weather.Changed += h, h => weather.Changed -= h, () => DateTime.UtcNow);
             case Core.Widgets.WidgetKind.Timer: return _timer is null ? null : new Widgets.TimerWidget(_timer);
             case Core.Widgets.WidgetKind.Calendar: return new Widgets.CalendarWidget(_calendar, () => _widgets?.Editing == true);
             case Core.Widgets.WidgetKind.Agenda: return new Widgets.AgendaWidget(_calendar);
@@ -330,7 +379,11 @@ public partial class App : Application
                 // The Bluetooth watcher runs only while a battery widget is on the desktop (the widget owns it).
                 return _tray is null ? null : new Widgets.BatteryWidget(new Widgets.DeviceBatteryService(_tray), ownsSource: true);
             case Core.Widgets.WidgetKind.Photo:
-                return new Widgets.PhotoFrameWidget(p.Id, p.Config, new Widgets.PhotoStore(Path.Combine(DataDir, "frames")), save);
+            {
+                var frame = new Widgets.PhotoFrameWidget(p.Id, p.Config, new Widgets.PhotoStore(Path.Combine(DataDir, "frames")), save);
+                if (_tint is { } tint) frame.PhotoShown += tint.OnPhoto; // the Lucent wallpaper takes the photo's colours
+                return frame;
+            }
             case Core.Widgets.WidgetKind.Folder:
                 if (_index is not { } index) return null;
                 _folderIcons ??= new Dock.AppIconCache();
@@ -518,9 +571,14 @@ public partial class App : Application
             () => Shutdown(),
             new Settings.SettingsWindow.WidgetOptions(
                 scale => { if (_widgets is null) dock.UpdateSettings(s => s with { WidgetScale = scale }); else _widgets.SetScale(scale); },
-                Path.Combine(AppContext.BaseDirectory, "Wallpapers"),
                 () => _widgets?.BeginEdit(),
-                Path.Combine(DataDir, "wallpapers")),
+                () => !Widgets.WidgetTheme.Light,
+                async dark =>
+                {
+                    // Settings › Theme: the same path as the Dark mode tile (Windows' theme + the Lucent wallpaper).
+                    using var theme = new Widgets.DarkModeToggle(DarkWallpaper);
+                    await theme.SetAsync(dark);
+                }),
             new Settings.SettingsWindow.DockEffects(
                 on => { dock.UpdateSettings(s => s with { WindowPreviews = on }); dock.PreviewsEnabled = on; }),
             _calendar,
@@ -655,6 +713,8 @@ public partial class App : Application
             _syncWatch?.Dispose();
             try { _alarmSound?.Stop(); } catch { /* exiting */ }
             _widgets?.Dispose();
+            _screenTime?.Dispose(); // saves today's minutes
+            _tint?.Dispose();
             _controller?.Dispose();
             _tray?.Dispose();
             _mouse?.Dispose();

@@ -15,21 +15,21 @@
         TextOptions.TextFormattingMode="Display"
         FontFamily="{StaticResource Font.Grotesk}"
         FontSize="13"
-        Foreground="{StaticResource Brush.Text}">
+        Foreground="{DynamicResource Shell.Text}">
     <Window.Resources>
         <Style TargetType="ScrollBar" BasedOn="{StaticResource ScrollBar.Thin}" />
         <Style x:Key="Label" TargetType="TextBlock">
             <Setter Property="FontFamily" Value="{StaticResource Font.Mono}" />
             <Setter Property="FontWeight" Value="Medium" />
             <Setter Property="FontSize" Value="10" />
-            <Setter Property="Foreground" Value="{StaticResource Brush.Dim}" />
+            <Setter Property="Foreground" Value="{DynamicResource Shell.Dim}" />
             <Setter Property="VerticalAlignment" Value="Center" />
         </Style>
     </Window.Resources>
 
     <!-- Mockup .qsp: 400 wide, padding 18, radius 28, glass (solid per user feedback), max height 600. -->
-    <Border x:Name="Panel" CornerRadius="{StaticResource Radius.Panel}" Background="{StaticResource Brush.GlassDense}"
-            BorderBrush="{StaticResource Brush.Line}" BorderThickness="1" Padding="18">
+    <Border x:Name="Panel" CornerRadius="{StaticResource Radius.Panel}" Background="{DynamicResource Shell.Glass}"
+            BorderBrush="{DynamicResource Shell.Line}" BorderThickness="1" Padding="18">
         <Border.RenderTransform>
             <TranslateTransform x:Name="PanelShift" />
         </Border.RenderTransform>

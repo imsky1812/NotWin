@@ -6,6 +6,7 @@ using NotWin.Widgets;
 
 namespace NotWin.Tests;
 
+[Collection("WidgetTheme")]
 public sealed class PhotoFrameShapeTests
 {
     private static void OnSta(Action body)
@@ -31,7 +32,7 @@ public sealed class PhotoFrameShapeTests
         Assert.True(((IDesktopWidget)frame).Bare); // no square WidgetCard around it
         var card = Assert.IsType<Border>(built);
         Assert.Equal(WidgetSize.Px(2) / 2.0, card.CornerRadius.TopLeft);
-        Assert.Same(WidgetCard.CardBrush, card.Background);
+        Assert.Same(WidgetTheme.Card, card.Background); // the ring follows light / dark (user 2026-11-26)
     });
 
     [Fact]
@@ -76,5 +77,30 @@ public sealed class PhotoFrameShapeTests
             Walk(built);
             Assert.Contains("CONNECT GOOGLE CALENDAR IN SETTINGS", texts);
         }
+    });
+
+    // Plan 13 follow-up: the frame says which photo it shows, so the Lucent wallpaper can take its colours.
+    [Fact]
+    public void Showing_A_Photo_RaisesPhotoShown() => OnSta(() =>
+    {
+        var root = Path.Combine(Path.GetTempPath(), "ns-frames-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            Directory.CreateDirectory(Path.Combine(root, "t1"));
+            var px = new byte[4 * 4 * 4];
+            var bmp = System.Windows.Media.Imaging.BitmapSource.Create(4, 4, 96, 96, System.Windows.Media.PixelFormats.Bgra32, null, px, 16);
+            var enc = new System.Windows.Media.Imaging.PngBitmapEncoder();
+            enc.Frames.Add(System.Windows.Media.Imaging.BitmapFrame.Create(bmp));
+            using (var f = File.Create(Path.Combine(root, "t1", "a.png"))) enc.Save(f);
+            var config = new WidgetConfig(Photos: ["a.png"]);
+            var frame = new PhotoFrameWidget("t1", config, new PhotoStore(root), _ => { });
+            var shown = new List<string>();
+            frame.PhotoShown += shown.Add;
+            frame.Configure(config);
+            frame.Build(new WidgetSize(2, 2));
+            Assert.Equal([Path.Combine(root, "t1", "a.png")], shown);
+            frame.Dispose();
+        }
+        finally { Directory.Delete(root, true); }
     });
 }

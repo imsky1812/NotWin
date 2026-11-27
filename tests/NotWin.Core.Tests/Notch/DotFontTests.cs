@@ -17,7 +17,7 @@ public sealed class DotFontTests
 
     [Fact]
     public void DotFont_HasMinus() =>
-        Assert.Equal(["00000", "00000", "00000", "11111", "00000", "00000", "00000"], DotFont.GlyphRows('-')!);
+        Assert.Equal(["000", "000", "000", "111", "000", "000", "000"], DotFont.GlyphRows('-')!); // slim: "-12°" fits a 2×1 tile
 
     [Fact]
     public void DotFont_HasWeatherGlyphs()

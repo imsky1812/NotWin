@@ -20,6 +20,7 @@ public sealed class AddPicker : Window
 
     private AddPicker(IReadOnlyList<WidgetKind> kinds, Action<WidgetKind> pick)
     {
+        NotWin.Theme.Motion.Smooth(this); // quick pop in, quicker fade out (Plan 13 follow-up)
         WindowStyle = WindowStyle.None;
         AllowsTransparency = true;
         Background = Brushes.Transparent;
@@ -96,6 +97,12 @@ public sealed class AddPicker : Window
         WidgetKind.TicTacToe => "Tic-tac-toe",
         WidgetKind.Notes => "Notes",
         WidgetKind.Alarm => "Alarm",
+        WidgetKind.AnalogClock => "Analogue clock",
+        WidgetKind.WorldClock => "World clock",
+        WidgetKind.StackedClock => "Stacked clock",
+        WidgetKind.ScreenTime => "Screen time",
+        WidgetKind.SystemMeters => "System meters",
+        WidgetKind.SunCompass => "Sun compass",
         _ => kind.ToString(),
     };
 
@@ -108,7 +115,10 @@ public sealed class AddPicker : Window
         WidgetKind.Media => "note",
         WidgetKind.Notes => "book",
         WidgetKind.Weather => "plant",
-        WidgetKind.Clock or WidgetKind.Timer or WidgetKind.Alarm => "cup",
+        WidgetKind.Clock or WidgetKind.Timer or WidgetKind.Alarm or WidgetKind.AnalogClock or WidgetKind.WorldClock or WidgetKind.StackedClock
+            or WidgetKind.Stopwatch or WidgetKind.ScreenTime => "cup",
+        WidgetKind.Toggle or WidgetKind.SystemMeters => "bolt",
+        WidgetKind.SunCompass => "sun",
         _ => "star",
     };
 }

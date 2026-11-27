@@ -78,7 +78,7 @@ public sealed class AgendaWidget : IDesktopWidget
         if (_size.H == 1) return Big(events[0], now);
 
         var panel = new DockPanel();
-        var head = TileChrome.Label("UP NEXT");
+        var head = WidgetTheme.Label("UP NEXT");
         head.Margin = new Thickness(0, 0, 0, 8);
         DockPanel.SetDock(head, System.Windows.Controls.Dock.Top);
         panel.Children.Add(head);
@@ -102,15 +102,15 @@ public sealed class AgendaWidget : IDesktopWidget
     {
         var (when, soon) = CalendarFeed.Countdown(e, now, TimeZoneInfo.Local);
         var stack = new StackPanel { Margin = new Thickness(0, 0, 0, 9) };
-        var label = TileChrome.Label(when, soon ? TileChrome.Red : null);
+        var label = WidgetTheme.Label(when, soon ? TileChrome.Red : null);
         stack.Children.Add(label);
-        var title = TileChrome.Body(e.Title, 13, FontWeights.SemiBold);
+        var title = WidgetTheme.Body(e.Title, 13, FontWeights.SemiBold);
         title.TextTrimming = TextTrimming.CharacterEllipsis;
         title.Margin = new Thickness(0, 2, 0, 0);
         stack.Children.Add(title);
         if (e.Location is { } place)
         {
-            var where = TileChrome.Body(place, 11, FontWeights.Normal, TileChrome.Dim);
+            var where = WidgetTheme.Body(place, 11, FontWeights.Normal, WidgetTheme.Dim);
             where.TextTrimming = TextTrimming.CharacterEllipsis;
             stack.Children.Add(where);
         }
@@ -122,8 +122,8 @@ public sealed class AgendaWidget : IDesktopWidget
     {
         var (when, soon) = CalendarFeed.Countdown(e, now, TimeZoneInfo.Local);
         var stack = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
-        stack.Children.Add(TileChrome.Label("UP NEXT · " + when, soon ? TileChrome.Red : null));
-        var title = TileChrome.Body(e.Title, 18, FontWeights.SemiBold);
+        stack.Children.Add(WidgetTheme.Label("UP NEXT · " + when, soon ? TileChrome.Red : null));
+        var title = WidgetTheme.Body(e.Title, 18, FontWeights.SemiBold);
         title.TextWrapping = TextWrapping.Wrap;
         title.TextTrimming = TextTrimming.CharacterEllipsis;
         title.MaxHeight = 50;
@@ -131,7 +131,7 @@ public sealed class AgendaWidget : IDesktopWidget
         stack.Children.Add(title);
         if (e.Location is { } place)
         {
-            var where = TileChrome.Body(place, 12, FontWeights.Normal, TileChrome.Dim);
+            var where = WidgetTheme.Body(place, 12, FontWeights.Normal, WidgetTheme.Dim);
             where.TextTrimming = TextTrimming.CharacterEllipsis;
             where.Margin = new Thickness(0, 4, 0, 0);
             stack.Children.Add(where);
@@ -142,10 +142,10 @@ public sealed class AgendaWidget : IDesktopWidget
     private static FrameworkElement Message(string head, string text)
     {
         var stack = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
-        stack.Children.Add(TileChrome.Label(head));
+        stack.Children.Add(WidgetTheme.Label(head));
         if (text.Length > 0)
         {
-            var body = TileChrome.Body(text, 12, FontWeights.SemiBold);
+            var body = WidgetTheme.Body(text, 12, FontWeights.SemiBold);
             body.TextWrapping = TextWrapping.Wrap;
             body.Margin = new Thickness(0, 6, 0, 0);
             stack.Children.Add(body);

@@ -16,7 +16,7 @@ namespace NotWin.Notch.Dashboard.Tiles;
 /// </summary>
 public sealed class MediaTile : ITileView
 {
-    private static readonly Brush Placeholder = MakePlaceholder();
+    private static Brush Placeholder => DashChrome.Chip; // flat, no gradient (Nothing design pass); follows the theme
     private readonly MediaSessionService _media;
     private readonly Func<string?, string> _appName;
     private readonly DispatcherTimer _progress;
@@ -38,7 +38,7 @@ public sealed class MediaTile : ITileView
     public FrameworkElement Build(TileSize size)
     {
         _size = size;
-        _host = TileChrome.Tile(new Grid());
+        _host = DashChrome.Tile(new Grid());
         if (size == TileSize.One) _host.Padding = new Thickness(0);
         Fill();
         return _host;
@@ -98,11 +98,11 @@ public sealed class MediaTile : ITileView
         DockPanel.SetDock(play, System.Windows.Controls.Dock.Right);
         row.Children.Add(play);
         var text = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
-        var title = TileChrome.Body(has ? m.Title ?? "" : "Nothing playing", 12, FontWeights.SemiBold, has ? null : TileChrome.Dim);
+        var title = DashChrome.Body(has ? m.Title ?? "" : "Nothing playing", 12, FontWeights.SemiBold, has ? null : DashChrome.Dim);
         title.TextWrapping = TextWrapping.Wrap;
         title.MaxHeight = 32;
         text.Children.Add(title);
-        if (has && !string.IsNullOrEmpty(m.Artist)) text.Children.Add(TileChrome.Label(m.Artist));
+        if (has && !string.IsNullOrEmpty(m.Artist)) text.Children.Add(DashChrome.Label(m.Artist));
         row.Children.Add(text);
         return row;
     }
@@ -116,11 +116,11 @@ public sealed class MediaTile : ITileView
         DockPanel.SetDock(art, System.Windows.Controls.Dock.Left);
         top.Children.Add(art);
         var meta = new StackPanel { VerticalAlignment = VerticalAlignment.Top };
-        meta.Children.Add(TileChrome.Label(has ? _appName(m.SourceAppId) : "Media"));
+        meta.Children.Add(DashChrome.Label(has ? _appName(m.SourceAppId) : "Media"));
         var now = MediaProgress.Position(m.Position, m.Duration, m.PositionAt, m.Playing, DateTimeOffset.Now);
         if (has && m.Duration > TimeSpan.Zero)
         {
-            var clock = TileChrome.Label($"{MediaProgress.Clock(now)} / {MediaProgress.Clock(m.Duration)}");
+            var clock = DashChrome.Label($"{MediaProgress.Clock(now)} / {MediaProgress.Clock(m.Duration)}");
             clock.Margin = new Thickness(0, 4, 0, 0);
             meta.Children.Add(clock);
         }
@@ -128,13 +128,13 @@ public sealed class MediaTile : ITileView
         DockPanel.SetDock(top, System.Windows.Controls.Dock.Top);
         panel.Children.Add(top);
 
-        var title = TileChrome.Body(has ? m.Title ?? "" : "Nothing playing", 14, FontWeights.SemiBold, has ? null : TileChrome.Dim);
+        var title = DashChrome.Body(has ? m.Title ?? "" : "Nothing playing", 14, FontWeights.SemiBold, has ? null : DashChrome.Dim);
         title.Margin = new Thickness(0, 8, 0, 0);
         DockPanel.SetDock(title, System.Windows.Controls.Dock.Top);
         panel.Children.Add(title);
         if (has && !string.IsNullOrEmpty(m.Artist))
         {
-            var artist = TileChrome.Body(m.Artist, 11, FontWeights.Normal, TileChrome.Dim);
+            var artist = DashChrome.Body(m.Artist, 11, FontWeights.Normal, DashChrome.Dim);
             DockPanel.SetDock(artist, System.Windows.Controls.Dock.Top);
             panel.Children.Add(artist);
         }
@@ -154,9 +154,9 @@ public sealed class MediaTile : ITileView
 
         var bar = new DotBar
         {
-            Count = 20, Dot = 4, Gap = 3, On = TileChrome.Text, Off = TileChrome.Frozen(0x33, 0x33, 0x33), Accent = TileChrome.Red,
+            Count = 20, Dot = 4, Gap = 3, On = DashChrome.Text, Off = DashChrome.Chip, Accent = DashChrome.Red,
             Lit = has ? MediaProgress.Dots(now, m.Duration, 20) : 0, VerticalAlignment = VerticalAlignment.Bottom,
-            HorizontalAlignment = HorizontalAlignment.Left,
+            HorizontalAlignment = HorizontalAlignment.Stretch, Spread = true, // edge to edge (user 2026-11-27: polish)
         };
         // Draggable like the desktop widget's (Plan 10): jump anywhere in the song.
         var seekable = has ? SeekBar.Wrap(bar, 20, m.Duration, _media.SeekAsync, on => { _seeking = on; if (!on) Fill(); }) : bar;
@@ -167,7 +167,7 @@ public sealed class MediaTile : ITileView
 
     private Border Play(MediaSnapshot m, double size)
     {
-        var b = TileChrome.PlayButton(m.Playing, size);
+        var b = DashChrome.PlayButton(m.Playing, size);
         b.MouseLeftButtonUp += (_, e) => { e.Handled = true; _ = _media.PlayPauseAsync(); };
         return b;
     }
@@ -175,7 +175,7 @@ public sealed class MediaTile : ITileView
     private static FrameworkElement Button(string icon, Func<Task<bool>> act)
     {
         var holder = new Border { Background = Brushes.Transparent, Padding = new Thickness(4), Cursor = Cursors.Hand, VerticalAlignment = VerticalAlignment.Center };
-        holder.Child = TileChrome.Icon(icon, 16);
+        holder.Child = DashChrome.Icon(icon, 16);
         holder.MouseLeftButtonUp += (_, e) => { e.Handled = true; _ = act(); };
         return holder;
     }
@@ -189,12 +189,6 @@ public sealed class MediaTile : ITileView
     private static Brush ArtBrush(MediaSnapshot m) =>
         m.Art is null ? Placeholder : new ImageBrush(m.Art) { Stretch = Stretch.UniformToFill };
 
-    private static Brush MakePlaceholder()
-    {
-        var b = new SolidColorBrush(Color.FromRgb(0x22, 0x22, 0x22)); // flat, no gradient (Nothing design pass)
-        b.Freeze();
-        return b;
-    }
 
     public void Opened()
     {

@@ -16,8 +16,9 @@ namespace NotWin.Notch.Dashboard.Tiles;
 /// </summary>
 public sealed class ClipboardTile : ITileView
 {
-    private static readonly Brush First = TileChrome.Frozen(0x22, 0x22, 0x22), Hover = TileChrome.Frozen(0x26, 0x26, 0x26);
-    private static readonly Brush Muted = TileChrome.Frozen(0xCC, 0xCC, 0xCC);
+    private static Brush First => DashChrome.Chip;
+    private static Brush Hover => DashChrome.ChipHover;
+    private static Brush Muted => DashChrome.Muted;
     private readonly ClipboardService _clips;
     private readonly Func<IDashboardHost> _host;
     private TileSize _size;
@@ -37,7 +38,7 @@ public sealed class ClipboardTile : ITileView
     public FrameworkElement Build(TileSize size)
     {
         _size = size;
-        _tile = TileChrome.Tile(new Grid(), center: size == TileSize.One);
+        _tile = DashChrome.Tile(new Grid(), center: size == TileSize.One);
         Fill();
         return _tile;
     }
@@ -56,15 +57,15 @@ public sealed class ClipboardTile : ITileView
         if (_size == TileSize.One)
         {
             var stack = new StackPanel { HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
-            var icon = TileChrome.Icon("clip", 20);
+            var icon = DashChrome.Icon("clip", 20);
             icon.Margin = new Thickness(0, 0, 0, 4);
             stack.Children.Add(icon);
             stack.Children.Add(new DotMatrix
             {
                 Text = Math.Min(items.Count, 99).ToString(System.Globalization.CultureInfo.InvariantCulture),
-                Dot = 3, Gap = 1, Fill = TileChrome.Text, HorizontalAlignment = HorizontalAlignment.Center,
+                Dot = 3, Gap = 1, Fill = DashChrome.Text, HorizontalAlignment = HorizontalAlignment.Center,
             });
-            var label = TileChrome.Label("Clipboard");
+            var label = DashChrome.Label("Clipboard");
             label.Margin = new Thickness(0, 4, 0, 0);
             label.HorizontalAlignment = HorizontalAlignment.Center;
             stack.Children.Add(label);
@@ -72,14 +73,14 @@ public sealed class ClipboardTile : ITileView
             return;
         }
         var panel = new DockPanel();
-        var expand = new Border { Background = Brushes.Transparent, Cursor = Cursors.Hand, Child = TileChrome.Icon("expand", 16, TileChrome.Dim) };
+        var expand = new Border { Background = Brushes.Transparent, Cursor = Cursors.Hand, Child = DashChrome.Icon("expand", 16, DashChrome.Dim) };
         expand.MouseLeftButtonUp += (_, e) => { e.Handled = true; Expand(); };
-        var header = TileChrome.Header("clip", "Clipboard", expand);
+        var header = DashChrome.Header("clip", "Clipboard", expand);
         DockPanel.SetDock(header, System.Windows.Controls.Dock.Top);
         panel.Children.Add(header);
         var rows = new StackPanel { Margin = new Thickness(0, 8, 0, 0) };
         var show = items.Take(_size == TileSize.Wide ? 1 : 3).ToList();
-        if (show.Count == 0) rows.Children.Add(TileChrome.Label("Nothing copied yet"));
+        if (show.Count == 0) rows.Children.Add(DashChrome.Label("Nothing copied yet"));
         for (var i = 0; i < show.Count; i++) rows.Children.Add(Row(show[i], i == 0, null));
         panel.Children.Add(rows);
         _tile.Child = panel;
@@ -92,25 +93,32 @@ public sealed class ClipboardTile : ITileView
         FrameworkElement line;
         if (item.IsImage)
         {
+            // Thumbnail and pixel size; the thumbnail already says "image", so the size gets the room
+            // (user 2026-11-27: "IMAGE · 970 ×" was cut off).
             var thumb = _clips.Thumbnail(item.ImageId!);
-            var row1 = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
+            var row1 = new Grid { VerticalAlignment = VerticalAlignment.Center };
+            row1.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            row1.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star), MinWidth = 0 });
             row1.Children.Add(new Border
             {
-                Width = 30, Height = 18, CornerRadius = new CornerRadius(4), Margin = new Thickness(0, 0, 8, 0),
-                Background = thumb is null ? TileChrome.Frozen(0x33, 0x33, 0x33) : new ImageBrush(thumb) { Stretch = Stretch.UniformToFill },
+                Width = 28, Height = 20, CornerRadius = new CornerRadius(5), Margin = new Thickness(0, 0, 8, 0),
+                Background = thumb is null ? (first ? DashChrome.ChipHover : DashChrome.Chip) : new ImageBrush(thumb) { Stretch = Stretch.UniformToFill },
             });
-            row1.Children.Add(new TextBlock
+            var size = new TextBlock
             {
-                Text = $"IMAGE · {item.Width} × {item.Height}", FontFamily = TileChrome.Mono, FontSize = 11,
-                Foreground = first ? TileChrome.Text : Muted, VerticalAlignment = VerticalAlignment.Center,
-            });
+                Text = $"{item.Width} × {item.Height}", FontFamily = DashChrome.Mono, FontSize = 11,
+                Foreground = first ? DashChrome.Text : Muted, VerticalAlignment = VerticalAlignment.Center,
+                TextTrimming = TextTrimming.CharacterEllipsis,
+            };
+            Grid.SetColumn(size, 1);
+            row1.Children.Add(size);
             line = row1;
         }
         else
         {
             line = new TextBlock
             {
-                Text = OneLine(item.Text ?? ""), FontFamily = TileChrome.Mono, FontSize = 11, Foreground = first ? TileChrome.Text : Muted,
+                Text = OneLine(item.Text ?? ""), FontFamily = DashChrome.Mono, FontSize = 11, Foreground = first ? DashChrome.Text : Muted,
                 TextTrimming = TextTrimming.CharacterEllipsis, VerticalAlignment = VerticalAlignment.Center,
             };
         }
@@ -119,7 +127,7 @@ public sealed class ClipboardTile : ITileView
         {
             var x = new TextBlock
             {
-                Text = "✕", FontSize = 10, Foreground = TileChrome.Dim, Margin = new Thickness(8, 0, 0, 0),
+                Text = "✕", FontSize = 10, Foreground = DashChrome.Dim, Margin = new Thickness(8, 0, 0, 0),
                 VerticalAlignment = VerticalAlignment.Center, Cursor = Cursors.Hand, Background = Brushes.Transparent,
             };
             x.MouseLeftButtonUp += (_, e) => { e.Handled = true; remove(); };
@@ -151,9 +159,9 @@ public sealed class ClipboardTile : ITileView
     {
         var root = new DockPanel();
         var back = new StackPanel { Orientation = Orientation.Horizontal, Background = Brushes.Transparent, Cursor = Cursors.Hand };
-        back.Children.Add(TileChrome.Body("‹  Clipboard", 13, FontWeights.SemiBold));
+        back.Children.Add(DashChrome.Body("‹  Clipboard", 13, FontWeights.SemiBold));
         back.MouseLeftButtonUp += (_, e) => { e.Handled = true; _list = null; _host().CloseOverlay(); };
-        var clear = TileChrome.Label("Clear");
+        var clear = DashChrome.Label("Clear");
         clear.Cursor = Cursors.Hand;
         clear.Background = Brushes.Transparent;
         clear.MouseLeftButtonUp += (_, e) => { e.Handled = true; _clips.Clear(); };
@@ -176,7 +184,7 @@ public sealed class ClipboardTile : ITileView
         if (_list is null) return;
         _list.Children.Clear();
         var items = _clips.History.Items;
-        if (items.Count == 0) _list.Children.Add(TileChrome.Label("Nothing copied yet"));
+        if (items.Count == 0) _list.Children.Add(DashChrome.Label("Nothing copied yet"));
         for (var i = 0; i < items.Count; i++)
         {
             var index = i;

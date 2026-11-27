@@ -23,6 +23,9 @@ public sealed class SnakeGame
         Reset();
     }
 
+    /// <summary>The step time for a score: 120 ms, 3 ms quicker per point, never under 70 ms (Plan 13 follow-up).</summary>
+    public static TimeSpan TickFor(int score) => TimeSpan.FromMilliseconds(Math.Max(70, 120 - 3 * Math.Max(0, score)));
+
     public int Size { get; private set; }
     public IReadOnlyList<(int X, int Y)> Body => _body;
     public (int X, int Y) Food { get; private set; }

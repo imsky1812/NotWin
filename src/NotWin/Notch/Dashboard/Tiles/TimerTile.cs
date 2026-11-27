@@ -35,35 +35,35 @@ public sealed class TimerTile : ITileView
         switch (size)
         {
             case TileSize.One:
-                _grid = new GridTimerView(56, 8);
-                tile = TileChrome.Tile(_grid, center: true);
+                _grid = new GridTimerView(56, 8) { Lit = DashChrome.Text, Gone = DashChrome.Chip };
+                tile = DashChrome.Tile(_grid, center: true);
                 tile.Cursor = Cursors.Hand;
                 tile.MouseLeftButtonUp += (_, e) => { e.Handled = true; _timer.Toggle(); };
                 break;
             case TileSize.Wide:
             {
                 var panel = new DockPanel();
-                var header = TileChrome.Header("timer", "Timer");
+                var header = DashChrome.Header("timer", "Timer");
                 DockPanel.SetDock(header, System.Windows.Controls.Dock.Top);
                 panel.Children.Add(header);
                 var row = new DockPanel { VerticalAlignment = VerticalAlignment.Bottom };
                 _play = PlayHolder(30);
                 DockPanel.SetDock(_play, System.Windows.Controls.Dock.Right);
                 row.Children.Add(_play);
-                _dots = new DotMatrix { Dot = 3, Gap = 1.1, Fill = TileChrome.Text, VerticalAlignment = VerticalAlignment.Center };
+                _dots = new DotMatrix { Dot = 3, Gap = 1.1, Fill = DashChrome.Text, VerticalAlignment = VerticalAlignment.Center };
                 row.Children.Add(_dots);
                 panel.Children.Add(row);
-                tile = TileChrome.Tile(panel);
+                tile = DashChrome.Tile(panel);
                 break;
             }
             default:
             {
                 var panel = new DockPanel();
-                _label = TileChrome.Label("");
-                var header = TileChrome.Header("timer", "Timer", _label);
+                _label = DashChrome.Label("");
+                var header = DashChrome.Header("timer", "Timer", _label);
                 DockPanel.SetDock(header, System.Windows.Controls.Dock.Top);
                 panel.Children.Add(header);
-                var controls = new DockPanel { Margin = new Thickness(6, 0, 6, 0) };
+                var controls = new DockPanel { Margin = new Thickness(4, 6, 4, 0) };
                 DockPanel.SetDock(controls, System.Windows.Controls.Dock.Bottom);
                 var minus = Step("−", _timer.Minus);
                 DockPanel.SetDock(minus, System.Windows.Controls.Dock.Left);
@@ -75,9 +75,9 @@ public sealed class TimerTile : ITileView
                 controls.Children.Add(plus);
                 controls.Children.Add(_play);
                 panel.Children.Add(controls);
-                _grid = new GridTimerView(92, 10) { HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
+                _grid = new GridTimerView(92, 10) { Lit = DashChrome.Text, Gone = DashChrome.Chip, DotRatio = 0.5, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
                 panel.Children.Add(_grid);
-                tile = TileChrome.Tile(panel);
+                tile = DashChrome.Tile(panel);
                 break;
             }
         }
@@ -93,16 +93,24 @@ public sealed class TimerTile : ITileView
         return holder;
     }
 
-    private static TextBlock Step(string glyph, Action act)
+    // The minus and plus as round chips the size of the play button (user 2026-11-27: polish; they were bare glyphs).
+    private static Border Step(string glyph, Action act)
     {
-        var t = new TextBlock
+        var chip = new Border
         {
-            Text = glyph, FontFamily = TileChrome.Font, FontSize = 18, Foreground = TileChrome.Frozen(0xAA, 0xAA, 0xAA),
-            Width = 24, TextAlignment = TextAlignment.Center, VerticalAlignment = VerticalAlignment.Center,
-            Background = System.Windows.Media.Brushes.Transparent, Cursor = Cursors.Hand,
+            Width = 30, Height = 30, CornerRadius = new CornerRadius(15), Background = DashChrome.Chip, Cursor = Cursors.Hand,
+            VerticalAlignment = VerticalAlignment.Center,
+            Child = new TextBlock
+            {
+                Text = glyph, FontFamily = DashChrome.Font, FontSize = 16, Foreground = DashChrome.Text,
+                HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center,
+                Margin = new Thickness(0, -2, 0, 0),
+            },
         };
-        t.MouseLeftButtonUp += (_, e) => { e.Handled = true; act(); };
-        return t;
+        chip.MouseEnter += (_, _) => chip.Background = DashChrome.ChipHover;
+        chip.MouseLeave += (_, _) => chip.Background = DashChrome.Chip;
+        chip.MouseLeftButtonUp += (_, e) => { e.Handled = true; act(); };
+        return chip;
     }
 
     private void OnChanged()
@@ -116,7 +124,7 @@ public sealed class TimerTile : ITileView
         _grid?.Show(_timer.Fraction, running, _timer.FlashOn);
         if (_dots is not null) _dots.Text = _timer.Text;
         if (_label is not null) _label.Text = _timer.Text;
-        if (_play is not null) _play.Child = TileChrome.PlayButton(running, _playSize);
+        if (_play is not null) _play.Child = DashChrome.PlayButton(running, _playSize);
     }
 
     public void Opened()

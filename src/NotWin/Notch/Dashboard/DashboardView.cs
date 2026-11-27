@@ -47,11 +47,11 @@ public sealed class DashboardView : IDisposable
     public DashboardView(Func<TileKind, ITileView> factory)
     {
         _factory = factory;
-        _editIcon = TileChrome.Icon("pencil", 14, TileChrome.Dim);
+        _editIcon = DashChrome.Icon("pencil", 14, DashChrome.Dim);
         _editIcon.Margin = new Thickness(0, 0, 6, 0);
         _editLabel = new TextBlock
         {
-            Text = "EDIT", FontFamily = TileChrome.Mono, FontSize = 11, Foreground = TileChrome.Dim, VerticalAlignment = VerticalAlignment.Center,
+            Text = "EDIT", FontFamily = DashChrome.Mono, FontSize = 11, Foreground = DashChrome.Dim, VerticalAlignment = VerticalAlignment.Center,
         };
         _edit = new StackPanel
         {
@@ -169,9 +169,22 @@ public sealed class DashboardView : IDisposable
         _page = Math.Clamp(page, 0, layout.Pages.Count - 1);
         _editing = editing;
         EndDrag();
-        Render(_open && _page != oldPage ? Math.Sign(_page - oldPage) : 0);
+        // Nothing changed since the last build (same tiles and sizes, page, edit mode and theme): keep the built page.
+        // Tiles keep themselves current through their own events and Opened() (Plan 13 follow-up: "optimise the tiles").
+        var key = RenderKey();
+        if (key != _renderedKey || _grid is null)
+        {
+            _renderedKey = key;
+            Render(_open && _page != oldPage ? Math.Sign(_page - oldPage) : 0);
+        }
         if (_open) Switch(before, Visible().ToHashSet());
     }
+
+    private string? _renderedKey;
+
+    private string RenderKey() =>
+        string.Join("|", _layout.Pages.Select(p => string.Join(",", p.Select(t => $"{t.Kind}:{t.Size}"))))
+        + $"#{_page}#{_editing}#{NotWin.Theme.ShellTheme.Light}";
 
     /// <summary>The notch opened or closed: starts/stops the visible tiles.</summary>
     public void SetOpen(bool open)
@@ -180,6 +193,10 @@ public sealed class DashboardView : IDisposable
         _open = open;
         foreach (var k in Visible()) Safe(k, v => { if (open) v.Opened(); else v.Closed(); });
         if (!open) CloseOverlay();
+        // Opening: the tiles fade up in a quick stagger (18 ms apart, at most 8 steps), while the notch grows.
+        if (open && _grid is not null)
+            for (var i = 0; i < _grid.Children.Count; i++)
+                if (_grid.Children[i] is UIElement tile) NotWin.Theme.Motion.PopIn(tile, 0.94, 8, NotWin.Theme.Motion.Stagger(i));
     }
 
     /// <summary>Replaces the grid with <paramref name="content"/> (<paramref name="rows"/> cells tall) until <see cref="CloseOverlay"/>.</summary>
@@ -234,6 +251,7 @@ public sealed class DashboardView : IDisposable
             {
                 el = BuildSafe(tiles[i]);
                 if (_editing) el = Decorate(el, i, tiles[i]);
+                else NotWin.Theme.Motion.Hover(el); // lifts a little under the pointer, dips when pressed
                 _rects.Add((new Rect(placed[i].Col * (Cell + Gap), placed[i].Row * (Cell + Gap), w * Cell + (w - 1) * Gap, h * Cell + (h - 1) * Gap), i));
             }
             else el = AddTile();
@@ -254,7 +272,7 @@ public sealed class DashboardView : IDisposable
         RenderFooter();
     }
 
-    // The old page leaves towards one side while the new one arrives from the other (spec §5 motion: 280 ms ease).
+    // The old page leaves towards one side while the new one arrives from the other (220 ms ease; quicker in Plan 13).
     private void Slide(Canvas old, Canvas fresh, int direction)
     {
         var shift = GridWidth + Gap * 2;
@@ -265,14 +283,14 @@ public sealed class DashboardView : IDisposable
         old.IsHitTestVisible = false;
         DoubleAnimationUsingKeyFrames Move(double to) => new()
         {
-            KeyFrames = { new SplineDoubleKeyFrame(to, KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(280)), Ease) },
+            KeyFrames = { new SplineDoubleKeyFrame(to, KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(220)), Ease) },
         };
         var leave = Move(-direction * shift);
         leave.Completed += (_, _) => _viewport.Children.Remove(old);
         outT.BeginAnimation(TranslateTransform.XProperty, leave);
         inT.BeginAnimation(TranslateTransform.XProperty, Move(0));
-        old.BeginAnimation(UIElement.OpacityProperty, new DoubleAnimation(1, 0, TimeSpan.FromMilliseconds(220)));
-        fresh.BeginAnimation(UIElement.OpacityProperty, new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(220)) { BeginTime = TimeSpan.FromMilliseconds(40) });
+        old.BeginAnimation(UIElement.OpacityProperty, new DoubleAnimation(1, 0, TimeSpan.FromMilliseconds(160)));
+        fresh.BeginAnimation(UIElement.OpacityProperty, new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(160)) { BeginTime = TimeSpan.FromMilliseconds(30) });
     }
 
     // ---- edit-mode drag ----
@@ -321,7 +339,7 @@ public sealed class DashboardView : IDisposable
             };
             _hint = new Border
             {
-                BorderBrush = TileChrome.Text, BorderThickness = new Thickness(2), CornerRadius = new CornerRadius(22), Visibility = Visibility.Collapsed,
+                BorderBrush = DashChrome.Text, BorderThickness = new Thickness(2), CornerRadius = new CornerRadius(22), Visibility = Visibility.Collapsed,
             };
             _dragLayer.Children.Add(_hint);
             _dragLayer.Children.Add(_ghost);
@@ -410,21 +428,21 @@ public sealed class DashboardView : IDisposable
         // A press on the tile body starts a drag (after 6 DIP of movement); chip and ✕ still take plain clicks.
         var outline = new Rectangle
         {
-            Stroke = TileChrome.Dim, StrokeThickness = 1.5, StrokeDashArray = [3, 2], RadiusX = 22, RadiusY = 22,
+            Stroke = DashChrome.Dim, StrokeThickness = 1.5, StrokeDashArray = [3, 2], RadiusX = 22, RadiusY = 22,
             IsHitTestVisible = false,
         };
         var (cw, ch) = TileRules.Cells(spec.Size);
         var chip = new Border
         {
-            Background = TileChrome.Text, CornerRadius = new CornerRadius(10), Padding = new Thickness(8, 3, 8, 3),
+            Background = DashChrome.Text, CornerRadius = new CornerRadius(10), Padding = new Thickness(8, 3, 8, 3),
             HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Bottom,
             Margin = new Thickness(8), Cursor = Cursors.Hand,
-            Child = new TextBlock { Text = $"{cw}×{ch} ▸", FontFamily = TileChrome.Mono, FontSize = 11, Foreground = TileChrome.Dark },
+            Child = new TextBlock { Text = $"{cw}×{ch} ▸", FontFamily = DashChrome.Mono, FontSize = 11, Foreground = DashChrome.Dark },
         };
         chip.MouseLeftButtonUp += (_, e) => { e.Handled = true; SizeChipClicked?.Invoke(index); };
         var x = new Border
         {
-            Width = 20, Height = 20, CornerRadius = new CornerRadius(10), Background = TileChrome.Red,
+            Width = 20, Height = 20, CornerRadius = new CornerRadius(10), Background = DashChrome.Red,
             HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Top,
             Margin = new Thickness(8), Cursor = Cursors.Hand,
             Child = new TextBlock
@@ -445,14 +463,14 @@ public sealed class DashboardView : IDisposable
         var stack = new StackPanel { HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
         stack.Children.Add(new TextBlock
         {
-            Text = "＋", FontSize = 18, Foreground = TileChrome.Dim, HorizontalAlignment = HorizontalAlignment.Center,
+            Text = "＋", FontSize = 18, Foreground = DashChrome.Dim, HorizontalAlignment = HorizontalAlignment.Center,
         });
-        var label = TileChrome.Label("Add");
+        var label = DashChrome.Label("Add");
         label.HorizontalAlignment = HorizontalAlignment.Center;
         stack.Children.Add(label);
         var outline = new Rectangle
         {
-            Stroke = TileChrome.Frozen(0x3A, 0x3A, 0x3A), StrokeThickness = 1.5, StrokeDashArray = [3, 2],
+            Stroke = DashChrome.Dim, StrokeThickness = 1.5, StrokeDashArray = [3, 2],
             RadiusX = 22, RadiusY = 22, IsHitTestVisible = false,
         };
         var root = new Grid { Background = Brushes.Transparent, Cursor = Cursors.Hand, Children = { outline, stack } };
@@ -472,7 +490,7 @@ public sealed class DashboardView : IDisposable
     private void RenderFooter()
     {
         _editLabel.Text = _editing ? "DONE" : "EDIT";
-        _editLabel.Foreground = _editing ? TileChrome.Text : TileChrome.Dim;
+        _editLabel.Foreground = _editing ? DashChrome.Text : DashChrome.Dim;
         _dots.Children.Clear();
         _dotHits.Clear();
         for (var p = 0; p < _layout.Pages.Count; p++)
@@ -481,7 +499,7 @@ public sealed class DashboardView : IDisposable
             var dot = new Ellipse
             {
                 Width = 6, Height = 6, Margin = new Thickness(6, 0, 0, 0), Cursor = Cursors.Hand,
-                Fill = p == _page ? TileChrome.Text : TileChrome.Frozen(0x44, 0x44, 0x44),
+                Fill = p == _page ? DashChrome.Text : DashChrome.Chip,
             };
             // A wider transparent hit area: 6 DIP dots are hard to click.
             var hit = new Border { Background = Brushes.Transparent, Padding = new Thickness(2, 5, 2, 5), Child = dot };

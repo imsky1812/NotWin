@@ -38,6 +38,7 @@ public sealed class DesktopWidgets : IDisposable
     private (string Id, PointI Cursor, RectI Start, EditChrome Chrome)? _drag;
     private readonly WidgetSlide _settle = new();
     private AddPicker? _picker;
+    private ChoicePicker? _choices;
     private bool _paused;
 
     // One widget instance on the desktop: its window, the window's root, and the widget object (Plan 5b).
@@ -59,6 +60,7 @@ public sealed class DesktopWidgets : IDisposable
         _reattach.Tick += (_, _) => TryReattach();
         _dpiDebounce.Tick += (_, _) => { _dpiDebounce.Stop(); Rebuild(); };
         SystemEvents.DisplaySettingsChanged += OnDisplayChanged;
+        WidgetTheme.Changed += OnThemeChanged; // Plan 13 follow-up: light / dark cards
     }
 
     public DesktopLayout Layout => _layout;
@@ -153,22 +155,11 @@ public sealed class DesktopWidgets : IDisposable
                 wh.DpiChanged += OnDpiChanged;
                 slot = new Slot(wh, root, made);
                 _slots[id] = slot;
+                made.CardChanged += () => Application.Current?.Dispatcher.BeginInvoke(() => RefreshCard(id));
                 if (_paused) Safe(() => made.SetPaused(true));
             }
             var widget = slot.Widget;
-            FrameworkElement card;
-            try
-            {
-                widget.Configure(p.Config);
-                card = WidgetCard.Wrap(widget.Build(p.Size), widget.Bare);
-                if (Editing) card = EditFrame(p, card);
-            }
-            catch (Exception e)
-            {
-                Log.Error($"widget {p.Kind} failed to build", e);
-                continue;
-            }
-            WidgetRoots.Fill(slot.Root, card, p.Size, _scale);
+            if (!Present(slot, p)) continue;
             var rect = ScreenRect(p);
             if (host != 0)
             {
@@ -183,6 +174,33 @@ public sealed class DesktopWidgets : IDisposable
             Safe(() => widget.Placed(rect, _monitor));
         }
         if (host == 0) StartReattach();
+    }
+
+    // Builds the widget's card (its surface and shape, Plan 13) into its window's root; false when the widget failed.
+    private bool Present(Slot slot, WidgetPlacement p)
+    {
+        var widget = slot.Widget;
+        FrameworkElement card;
+        try
+        {
+            widget.Configure(p.Config);
+            card = WidgetCard.Wrap(widget.Build(p.Size), widget.Surface, WidgetRules.IsRound(p), p.Size, widget.Bare);
+            if (Editing) card = EditFrame(p, card);
+        }
+        catch (Exception e)
+        {
+            Log.Error($"widget {p.Kind} failed to build", e);
+            return false;
+        }
+        WidgetRoots.Fill(slot.Root, card, p.Size, _scale);
+        return true;
+    }
+
+    // One widget's surface changed (a toggle flipped): only its card is built again.
+    private void RefreshCard(string id)
+    {
+        if (_disposed || !_slots.TryGetValue(id, out var slot) || _layout.IndexOf(id) is var i && i < 0) return;
+        Present(slot, _layout.Widgets[i]);
     }
 
     /// <summary>The widget's window rectangle on screen (physical px).</summary>
@@ -294,10 +312,28 @@ public sealed class DesktopWidgets : IDisposable
         var below = new RectI((int)a.X, (int)a.Y, (int)b.X, (int)b.Y);
         _picker = AddPicker.Show(kinds, below, kind =>
         {
-            var config = kind == WidgetKind.Folder ? new WidgetConfig(Picture: DotArt.Random(Random.Shared)) : null;
+            var config = WidgetChoices.ConfigFor(kind, _layout.Widgets); // Plan 13: the next unused toggle, UTC, the light face
             var (layout, _) = _layout.Add(kind, Area.W, Area.H, () => DesktopLayout.NewId(Random.Shared), config);
             Log.Info($"widget added: {kind}");
             Apply(layout);
+        });
+    }
+
+    private void ShowChoices(string id, RectI below)
+    {
+        ClosePicker();
+        var i = _layout.IndexOf(id);
+        if (i < 0) return;
+        var p = _layout.Widgets[i];
+        var options = ChoicePicker.Labels(p.Kind);
+        if (options.Count == 0) return;
+        _choices = ChoicePicker.Show(options, p.Config?.Choice, below, choice =>
+        {
+            var at = _layout.IndexOf(id);
+            if (at < 0) return;
+            var config = _layout.Widgets[at].Config ?? new WidgetConfig();
+            Log.Info($"widget choice: {p.Kind}");
+            Apply(_layout.WithConfig(id, config with { Choice = choice }));
         });
     }
 
@@ -307,6 +343,10 @@ public sealed class DesktopWidgets : IDisposable
         _picker = null;
         try { picker?.Close(); }
         catch (InvalidOperationException) { } // already closing
+        var choices = _choices;
+        _choices = null;
+        try { choices?.Close(); }
+        catch (InvalidOperationException) { }
     }
 
     private FrameworkElement EditFrame(WidgetPlacement p, FrameworkElement card)
@@ -382,13 +422,12 @@ public sealed class DesktopWidgets : IDisposable
         if (d.Chrome.Grab.IsMouseCaptured) d.Chrome.Grab.ReleaseMouseCapture();
         if (!_slots.TryGetValue(d.Id, out var h)) return;
         var i = _layout.IndexOf(d.Id);
-        // A click without movement on a folder steps to its next picture (spec §5.4).
-        if (i >= 0 && _layout.Widgets[i].Kind == WidgetKind.Folder && target is { } still
-            && Math.Abs(still.Rect.Left - d.Start.Left) < 4 && Math.Abs(still.Rect.Top - d.Start.Top) < 4)
+        var still = target is { } s && Math.Abs(s.Rect.Left - d.Start.Left) < 4 && Math.Abs(s.Rect.Top - d.Start.Top) < 4;
+        // Plan 13: on a toggle, world clock or analogue clock it opens the list of what it can show.
+        if (i >= 0 && still && WidgetChoices.HasChoice(_layout.Widgets[i].Kind))
         {
             h.Host.Place(d.Start);
-            var config = _layout.Widgets[i].Config ?? new WidgetConfig();
-            Apply(_layout.WithConfig(d.Id, config with { Picture = DotArt.Next(config.Picture) }));
+            ShowChoices(d.Id, d.Start);
             return;
         }
         if (target is { Moved: true } t && i >= 0)
@@ -432,6 +471,9 @@ public sealed class DesktopWidgets : IDisposable
     }
 
     private void OnDisplayChanged(object? sender, EventArgs e) => Application.Current?.Dispatcher.BeginInvoke(Rebuild);
+
+    // Windows switched between light and dark: every card is built again in the new colours (rare, so a full rebuild).
+    private void OnThemeChanged() => Application.Current?.Dispatcher.BeginInvoke(Rebuild);
 
     private void OnLost()
     {
@@ -479,6 +521,7 @@ public sealed class DesktopWidgets : IDisposable
         ClosePicker();
         _backdrop?.Dispose();
         SystemEvents.DisplaySettingsChanged -= OnDisplayChanged;
+        WidgetTheme.Changed -= OnThemeChanged;
         foreach (var slot in _slots.Values) DisposeSlot(slot);
         _slots.Clear();
     }

@@ -94,7 +94,7 @@ public sealed class MediaWidget : IDesktopWidget
 
     private static FrameworkElement Button(string icon, Func<Task<bool>> act)
     {
-        var b = new Border { Background = Brushes.Transparent, Padding = new Thickness(4), Cursor = Cursors.Hand, VerticalAlignment = VerticalAlignment.Center, Child = TileChrome.Icon(icon, 18) };
+        var b = new Border { Background = Brushes.Transparent, Padding = new Thickness(4), Cursor = Cursors.Hand, VerticalAlignment = VerticalAlignment.Center, Child = WidgetTheme.Icon(icon, 18) };
         b.MouseLeftButtonUp += (_, e) => { e.Handled = true; _ = act(); };
         return b;
     }
@@ -104,7 +104,7 @@ public sealed class MediaWidget : IDesktopWidget
         var now = MediaProgress.Position(m.Position, m.Duration, m.PositionAt, m.Playing, DateTimeOffset.Now);
         var dots = new DotBar
         {
-            Count = count, Dot = 4, Gap = 3, On = TileChrome.Text, Off = TileChrome.Frozen(0x33, 0x33, 0x33), Accent = TileChrome.Red,
+            Count = count, Dot = 4, Gap = 3, On = WidgetTheme.Text, Off = WidgetTheme.Unlit, Accent = TileChrome.Red,
             Lit = has ? MediaProgress.Dots(now, m.Duration, count) : 0, HorizontalAlignment = HorizontalAlignment.Left,
         };
         if (!has) return dots;
@@ -165,8 +165,8 @@ public sealed class MediaWidget : IDesktopWidget
     private static FrameworkElement Titles(MediaSnapshot m, bool has)
     {
         var stack = new StackPanel();
-        stack.Children.Add(TileChrome.Body(has ? m.Title ?? "" : "Nothing playing", 17, FontWeights.SemiBold, has ? null : TileChrome.Dim));
-        if (has && !string.IsNullOrEmpty(m.Artist)) stack.Children.Add(TileChrome.Body(m.Artist, 12, FontWeights.Normal, TileChrome.Dim));
+        stack.Children.Add(TileChrome.Body(has ? m.Title ?? "" : "Nothing playing", 17, FontWeights.SemiBold, has ? null : WidgetTheme.Dim));
+        if (has && !string.IsNullOrEmpty(m.Artist)) stack.Children.Add(TileChrome.Body(m.Artist, 12, FontWeights.Normal, WidgetTheme.Dim));
         return stack;
     }
 

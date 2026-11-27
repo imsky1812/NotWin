@@ -43,6 +43,7 @@ public sealed class AlarmRingWindow : Window
 {
     public AlarmRingWindow(Alarm alarm, Action snooze, Action stop)
     {
+        NotWin.Theme.Motion.Smooth(this); // quick pop in, quicker fade out (Plan 13 follow-up)
         WindowStyle = WindowStyle.None;
         AllowsTransparency = true;
         Background = Brushes.Transparent;
@@ -136,8 +137,8 @@ public sealed class AlarmWidget : IDesktopWidget
         if (_host is null) return;
         var now = DateTime.Now;
         var next = AlarmRules.Next(_alarms.Alarms, now);
-        var big = TileChrome.Body(next is { } n ? AlarmLook.Time(n.Alarm) : "--:--", _size.W == 1 ? 30 : 34, FontWeights.SemiBold,
-            next is null ? TileChrome.Dim : null);
+        var big = Widgets.WidgetTheme.Body(next is { } n ? AlarmLook.Time(n.Alarm) : "--:--", _size.W == 1 ? 30 : 34, FontWeights.SemiBold,
+            next is null ? Widgets.WidgetTheme.Dim : Widgets.WidgetTheme.Text);
         FrameworkElement content;
         if (_size.W == 1)
         {
@@ -148,12 +149,12 @@ public sealed class AlarmWidget : IDesktopWidget
         else
         {
             var stack = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
-            stack.Children.Add(TileChrome.Label(_alarms.RingingNow is not null ? "ALARM · TAP TO STOP" : "ALARM",
+            stack.Children.Add(Widgets.WidgetTheme.Label(_alarms.RingingNow is not null ? "ALARM · TAP TO STOP" : "ALARM",
                 _alarms.RingingNow is not null ? TileChrome.Red : null));
             big.Margin = new Thickness(0, 4, 0, 2);
             stack.Children.Add(big);
             var snoozed = _alarms.SnoozedUntil;
-            stack.Children.Add(TileChrome.Label(
+            stack.Children.Add(Widgets.WidgetTheme.Label(
                 snoozed is { } z ? "SNOOZED · " + AlarmRules.Until(z, now)
                 : next is { } x ? $"{AlarmRules.Until(x.At, now)} · {AlarmRules.DaysLabel(x.Alarm.Days)}"
                 : "NO ALARMS · TAP TO ADD"));
@@ -187,7 +188,7 @@ public sealed class AlarmEditorPopup : EditorPopupWindow
 
     public AlarmEditorPopup(AlarmService alarms) : this(alarms, new StackPanel()) { }
 
-    private AlarmEditorPopup(AlarmService alarms, StackPanel rows) : base(Layout(rows, out var add), 380)
+    private AlarmEditorPopup(AlarmService alarms, StackPanel rows) : base(Layout(rows, out var add), 380, themed: true)
     {
         _alarms = alarms;
         _rows = rows;
@@ -203,12 +204,12 @@ public sealed class AlarmEditorPopup : EditorPopupWindow
 
     private static FrameworkElement Layout(StackPanel rows, out Border add)
     {
-        var head = TileChrome.Label("ALARMS · RING WHILE THE PC IS AWAKE");
+        var head = Widgets.WidgetTheme.Label("ALARMS · RING WHILE THE PC IS AWAKE");
         head.Margin = new Thickness(0, 0, 0, 10);
         add = new Border
         {
             Background = Brushes.Transparent, Cursor = Cursors.Hand, Margin = new Thickness(0, 6, 0, 0),
-            Child = TileChrome.Body("＋ Add", 13, FontWeights.SemiBold),
+            Child = Widgets.WidgetTheme.Body("＋ Add", 13, FontWeights.SemiBold),
         };
         return new StackPanel { Children = { head, rows, add } };
     }
@@ -233,7 +234,7 @@ public sealed class AlarmEditorPopup : EditorPopupWindow
     private void Rebuild()
     {
         _rows.Children.Clear();
-        if (_alarms.Alarms.Count == 0) _rows.Children.Add(TileChrome.Body("No alarms yet.", 13, FontWeights.Normal, TileChrome.Dim));
+        if (_alarms.Alarms.Count == 0) _rows.Children.Add(Widgets.WidgetTheme.Body("No alarms yet.", 13, FontWeights.Normal, Widgets.WidgetTheme.Dim));
         foreach (var alarm in _alarms.Alarms) _rows.Children.Add(Row(alarm));
     }
 
@@ -243,7 +244,7 @@ public sealed class AlarmEditorPopup : EditorPopupWindow
         var box = new TextBox
         {
             Text = AlarmLook.Time(alarm), Width = 64, FontFamily = TileChrome.Font, FontSize = 15, FontWeight = FontWeights.SemiBold,
-            Foreground = TileChrome.Text, CaretBrush = TileChrome.Text, Background = TileChrome.Frozen(0x22, 0x22, 0x22),
+            Foreground = Widgets.WidgetTheme.Text, CaretBrush = Widgets.WidgetTheme.Text, Background = Widgets.WidgetTheme.Hover,
             BorderThickness = new Thickness(1), BorderBrush = Brushes.Transparent, Padding = new Thickness(6, 4, 6, 4),
             VerticalAlignment = VerticalAlignment.Center,
         };
@@ -253,13 +254,13 @@ public sealed class AlarmEditorPopup : EditorPopupWindow
         {
             // Red text on a red tint while it can't be read (the focused border colour is the template's, not ours).
             var ok = SetTime(alarm.Id, box.Text);
-            box.Foreground = ok ? TileChrome.Text : TileChrome.Red;
+            box.Foreground = ok ? Widgets.WidgetTheme.Text : TileChrome.Red;
             box.Background = ok ? normal : bad;
         };
         DockPanel.SetDock(box, System.Windows.Controls.Dock.Left);
         row.Children.Add(box);
 
-        var remove = new TextBlock { Text = "✕", FontSize = 12, Foreground = TileChrome.Dim, Cursor = Cursors.Hand, Margin = new Thickness(8, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center, Background = Brushes.Transparent };
+        var remove = new TextBlock { Text = "✕", FontSize = 12, Foreground = Widgets.WidgetTheme.Dim, Cursor = Cursors.Hand, Margin = new Thickness(8, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center, Background = Brushes.Transparent };
         remove.MouseLeftButtonUp += (_, e) =>
         {
             e.Handled = true;
@@ -269,11 +270,11 @@ public sealed class AlarmEditorPopup : EditorPopupWindow
         DockPanel.SetDock(remove, System.Windows.Controls.Dock.Right);
         row.Children.Add(remove);
 
-        var toggle = new Border { Cursor = Cursors.Hand, Margin = new Thickness(8, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center, Child = TileChrome.Toggle(alarm.On) };
+        var toggle = new Border { Cursor = Cursors.Hand, Margin = new Thickness(8, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center, Child = NotWin.Notch.Dashboard.DashChrome.Toggle(alarm.On) };
         toggle.MouseLeftButtonUp += (_, e) =>
         {
             e.Handled = true;
-            if (Edit(alarm.Id, a => a with { On = !a.On }) && Current(alarm.Id) is { } now) toggle.Child = TileChrome.Toggle(now.On);
+            if (Edit(alarm.Id, a => a with { On = !a.On }) && Current(alarm.Id) is { } now) toggle.Child = NotWin.Notch.Dashboard.DashChrome.Toggle(now.On);
         };
         DockPanel.SetDock(toggle, System.Windows.Controls.Dock.Right);
         row.Children.Add(toggle);
@@ -287,8 +288,8 @@ public sealed class AlarmEditorPopup : EditorPopupWindow
             chip.Child = letter;
             void Paint(bool on)
             {
-                chip.Background = on ? TileChrome.Text : TileChrome.Frozen(0x2A, 0x2A, 0x2A);
-                letter.Foreground = on ? TileChrome.Dark : TileChrome.Dim;
+                chip.Background = on ? Widgets.WidgetTheme.Text : Widgets.WidgetTheme.Hover;
+                letter.Foreground = on ? Widgets.WidgetTheme.Popup : Widgets.WidgetTheme.Dim;
             }
             Paint((alarm.Days & bit) != 0);
             chip.MouseLeftButtonUp += (_, e) =>

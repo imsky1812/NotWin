@@ -35,21 +35,21 @@ public sealed class TimerWidget : IDesktopWidget
         FrameworkElement content;
         if (size == new WidgetSize(1, 1))
         {
-            _grid = new GridTimerView(100, 10) { HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
+            _grid = new GridTimerView(100, 10) { Lit = WidgetTheme.Text, Gone = WidgetTheme.Unlit, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
             content = _grid;
         }
         else if (size == new WidgetSize(2, 1))
         {
-            _grid = new GridTimerView(100, 10) { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 16, 0) };
-            _dots = new DotMatrix { Dot = 3.4, Gap = 1.2, Fill = TileChrome.Text, Margin = new Thickness(0, 10, 0, 0) };
-            var text = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Children = { TileChrome.Label("Timer"), _dots } };
+            _grid = new GridTimerView(100, 10) { Lit = WidgetTheme.Text, Gone = WidgetTheme.Unlit, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 16, 0) };
+            _dots = new DotMatrix { Dot = 3.4, Gap = 1.2, Fill = WidgetTheme.Text, Margin = new Thickness(0, 10, 0, 0) };
+            var text = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Children = { WidgetTheme.Label("Timer"), _dots } };
             content = new StackPanel { Orientation = Orientation.Horizontal, Children = { _grid, text } };
         }
         else
         {
-            _grid = new GridTimerView(200, 12) { HorizontalAlignment = HorizontalAlignment.Center };
-            _dots = new DotMatrix { Dot = 3, Gap = 1.2, Fill = TileChrome.Text, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 12, 0) };
-            _state = TileChrome.Label("");
+            _grid = new GridTimerView(200, 12) { Lit = WidgetTheme.Text, Gone = WidgetTheme.Unlit, HorizontalAlignment = HorizontalAlignment.Center };
+            _dots = new DotMatrix { Dot = 3, Gap = 1.2, Fill = WidgetTheme.Text, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 12, 0) };
+            _state = WidgetTheme.Label("");
             var row = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 12, 0, 0), Children = { _dots, _state } };
             content = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Children = { _grid, row } };
         }

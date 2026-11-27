@@ -24,10 +24,12 @@ public partial class NotchWindow : Window
     private bool _bigBand;
     private readonly DispatcherTimer _shrink = new() { Interval = TimeSpan.FromMilliseconds(360) };
     private const int WsExTransparent = 0x00000020;
-    private static readonly Duration Resize = new(TimeSpan.FromMilliseconds(300));
+    private static readonly Duration Resize = new(TimeSpan.FromMilliseconds(240)); // quicker (Plan 13 follow-up)
     private static readonly KeySpline Ease = new(0.2, 0.8, 0.2, 1);
     private static readonly TimeSpan FillDelay = TimeSpan.FromMilliseconds(300), FillStep = TimeSpan.FromMilliseconds(70);
     private static readonly Brush Lit = Frozen(0xE8, 0xE8, 0xE8), Red = Frozen(0xD7, 0x19, 0x21), Off = Frozen(0x22, 0x22, 0x22);
+    private static readonly Brush LitLight = Frozen(0x10, 0x10, 0x10), OffLight = Frozen(0xDD, 0xDD, 0xDD);
+    private bool _batteryLow;
     private readonly DispatcherTimer _eq;
     private readonly DispatcherTimer _fill;
     private readonly SolidColorBrush _accent = new(Color.FromRgb(0xD7, 0x19, 0x21)); // animated: pulses while charging
@@ -93,8 +95,6 @@ public partial class NotchWindow : Window
         // 20 fps while the music state is visible, off otherwise (spec §7).
         _eq = new DispatcherTimer(DispatcherPriority.Render) { Interval = TimeSpan.FromMilliseconds(50) };
         _eq.Tick += (_, _) => StepEqualizer();
-        Equalizer.On = Lit;
-        Equalizer.Off = Off;
         Equalizer.Accent = Red;
         _fill = new DispatcherTimer(DispatcherPriority.Render) { Interval = FillStep };
         _fill.Tick += (_, _) =>
@@ -112,9 +112,9 @@ public partial class NotchWindow : Window
             Place();
         };
         TrackClip.SizeChanged += (_, _) => UpdateMarquee();
-        PowerBar.On = Lit;
-        PowerBar.Off = Frozen(0x2A, 0x2A, 0x2A);
         PowerBar.Accent = _accent;
+        ApplyTheme();
+        Theme.ShellTheme.Changed += ApplyTheme; // light / dark (user 2026-11-26)
         SystemEvents.DisplaySettingsChanged += OnDisplayChanged;
         Closed += (_, _) =>
         {
@@ -216,7 +216,9 @@ public partial class NotchWindow : Window
         BatteryText.Text = $"{Math.Clamp(percent, 0, 100)}%";
         BatteryFill.Width = 12 * Math.Clamp(percent, 0, 100) / 100.0;
         var low = percent < 20 && !charging;
-        BatteryFill.Background = low ? Red : Frozen(0xDD, 0xDD, 0xDD);
+        _batteryLow = low;
+        if (low) BatteryFill.Background = Red;
+        else BatteryFill.SetResourceReference(System.Windows.Controls.Border.BackgroundProperty, "Shell.Soft");
         Bolt.Visibility = charging ? Visibility.Visible : Visibility.Collapsed;
     }
 
@@ -444,6 +446,20 @@ public partial class NotchWindow : Window
         }
         _eqModel.Step(peak.Value);
         Equalizer.Show(_eqModel);
+    }
+
+    // The dots that are set in code (equalizer, power bar) follow the light / dark theme; the rest of the pill uses
+    // DynamicResources (Shell.*).
+    private void ApplyTheme()
+    {
+        var light = Theme.ShellTheme.Light;
+        Equalizer.On = light ? LitLight : Lit;
+        Equalizer.Off = light ? OffLight : Off;
+        PowerBar.On = light ? LitLight : Lit;
+        PowerBar.Off = light ? OffLight : Frozen(0x2A, 0x2A, 0x2A);
+        Equalizer.InvalidateVisual();
+        PowerBar.InvalidateVisual();
+        if (!_batteryLow) BatteryFill.SetResourceReference(System.Windows.Controls.Border.BackgroundProperty, "Shell.Soft");
     }
 
     private static SolidColorBrush Frozen(byte r, byte g, byte b)

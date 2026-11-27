@@ -38,6 +38,7 @@ public sealed record ShellSettings
     /// <summary>The snake widget's best score.</summary>
     public int SnakeBest { get; init; }
 
+
     /// <summary>Plan 9: the folder settings, notes and alarms are kept in for other PCs (null: sync off). Per PC.</summary>
     public string? SyncFolder { get; init; }
 

@@ -47,12 +47,12 @@ public sealed class NotesWidget : IDesktopWidget
     {
         if (_host is null) return;
         var panel = new DockPanel();
-        var head = TileChrome.Label("NOTES");
+        var head = WidgetTheme.Label("NOTES");
         head.Margin = new Thickness(0, 0, 0, 8);
         DockPanel.SetDock(head, System.Windows.Controls.Dock.Top);
         panel.Children.Add(head);
         var text = _notes.Text.Trim();
-        var body = TileChrome.Body(text.Length == 0 ? "TAP TO WRITE" : text, 13, FontWeights.Normal, text.Length == 0 ? TileChrome.Dim : null);
+        var body = WidgetTheme.Body(text.Length == 0 ? "TAP TO WRITE" : text, 13, FontWeights.Normal, text.Length == 0 ? WidgetTheme.Dim : null);
         body.TextWrapping = TextWrapping.Wrap;
         body.TextTrimming = TextTrimming.CharacterEllipsis;
         body.LineHeight = 18;
@@ -86,7 +86,7 @@ public sealed class NotesEditorPopup : EditorPopupWindow
 
     public NotesEditorPopup(SharedNotes notes) : this(notes, MakeBox(notes.Text)) { }
 
-    private NotesEditorPopup(SharedNotes notes, TextBox box) : base(Layout(box), 320)
+    private NotesEditorPopup(SharedNotes notes, TextBox box) : base(Layout(box), 320, themed: true)
     {
         _notes = notes;
         _box = box;
@@ -131,7 +131,7 @@ public sealed class NotesEditorPopup : EditorPopupWindow
     private static TextBox MakeBox(string text) => new()
     {
         Text = text, Height = 220, Background = Brushes.Transparent, BorderThickness = new Thickness(0),
-        Foreground = TileChrome.Text, CaretBrush = TileChrome.Text, SelectionBrush = TileChrome.Frozen(0x55, 0x55, 0x55),
+        Foreground = WidgetTheme.Text, CaretBrush = WidgetTheme.Text, SelectionBrush = TileChrome.Frozen(0x88, 0x88, 0x88),
         FontFamily = TileChrome.Font, FontSize = 13, AcceptsReturn = true, TextWrapping = TextWrapping.Wrap,
         VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
     };
@@ -139,7 +139,7 @@ public sealed class NotesEditorPopup : EditorPopupWindow
     private static FrameworkElement Layout(TextBox box)
     {
         var panel = new DockPanel();
-        var head = TileChrome.Label("NOTES · ESC TO CLOSE");
+        var head = WidgetTheme.Label("NOTES · ESC TO CLOSE");
         head.Margin = new Thickness(0, 0, 0, 8);
         DockPanel.SetDock(head, System.Windows.Controls.Dock.Top);
         panel.Children.Add(head);

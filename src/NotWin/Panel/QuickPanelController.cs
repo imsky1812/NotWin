@@ -26,7 +26,7 @@ public sealed class QuickPanelController : IDisposable
     /// <summary>Raised after the panel hid.</summary>
     public event Action? Closed;
 
-    public bool IsOpen => Window.IsVisible;
+    public bool IsOpen => Window.IsVisible && !Window.Hiding; // fading out counts as closed
 
     public void Toggle()
     {
