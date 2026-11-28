@@ -277,6 +277,7 @@ public sealed class DockController : IDisposable
         ShowPopup(anchor,
         [
             new PopupRow("Settings…", () => SettingsRequested?.Invoke()),
+            new PopupRow("Add a program…", () => AddProgramRequested?.Invoke()),
             new PopupRow("Keep taskbar visible", () => SetKeepVisible(!keep), keep),
             new PopupRow("Start with Windows", () => SetStartWithWindows(!start), start),
             new PopupRow("Quit NotWin", _quit),
@@ -308,6 +309,18 @@ public sealed class DockController : IDisposable
 
     /// <summary>"Settings…" in the start button's right-click menu.</summary>
     public event Action? SettingsRequested;
+
+    /// <summary>"Add a program…" in the start button's menu (Plan 14): add an off-index program and pin it to the dock.</summary>
+    public event Action? AddProgramRequested;
+
+    /// <summary>Pins a program the user added from their PC (Plan 14): a full path, launched directly like any pinned exe.</summary>
+    public void PinProgram(string path, string name)
+    {
+        if (string.IsNullOrWhiteSpace(path)) return;
+        if (_settings.PinnedApps.Any(p => DockItemsBuilder.SameApp(p.AppId, path))) { Rebuild(); return; }
+        var pinned = _settings.PinnedApps.Append(new PinnedApp(path, name, path, path.ToLowerInvariant())).ToList();
+        SavePins(pinned);
+    }
 
     public void SetKeepVisible(bool on)
     {

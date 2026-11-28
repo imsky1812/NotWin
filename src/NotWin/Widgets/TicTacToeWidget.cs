@@ -25,6 +25,9 @@ public sealed class TicTacToeWidget : IDesktopWidget
     private TicTacToeBoard? _board;
     private TextBlock? _status, _tally;
     private bool _shellOpensNext = true; // you open the first game
+    private string _mode = "ai";          // "ai" = vs Nothing, "two" = two players on this PC (user 2026-11-27)
+    private char _turn = 'X';             // whose turn in two-player mode
+    private bool _startX = true;          // who opens the next two-player game (alternates)
     private int _blinks;
 
     public TicTacToeWidget(Func<GameScore> score, Action<GameScore> saveScore)
@@ -40,6 +43,21 @@ public sealed class TicTacToeWidget : IDesktopWidget
     }
 
     public WidgetKind Kind => WidgetKind.TicTacToe;
+
+    // The opponent: the shell, or a second player on this PC (edit mode choice). Switching starts a fresh game.
+    public void Configure(WidgetConfig? config)
+    {
+        var mode = config?.Choice == "two" ? "two" : "ai";
+        if (mode == _mode) return;
+        _mode = mode;
+        _think.Stop();
+        _blink.Stop();
+        _game.Reset(shellFirst: false, _rng);
+        _turn = 'X';
+        _startX = true;
+        _shellOpensNext = true;
+        if (_board is not null) { _board.Dim = false; Paint(); }
+    }
 
     public FrameworkElement Build(WidgetSize size)
     {
@@ -67,9 +85,26 @@ public sealed class TicTacToeWidget : IDesktopWidget
         {
             _blink.Stop();
             if (_board is not null) _board.Dim = false;
-            _game.Reset(_shellOpensNext, _rng);
-            _shellOpensNext = !_shellOpensNext;
+            if (_mode == "two")
+            {
+                _game.Reset(shellFirst: false, _rng);
+                _startX = !_startX;
+                _turn = _startX ? 'X' : 'O';
+            }
+            else
+            {
+                _game.Reset(_shellOpensNext, _rng);
+                _shellOpensNext = !_shellOpensNext;
+            }
             Paint();
+            return;
+        }
+        if (_mode == "two")
+        {
+            if (!_game.Place(cell, _turn)) return;
+            _turn = _turn == 'X' ? 'O' : 'X';
+            Paint();
+            if (_game.Over) Finished();
             return;
         }
         if (!_game.Play(cell)) return;
@@ -100,12 +135,20 @@ public sealed class TicTacToeWidget : IDesktopWidget
     {
         _board?.InvalidateVisual();
         if (_status is not null)
-            _status.Text = !_game.Over ? (_think.IsEnabled ? "THINKING…" : "YOUR TURN")
-                : _game.Winner switch { 'X' => "YOU WIN · TAP", 'O' => "NOTHING WINS · TAP", _ => "DRAW · TAP" };
+            _status.Text = !_game.Over
+                ? _mode == "two" ? $"{_turn} TO PLAY" : _think.IsEnabled ? "THINKING…" : "YOUR TURN"
+                : _game.Winner switch
+                {
+                    'X' => _mode == "two" ? "X WINS · TAP" : "YOU WIN · TAP",
+                    'O' => _mode == "two" ? "O WINS · TAP" : "NOTHING WINS · TAP",
+                    _ => "DRAW · TAP",
+                };
         if (_tally is not null)
         {
             var s = _score();
-            _tally.Text = string.Create(CultureInfo.InvariantCulture, $"YOU {s.You} · DRAW {s.Draws} · NOTHING {s.Shell}");
+            _tally.Text = _mode == "two"
+                ? string.Create(CultureInfo.InvariantCulture, $"X {s.You} · DRAW {s.Draws} · O {s.Shell}")
+                : string.Create(CultureInfo.InvariantCulture, $"YOU {s.You} · DRAW {s.Draws} · NOTHING {s.Shell}");
         }
     }
 

@@ -200,7 +200,11 @@ public partial class App : Application
             _notch.AttachTimer(_timer);
             _weather = new Forecast.WeatherService(DataDir);
             _notch.SettingsRequested += ShowSettings;
-            if (dockCtl is not null) dockCtl.SettingsRequested += ShowSettings;
+            if (dockCtl is not null)
+            {
+                dockCtl.SettingsRequested += ShowSettings;
+                dockCtl.AddProgramRequested += () => { if (_index is { } ix && BrowseForProgram(ix) is { } item) dockCtl.PinProgram(item.Id, item.Name); };
+            }
             _weather.Start(dockCtl?.Settings.Weather);
             // Alarms (Plan 9): checked every second; guarded like the calendar.
             try { StartAlarms(); }

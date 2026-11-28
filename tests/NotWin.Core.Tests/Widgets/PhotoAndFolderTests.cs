@@ -57,7 +57,7 @@ public sealed class PhotoAndFolderTests
     {
         // Plan 9: eight more pictures after the first eight (rocket … ghost), all 11 × 11.
         Assert.Equal(["cat", "folder", "plant", "gamepad", "note", "camera", "cup", "star",
-            "rocket", "heart", "moon", "sun", "code", "book", "bolt", "ghost"], DotArt.Pictures);
+            "rocket", "heart", "moon", "sun", "code", "book", "bolt", "ghost", "clock", "globe", "cloud"], DotArt.Pictures);
         foreach (var name in DotArt.Pictures)
         {
             var rows = DotArt.Rows(name);
@@ -73,7 +73,8 @@ public sealed class PhotoAndFolderTests
     {
         Assert.Equal("folder", DotArt.Next("cat"));
         Assert.Equal("rocket", DotArt.Next("star"));
-        Assert.Equal("cat", DotArt.Next("ghost"));
+        Assert.Equal("clock", DotArt.Next("ghost"));
+        Assert.Equal("cat", DotArt.Next("cloud")); // wraps round
         Assert.Equal(DotArt.Rows("folder"), DotArt.Rows("nope"));
         Assert.Contains(DotArt.Random(new Random(3)), DotArt.Pictures);
     }

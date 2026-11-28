@@ -82,6 +82,7 @@ public sealed class ChoicePicker : Window
     {
         WidgetKind.Toggle => WidgetChoices.Toggles.Select(t => (t, ToggleNames[t])).ToList(),
         WidgetKind.AnalogClock => [("light", "Light face"), ("dark", "Dark face")],
+        WidgetKind.TicTacToe => [("ai", "Vs Nothing"), ("two", "Two players")],
         WidgetKind.WorldClock => WidgetChoices.Zones.Select(Zone).OfType<(string, string)>().ToList(),
         _ => [],
     };

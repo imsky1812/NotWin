@@ -248,6 +248,20 @@ public static class DotArt
             "...........",
         ],
         // Plan 14 (user 2026-11-27): a distinct icon per widget kind in the ＋ Add list.
+        ["grid"] =
+        [
+            "...........",
+            "...#...#...",
+            "...#...#...",
+            ".#########.",
+            "...#...#...",
+            "...#...#...",
+            ".#########.",
+            "...#...#...",
+            "...#...#...",
+            "...........",
+            "...........",
+        ],
         ["digits"] =
         [
             "...........",
@@ -434,7 +448,7 @@ public static class DotArt
 
     /// <summary>The folder pictures, in the order a click in edit mode steps through them.</summary>
     public static IReadOnlyList<string> Pictures { get; } = ["cat", "folder", "plant", "gamepad", "note", "camera", "cup", "star",
-        "rocket", "heart", "moon", "sun", "code", "book", "bolt", "ghost"]; // the second eight: Plan 9
+        "rocket", "heart", "moon", "sun", "code", "book", "bolt", "ghost", "clock", "globe", "cloud"]; // Plan 9: +8; Plan 14: +3
 
     /// <summary>Every glyph name (folder pictures and widget icons).</summary>
     public static IReadOnlyCollection<string> Names => Art.Keys;

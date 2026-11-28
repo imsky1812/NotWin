@@ -98,6 +98,28 @@ public sealed class TicTacToeTests
         Assert.All(g.Cells, c => Assert.Equal('.', c));
     }
 
+    // Two-player hot-seat (user 2026-11-27): either mark can be placed, and nothing moves on its own.
+    [Fact]
+    public void Place_PutsEitherMark_RejectsTakenOverOrBad()
+    {
+        var g = new TicTacToe();
+        Assert.True(g.Place(4, 'X'));
+        Assert.True(g.Place(0, 'O'));
+        Assert.False(g.Place(4, 'O'));   // taken
+        Assert.False(g.Place(1, '.'));   // not a mark
+        Assert.False(g.Place(-1, 'X'));  // off the board
+        Assert.Equal(2, g.Cells.Count(c => c != '.')); // no auto-reply
+    }
+
+    [Fact]
+    public void Place_StopsAfterAWin()
+    {
+        var g = Board("XX.OO....");
+        Assert.True(g.Place(2, 'X'));
+        Assert.Equal('X', g.Winner);
+        Assert.False(g.Place(5, 'O')); // the game is over
+    }
+
     [Fact]
     public void Rules_SizesAndPicker()
     {

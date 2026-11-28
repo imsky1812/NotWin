@@ -10,7 +10,8 @@ public static class WidgetIcons
     {
         WidgetKind.Photo => "camera",
         WidgetKind.Folder => "folder",
-        WidgetKind.Snake or WidgetKind.TicTacToe => "gamepad",
+        WidgetKind.Snake => "gamepad",
+        WidgetKind.TicTacToe => "grid",
         WidgetKind.Media => "note",
         WidgetKind.Notes => "book",
         WidgetKind.Weather => "cloud",

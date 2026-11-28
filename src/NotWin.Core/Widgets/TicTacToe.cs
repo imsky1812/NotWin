@@ -28,10 +28,13 @@ public sealed class TicTacToe
     }
 
     /// <summary>Your move (X) on <paramref name="cell"/> 0..8; false when it is taken or the game is over.</summary>
-    public bool Play(int cell)
+    public bool Play(int cell) => Place(cell, 'X');
+
+    /// <summary>Places <paramref name="mark"/> ('X' or 'O') on <paramref name="cell"/> for two-player hot-seat; false when it can't go there.</summary>
+    public bool Place(int cell, char mark)
     {
-        if (Over || cell is < 0 or > 8 || Cells[cell] != '.') return false;
-        Cells[cell] = 'X';
+        if (Over || cell is < 0 or > 8 || Cells[cell] != '.' || mark is not ('X' or 'O')) return false;
+        Cells[cell] = mark;
         Judge();
         return true;
     }
