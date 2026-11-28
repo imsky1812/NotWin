@@ -714,13 +714,38 @@ public partial class App : Application
     // exe or shortcut, remembers it (so search and folders find it from now on), and returns it to drop into the folder.
     private static Core.Launcher.LaunchItem? BrowseForProgram(Launcher.AppIndex index)
     {
-        var dialog = new Microsoft.Win32.OpenFileDialog
+        var file = PickProgramFile();
+        Log.Info($"add program: dialog {(file is null ? "cancelled" : "chose a file")}"); // never the path
+        return file is null ? null : index.AddCustomApp(file);
+    }
+
+    // The file picker needs a visible, foreground owner: without one it opens behind NotWin's always-on-top windows and
+    // the user sees nothing (user 2026-11-28: "no window opens"). A tiny transparent topmost window, centred on screen,
+    // owns and fronts it.
+    private static string? PickProgramFile()
+    {
+        var area = SystemParameters.WorkArea;
+        var owner = new Window
         {
-            Title = "Add a program",
-            Filter = "Programs (*.exe;*.lnk)|*.exe;*.lnk|All files (*.*)|*.*",
-            CheckFileExists = true,
+            Width = 1, Height = 1, WindowStyle = WindowStyle.None, ResizeMode = ResizeMode.NoResize,
+            ShowInTaskbar = false, AllowsTransparency = true, Background = System.Windows.Media.Brushes.Transparent,
+            Topmost = true, ShowActivated = true,
+            Left = area.Left + area.Width / 2, Top = area.Top + area.Height / 2,
         };
-        return dialog.ShowDialog() == true ? index.AddCustomApp(dialog.FileName) : null;
+        try
+        {
+            owner.Show();
+            ForegroundNative.Activate(new System.Windows.Interop.WindowInteropHelper(owner).Handle);
+            var dialog = new Microsoft.Win32.OpenFileDialog
+            {
+                Title = "Add a program",
+                Filter = "Programs (*.exe;*.lnk)|*.exe;*.lnk|All files (*.*)|*.*",
+                CheckFileExists = true,
+            };
+            return dialog.ShowDialog(owner) == true ? dialog.FileName : null;
+        }
+        catch (Exception e) { Log.Error("add program: the file picker failed", e); return null; }
+        finally { try { owner.Close(); } catch (Exception) { } }
     }
 
     private (ShellSettings Settings, bool LoadedOk) StartDock()
