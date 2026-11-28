@@ -104,7 +104,15 @@ public sealed class AnalogClockWidget : IDesktopWidget
             if (r <= 0) return;
             var c = new Point(ActualWidth / 2, ActualHeight / 2);
             var hand = light ? Ink : WidgetTheme.Text; // the dark face is the theme's card (light grey in light mode)
-            var tickBrush = light ? Ink : WidgetTheme.Dim;
+            var tickBrush = light ? Ink : TileChrome.Frozen(0xA6, 0xA6, 0xA6); // brighter ticks read on the dark wallpaper (user 2026-11-28)
+            // The dark face draws its own dial — a touch lighter than the card, with a thin ring — so the clock is a
+            // distinct object on the near-black wallpaper rather than faint hands floating on black.
+            if (!light)
+            {
+                var dial = TileChrome.Frozen(0x24, 0x24, 0x24);
+                var ring = new Pen(TileChrome.Frozen(0x3E, 0x3E, 0x3E), Math.Max(1, r * 0.018));
+                dc.DrawEllipse(dial, ring, c, r * 0.97, r * 0.97);
+            }
             for (var i = 0; i < 12; i++)
             {
                 var major = i % 3 == 0;

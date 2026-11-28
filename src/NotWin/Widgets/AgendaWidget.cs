@@ -97,13 +97,19 @@ public sealed class AgendaWidget : IDesktopWidget
         return panel;
     }
 
-    // One event in the list: when, then the title and the place on one line each.
+    // One event in the list: a dot (red when soon), the when, then the title and the place on one line each.
     private static FrameworkElement Row(CalEvent e, DateTimeOffset now)
     {
         var (when, soon) = CalendarFeed.Countdown(e, now, TimeZoneInfo.Local);
-        var stack = new StackPanel { Margin = new Thickness(0, 0, 0, 9) };
-        var label = WidgetTheme.Label(when, soon ? TileChrome.Red : null);
-        stack.Children.Add(label);
+        var stack = new StackPanel { Margin = new Thickness(0, 0, 0, 10) };
+        var whenRow = new StackPanel { Orientation = Orientation.Horizontal };
+        whenRow.Children.Add(new Border
+        {
+            Width = 6, Height = 6, CornerRadius = new CornerRadius(3), Margin = new Thickness(0, 0, 8, 0),
+            VerticalAlignment = VerticalAlignment.Center, Background = soon ? TileChrome.Red : WidgetTheme.Dim,
+        });
+        whenRow.Children.Add(WidgetTheme.Label(when, soon ? TileChrome.Red : null));
+        stack.Children.Add(whenRow);
         var title = WidgetTheme.Body(e.Title, 13, FontWeights.SemiBold);
         title.TextTrimming = TextTrimming.CharacterEllipsis;
         title.Margin = new Thickness(0, 2, 0, 0);
@@ -141,12 +147,24 @@ public sealed class AgendaWidget : IDesktopWidget
 
     private static FrameworkElement Message(string head, string text)
     {
-        var stack = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
-        stack.Children.Add(WidgetTheme.Label(head));
+        var stack = new StackPanel { VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center };
+        if (text.Length > 0)
+        {
+            // A dot calendar so the empty / not-connected state looks intentional (user 2026-11-28 polish).
+            stack.Children.Add(new DotArtView
+            {
+                Rows = DotArt.Rows("calendar"), Dot = 3, Gap = 1.6, Fill = WidgetTheme.Dim,
+                HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 0, 0, 12),
+            });
+        }
+        var label = WidgetTheme.Label(head);
+        label.HorizontalAlignment = HorizontalAlignment.Center;
+        stack.Children.Add(label);
         if (text.Length > 0)
         {
             var body = WidgetTheme.Body(text, 12, FontWeights.SemiBold);
             body.TextWrapping = TextWrapping.Wrap;
+            body.TextAlignment = TextAlignment.Center;
             body.Margin = new Thickness(0, 6, 0, 0);
             stack.Children.Add(body);
         }

@@ -105,7 +105,8 @@ public sealed class MediaWidget : IDesktopWidget
         var dots = new DotBar
         {
             Count = count, Dot = 4, Gap = 3, On = WidgetTheme.Text, Off = WidgetTheme.Unlit, Accent = TileChrome.Red,
-            Lit = has ? MediaProgress.Dots(now, m.Duration, count) : 0, HorizontalAlignment = HorizontalAlignment.Left,
+            Lit = has ? MediaProgress.Dots(now, m.Duration, count) : 0,
+            HorizontalAlignment = HorizontalAlignment.Stretch, Spread = true, // edge to edge (user 2026-11-28 polish)
         };
         if (!has) return dots;
         return SeekBar.Wrap(dots, count, m.Duration, _media.SeekAsync, on =>
