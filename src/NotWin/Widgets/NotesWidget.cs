@@ -47,8 +47,14 @@ public sealed class NotesWidget : IDesktopWidget
     {
         if (_host is null) return;
         var panel = new DockPanel();
-        var head = WidgetTheme.Label("NOTES");
-        head.Margin = new Thickness(0, 0, 0, 8);
+        var head = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 8) };
+        var pencil = TileChrome.Icon("pencil", 13, WidgetTheme.Dim);
+        pencil.Margin = new Thickness(0, 0, 7, 0);
+        pencil.VerticalAlignment = VerticalAlignment.Center;
+        head.Children.Add(pencil);
+        var headLabel = WidgetTheme.Label("NOTES");
+        headLabel.VerticalAlignment = VerticalAlignment.Center;
+        head.Children.Add(headLabel);
         DockPanel.SetDock(head, System.Windows.Controls.Dock.Top);
         panel.Children.Add(head);
         var text = _notes.Text.Trim();

@@ -90,14 +90,15 @@ public sealed class FolderWidget : IDesktopWidget
 
     private Border AppCircle(LaunchItem item, double size, double gap)
     {
+        // The real, coloured app icon (user 2026-11-28), on a round chip the Nothing folders use.
         ImageSource? icon = null;
-        try { icon = MonoIcon.From(_icons.Get(item.Id, (int)Math.Ceiling(size * 1.25))); }
+        try { icon = _icons.Get(item.Id, (int)Math.Ceiling(size * 1.25)); }
         catch (Exception e) { Log.Info($"folder icon failed: {e.GetType().Name}"); } // no app paths in the log
         return new Border
         {
             Width = size, Height = size, CornerRadius = new CornerRadius(size / 2), Background = WidgetTheme.Hover,
             Margin = new Thickness(0, 0, gap, gap), Tag = "app",
-            Child = new Image { Source = icon, Width = size * 0.58, Height = size * 0.58, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center },
+            Child = new Image { Source = icon, Width = size * 0.62, Height = size * 0.62, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center },
         };
     }
 

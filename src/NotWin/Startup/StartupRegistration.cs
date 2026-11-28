@@ -5,8 +5,9 @@ using NotWin.Core;
 namespace NotWin.Startup;
 
 /// <summary>
-/// Per-user "start with Windows" via HKCU Run (the signed uiAccess exe launches fine from a normal-user process).
-/// Only the installed copy (Program Files\NotWin) may own the entry, so dev/bin builds never hijack it.
+/// Per-user "start with Windows" via HKCU Run. The value launches NotWin through the shell (explorer.exe) so it is
+/// granted uiAccess at logon (a uiAccess exe run straight from Run is often started without it). Only the installed
+/// copy (Program Files\NotWin) may own the entry, so dev/bin builds never hijack it.
 /// </summary>
 public static class StartupRegistration
 {
@@ -23,7 +24,9 @@ public static class StartupRegistration
         if (enabled)
         {
             if (!installed) { Log.Info("start-with-windows: not the installed copy - Run entry left unchanged"); return; }
-            key.SetValue(ValueName, "\"" + exePath + "\"", RegistryValueKind.String);
+            // Launch through the shell (explorer.exe) so NotWin is granted uiAccess at logon (user 2026-11-28: after a
+            // cold boot a uiAccess exe run straight from Run came up without it, leaving the Windows taskbar in charge).
+            key.SetValue(ValueName, StartupPolicy.RunCommand(exePath), RegistryValueKind.String);
             return;
         }
 

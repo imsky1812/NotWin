@@ -28,4 +28,17 @@ public sealed class StartupPolicyTests
         Assert.False(StartupPolicy.RunValuePointsAt("\"C:\\Program Files\\NotWin\\NotWin.exe\"", @"D:\x\a.exe"));
         Assert.False(StartupPolicy.RunValuePointsAt(null, @"D:\x\a.exe"));
     }
+
+    // User 2026-11-28: the Run entry launches NotWin through the shell so it gets uiAccess at logon.
+    [Fact]
+    public void RunCommand_LaunchesThroughExplorer() =>
+        Assert.Equal("explorer.exe \"C:\\Program Files\\NotWin\\NotWin.exe\"", StartupPolicy.RunCommand(@"C:\Program Files\NotWin\NotWin.exe"));
+
+    [Fact]
+    public void RunValuePointsAt_RecognisesTheExplorerWrappedForm()
+    {
+        Assert.True(StartupPolicy.RunValuePointsAt("explorer.exe \"D:\\x\\a.exe\"", @"d:\x\A.exe"));
+        Assert.True(StartupPolicy.RunValuePointsAt(StartupPolicy.RunCommand(@"D:\x\a.exe"), @"D:\x\a.exe"));
+        Assert.False(StartupPolicy.RunValuePointsAt("explorer.exe \"D:\\x\\other.exe\"", @"D:\x\a.exe"));
+    }
 }
